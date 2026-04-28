@@ -1,0 +1,44 @@
+{
+  "name": "fyb_site",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev --webpack",
+    "dev:turbo": "next dev --turbopack",
+    "build": "next build",
+    "start": "next start",
+    "lint": "eslint",
+    "typecheck": "tsc --noEmit",
+    "seed:departments": "tsx --env-file-if-exists=.env --env-file-if-exists=.env.local scripts/seed-departments.ts",
+    "reset:departments": "tsx --env-file-if-exists=.env --env-file-if-exists=.env.local scripts/reset-departments.ts",
+    "reseed:departments": "npm run reset:departments && npm run seed:departments"
+  },
+  "dependencies": {
+    "canvg": "^4.0.3",
+    "cloudinary": "^2.10.0",
+    "idb": "^8.0.3",
+    "lucide-react": "^0.542.0",
+    "mongoose": "^9.6.0",
+    "nanoid": "^5.1.6",
+    "next": "16.1.4",
+    "next-auth": "^5.0.0-beta.31",
+    "nodemailer": "^7.0.13",
+    "react": "19.2.3",
+    "react-dom": "19.2.3",
+    "zod": "^4.3.5",
+    "zustand": "^5.0.10"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "^4",
+    "@types/node": "^20",
+    "@types/nodemailer": "^8.0.0",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "babel-plugin-react-compiler": "1.0.0",
+    "eslint": "^9",
+    "eslint-config-next": "16.1.4",
+    "tailwindcss": "^4",
+    "tsx": "^4.21.0",
+    "typescript": "^5"
+  }
+}

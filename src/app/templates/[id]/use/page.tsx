@@ -1,0 +1,801 @@
+"use client";
+
+import { use, useEffect, useMemo, useRef, useState } from "react";
+import Link from "next/link";
+import { ArrowLeft, ChevronLeft, ChevronRight, Menu, X } from "lucide-react";
+
+import type { NormalizedDesignV1 } from "@/lib/figma";
+import { composeImageMap } from "@/lib/render/composeImageMap";
+import { exportTemplatePng } from "@/lib/render/exportPng";
+import { useDesignAssets } from "@/lib/render/useDesignAssets";
+import { useTemplateEditorStore } from "@/lib/stores/templateEditorStore";
+import { createLocalTemplateRepository } from "@/lib/storage/templateRepo";
+import type { TemplateRecord } from "@/lib/storage/types";
+
+import { DesignWorkspace } from "@/components/editor/DesignWorkspace";
+import { useGoogleFonts } from "@/components/editor/useGoogleFonts";
+import { ImageUpload, inferFileMeta } from "@/components/forms/ImageUpload";
+import { ProgressModal } from "@/components/ui/ProgressModal";
+import { useSimulatedProgress } from "@/components/ui/useSimulatedProgress";
+
+export default function UseTemplatePage({
+  params,
+}: {
+  params: Promise<{ id: string }>;
+}) {
+  const { id } = use(params);
+  const repo = useMemo(() => createLocalTemplateRepository(), []);
+  const [record, setRecord] = useState<TemplateRecord | null>(null);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [exporting, setExporting] = useState(false);
+  const [exportStage, setExportStage] = useState<string>("");
+  const [exportModalOpen, setExportModalOpen] = useState(false);
+  const [exportScale, setExportScale] = useState<1 | 2 | 3 | null>(null);
+  const [mobileDetailsOpen, setMobileDetailsOpen] = useState(false);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [autoFitNonce, setAutoFitNonce] = useState(0);
+  const [mobileFormPage, setMobileFormPage] = useState(0);
+  const mobileFormScrollRef = useRef<HTMLDivElement | null>(null);
+
+  const [previewTextByNodeId, setPreviewTextByNodeId] = useState<Record<string, string>>({});
+  const [previewImageByNodeId, setPreviewImageByNodeId] = useState<Record<
+    string,
+    { url: string; file?: File; objectFit: "cover" | "contain"; _revoke?: boolean }
+  >>({});
+  const [previewColorByNodeId, setPreviewColorByNodeId] = useState<Record<string, string>>({});
+  const previewImagesRef = useRef(previewImageByNodeId);
+  const resetView = useTemplateEditorStore((s) => s.resetView);
+  const exportProgress = useSimulatedProgress(exporting);
+
+  const { designAssetImageByNodeId } = useDesignAssets(id);
+  const renderImageByNodeId = useMemo(
+    () => composeImageMap(previewImageByNodeId, designAssetImageByNodeId, record?.fieldConfig),
+    [previewImageByNodeId, designAssetImageByNodeId, record?.fieldConfig],
+  );
+
+  const normalized = record?.normalized as NormalizedDesignV1 | undefined;
+  const pageLoading = !record || !normalized;
+  const pageProgress = useSimulatedProgress(pageLoading, { start: 0.12, cap: 0.96 });
+
+  useEffect(() => {
+    previewImagesRef.current = previewImageByNodeId;
+  }, [previewImageByNodeId]);
+
+  useEffect(() => {
+    return () => {
+      for (const v of Object.values(previewImagesRef.current)) {
+        if (v._revoke) URL.revokeObjectURL(v.url);
+      }
+    };
+  }, []);
+
+  useEffect(() => {
+    (async () => {
+      const r = await repo.get(id);
+      setRecord(r);
+    })();
+  }, [id, repo]);
+
+  useEffect(() => {
+    const v = window.localStorage.getItem("fyb:use:sidebar") === "collapsed";
+    setSidebarCollapsed(v);
+  }, []);
+
+  useGoogleFonts(["Ms Madi", ...(normalized?.assets.fonts ?? [])]);
+
+  const hasEdits =
+    Object.keys(previewTextByNodeId).length > 0 ||
+    Object.keys(previewImageByNodeId).length > 0 ||
+    Object.keys(previewColorByNodeId).length > 0;
+
+  const mobileFields = useMemo(() => {
+    const fields = record?.fieldConfig.fields ?? [];
+    return fields.filter((f) => {
+      if (f.kind === "color") return (f.colorBehavior?.enabled ?? true) !== false;
+      // Design-asset image slots are admin-controlled and not editable on user side.
+      if (f.kind === "image") return f.imageSource !== "design_asset";
+      return true;
+    });
+  }, [record]);
+
+  const mobilePageSize = 6;
+  const mobilePageCount = Math.max(1, Math.ceil(mobileFields.length / mobilePageSize));
+  const mobilePageStart = mobileFormPage * mobilePageSize;
+  const mobilePageFields = mobileFields.slice(mobilePageStart, mobilePageStart + mobilePageSize);
+
+  useEffect(() => {
+    if (!mobileDetailsOpen) return;
+    setMobileFormPage(0);
+    const raf = requestAnimationFrame(() => mobileFormScrollRef.current?.scrollTo({ top: 0 }));
+    return () => cancelAnimationFrame(raf);
+  }, [mobileDetailsOpen]);
+
+  if (pageLoading) {
+    return (
+      <div className="min-h-dvh bg-zinc-50 dark:bg-zinc-950">
+        <ProgressModal
+          open
+          title="Loading template"
+          subtitle={
+            pageProgress < 0.25
+              ? "Fetching template data"
+              : pageProgress < 0.65
+                ? "Preparing workspace"
+                : "Almost ready"
+          }
+          percent={Math.round(pageProgress * 100)}
+          hint="This runs locally in your browser."
+        />
+      </div>
+    );
+  }
+
+  if (record.status !== "published") {
+    return (
+      <div className="min-h-screen bg-zinc-50 p-6 dark:bg-zinc-950">
+        <div className="rounded-2xl border border-zinc-200 bg-white p-6 text-sm text-zinc-700 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-200">
+          This template is not published.
+        </div>
+      </div>
+    );
+  }
+
+  function onPreviewTextChange(nodeId: string, value: string) {
+    const field = record?.fieldConfig.fields.find(
+      (f): f is Extract<typeof f, { kind: "text" }> => f.nodeId === nodeId && f.kind === "text",
+    );
+    const mode = field?.textBehavior?.case ?? "as_design";
+    const nextValue =
+      mode === "upper"
+        ? value.toUpperCase()
+        : mode === "lower"
+          ? value.toLowerCase()
+          : mode === "title"
+            ? value.replace(/\b\w+/g, (w) => w.slice(0, 1).toUpperCase() + w.slice(1).toLowerCase())
+            : value;
+    setPreviewTextByNodeId((prev) => ({ ...prev, [nodeId]: nextValue }));
+  }
+
+  function onPreviewColorChange(nodeId: string, value: string) {
+    setPreviewColorByNodeId((prev) => ({ ...prev, [nodeId]: value }));
+  }
+
+  function onPreviewImageChange(nodeId: string, file: File | null) {
+    setPreviewImageByNodeId((prev) => {
+      const existing = prev[nodeId];
+      if (existing?._revoke) URL.revokeObjectURL(existing.url);
+
+      if (!file) {
+        const next = { ...prev };
+        delete next[nodeId];
+        return next;
+      }
+
+      const url = URL.createObjectURL(file);
+      const imageField = record?.fieldConfig.fields.find(
+        (f): f is Extract<typeof f, { kind: "image" }> => f.nodeId === nodeId && f.kind === "image",
+      );
+
+      // Enforce allowReplace at the UI boundary.
+      if (imageField?.imageBehavior?.allowReplace === false) {
+        return prev;
+      }
+
+      const fit = imageField?.imageBehavior?.fit ?? (imageField?.cropRule === "contain" ? "contain" : "cover");
+
+      return {
+        ...prev,
+        [nodeId]: {
+          url,
+          file,
+          objectFit: fit,
+          _revoke: true,
+        },
+      };
+    });
+  }
+
+  async function doExportPng(scale: 1 | 2 | 3) {
+    if (!record || !normalized) return;
+    setExporting(true);
+    setExportStage("Preparing images");
+    try {
+      const imageBlobs: Record<string, { blob: Blob; objectFit: "cover" | "contain" }> = {};
+      for (const [nodeId, v] of Object.entries(previewImageByNodeId)) {
+        if (!v.file) continue;
+        imageBlobs[nodeId] = { blob: v.file, objectFit: v.objectFit };
+      }
+      // Design-asset overrides: admin-uploaded blobs always win for design_asset fields.
+      // Slots without an uploaded asset are dropped so they render as placeholders.
+      for (const f of record.fieldConfig.fields) {
+        if (f.kind !== "image") continue;
+        if (f.imageSource !== "design_asset") continue;
+        const asset = designAssetImageByNodeId[f.nodeId];
+        if (asset) {
+          imageBlobs[f.nodeId] = {
+            blob: asset.blob,
+            objectFit: f.imageBehavior?.fit ?? f.cropRule ?? "cover",
+          };
+        } else {
+          delete imageBlobs[f.nodeId];
+        }
+      }
+
+      setExportStage("Rendering design");
+      const { blob } = await exportTemplatePng({
+        design: normalized,
+        fieldConfig: record.fieldConfig,
+        previewTextByNodeId,
+        previewImageByNodeId: imageBlobs,
+        previewColorByNodeId,
+        scale,
+      });
+
+      setExportStage("Preparing download");
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${record.name.replaceAll(/[^a-z0-9-_ ]/gi, "").trim() || "template"}.png`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } finally {
+      setExporting(false);
+      setExportStage("");
+    }
+  }
+
+  function openExportModal() {
+    setExportScale(null);
+    setExportModalOpen(true);
+  }
+
+  function resetUserWorkspace() {
+    for (const v of Object.values(previewImagesRef.current)) {
+      if (v._revoke) URL.revokeObjectURL(v.url);
+    }
+    setPreviewTextByNodeId({});
+    setPreviewColorByNodeId({});
+    setPreviewImageByNodeId({});
+    setExportModalOpen(false);
+    setExportScale(null);
+    resetView();
+    setAutoFitNonce((n) => n + 1);
+  }
+
+  return (
+    <div className="flex h-dvh min-w-0 flex-col bg-zinc-50 dark:bg-zinc-950">
+      {/* Mobile: compact top bar */}
+      <div className="sticky top-0 z-20 flex items-center justify-between gap-3 border-b border-zinc-200 bg-white/90 px-3 py-2 backdrop-blur lg:hidden dark:border-zinc-800 dark:bg-zinc-900/80">
+        <button
+          type="button"
+          onClick={() => setMobileMenuOpen(true)}
+          className="inline-flex h-10 w-10 items-center justify-center rounded-2xl border border-zinc-200 bg-white text-zinc-900 hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-100 dark:hover:bg-zinc-800"
+          aria-label="Open menu"
+        >
+          <Menu className="h-5 w-5" />
+        </button>
+        <div className="min-w-0 text-center">
+          <div className="truncate text-sm font-semibold text-zinc-950 dark:text-zinc-100">{record.name}</div>
+          <div className="truncate text-[11px] text-zinc-600 dark:text-zinc-300">Workspace</div>
+        </div>
+        <button
+          type="button"
+          onClick={() => setMobileDetailsOpen(true)}
+          className="inline-flex h-9 items-center justify-center rounded-xl bg-zinc-900 px-3 text-xs font-medium text-white hover:bg-zinc-800 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-white"
+        >
+          Details
+        </button>
+      </div>
+
+      <div className="flex min-h-0 min-w-0 flex-1">
+        {/* Left sidebar (collapsible) */}
+        <aside
+          className={
+            "hidden h-full flex-col border-r border-zinc-200 bg-white lg:flex dark:border-zinc-800 dark:bg-zinc-900 " +
+            (sidebarCollapsed ? "w-18" : "w-65")
+          }
+        >
+          <div className="flex items-center justify-between gap-2 border-b border-zinc-200 px-3 py-3 dark:border-zinc-800">
+            <div className={"min-w-0 " + (sidebarCollapsed ? "sr-only" : "")}
+            >
+              <div className="truncate text-sm font-semibold text-zinc-950 dark:text-zinc-100">{record.name}</div>
+              <div className="truncate text-xs text-zinc-600 dark:text-zinc-300">Template</div>
+            </div>
+            <button
+              type="button"
+              onClick={() =>
+                setSidebarCollapsed((v) => {
+                  const next = !v;
+                  window.localStorage.setItem("fyb:use:sidebar", next ? "collapsed" : "expanded");
+                  return next;
+                })
+              }
+              className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-zinc-200 bg-white text-sm font-medium text-zinc-900 hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-100 dark:hover:bg-zinc-800"
+              title={sidebarCollapsed ? "Expand" : "Collapse"}
+              aria-label={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+            >
+              {sidebarCollapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
+            </button>
+          </div>
+
+          <nav className="flex-1 space-y-1 p-3 text-sm">
+            <Link
+              href="/templates"
+              className="block rounded-xl px-3 py-2 text-zinc-700 hover:bg-zinc-50 dark:text-zinc-200 dark:hover:bg-zinc-800/60"
+              title="Back to templates"
+            >
+              <span className={sidebarCollapsed ? "sr-only" : ""}>Back</span>
+            </Link>
+            <div className="mt-2 rounded-xl bg-zinc-50 p-3 dark:bg-zinc-800/40">
+              <div className={"text-xs font-medium text-zinc-900 dark:text-zinc-100 " + (sidebarCollapsed ? "sr-only" : "")}>
+                Tips
+              </div>
+              <div className={"mt-1 text-xs text-zinc-600 dark:text-zinc-300 " + (sidebarCollapsed ? "sr-only" : "")}>
+                Pan: Space + drag • Zoom: Ctrl+Wheel
+              </div>
+            </div>
+          </nav>
+        </aside>
+
+        {/* Center workspace */}
+        <main className="flex h-full min-w-0 flex-1 flex-col overflow-hidden">
+          <div className="hidden items-center justify-between border-b border-zinc-200 bg-white px-4 py-3 lg:flex dark:border-zinc-800 dark:bg-zinc-900">
+            <div className="text-sm font-semibold text-zinc-950 dark:text-zinc-100">Workspace</div>
+            <div className="text-xs text-zinc-600 dark:text-zinc-300">Read-only canvas</div>
+          </div>
+
+          <div className="flex-1 overflow-hidden p-0 sm:p-3 lg:p-3 xl:p-4">
+            <div className="h-full min-h-0 w-full overflow-hidden bg-white sm:rounded-2xl sm:border sm:border-zinc-200 dark:bg-zinc-900 dark:sm:border-zinc-800">
+              <DesignWorkspace
+                design={normalized}
+                fieldConfig={record.fieldConfig}
+                previewTextByNodeId={previewTextByNodeId}
+                previewImageByNodeId={renderImageByNodeId}
+                selectedNodeId={null}
+                previewColorByNodeId={previewColorByNodeId}
+                showGuides={false}
+                enableSelection={false}
+                autoFitOnMount
+                autoFitOnResize
+                autoFitKey={autoFitNonce}
+              />
+            </div>
+          </div>
+        </main>
+
+        {/* Right panel (form) */}
+        <aside className="hidden h-full w-80 flex-col border-l border-zinc-200 bg-white lg:flex xl:w-95 dark:border-zinc-800 dark:bg-zinc-900">
+          <div className="border-b border-zinc-200 px-4 py-2.5 dark:border-zinc-800">
+            <div className="text-sm font-semibold text-zinc-950 dark:text-zinc-100">Your details</div>
+            <div className="mt-1 text-xs text-zinc-600 dark:text-zinc-300">Generated from admin configuration.</div>
+          </div>
+
+          <div className="min-h-0 flex-1 overflow-y-auto p-3 xl:p-4">
+            <div className="space-y-2">
+              {record.fieldConfig.fields
+                .filter((f) => !(f.kind === "image" && f.imageSource === "design_asset"))
+                .map((f) => {
+                if (f.kind === "text") {
+                  const value = previewTextByNodeId[f.nodeId] ?? "";
+                  return (
+                    <label key={f.id} className="grid gap-1">
+                      <span className="text-xs font-medium text-zinc-900 dark:text-zinc-100">{f.label}</span>
+                      <input
+                        value={value}
+                        maxLength={f.maxChars}
+                        onChange={(e) => onPreviewTextChange(f.nodeId, e.target.value)}
+                        className="h-9 rounded-xl border border-zinc-200 bg-white px-3 text-[13px] text-zinc-900 dark:border-zinc-800 dark:bg-zinc-950/30 dark:text-zinc-100"
+                      />
+                    </label>
+                  );
+                }
+
+                if (f.kind === "image") {
+                  const allowReplace = f.imageBehavior?.allowReplace ?? true;
+                  const current = previewImageByNodeId[f.nodeId];
+                  const meta = inferFileMeta(current?.file);
+                  return (
+                    <ImageUpload
+                      key={f.id}
+                      label={f.label}
+                      description={undefined}
+                      valueUrl={current?.url}
+                      valueName={meta}
+                      objectFit={current?.objectFit ?? (f.imageBehavior?.fit ?? (f.cropRule === "contain" ? "contain" : "cover"))}
+                      disabled={!allowReplace}
+                      onPick={(file) => onPreviewImageChange(f.nodeId, file)}
+                      onClear={allowReplace ? () => onPreviewImageChange(f.nodeId, null) : undefined}
+                    />
+                  );
+                }
+
+                if (f.kind === "color") {
+                  const enabled = f.colorBehavior?.enabled ?? true;
+                  if (!enabled) return null;
+
+                  const palette = f.colorBehavior?.palette?.filter(Boolean) ?? [];
+                  const value = previewColorByNodeId[f.nodeId] ?? (palette[0] ?? "#000000");
+
+                  return (
+                    <label key={f.id} className="grid gap-1">
+                      <span className="text-xs font-medium text-zinc-900 dark:text-zinc-100">{f.label}</span>
+                      {palette.length ? (
+                        <select
+                          value={value}
+                          onChange={(e) => onPreviewColorChange(f.nodeId, e.target.value)}
+                          className="h-9 rounded-xl border border-zinc-200 bg-white px-3 text-[13px] text-zinc-900 dark:border-zinc-800 dark:bg-zinc-950/30 dark:text-zinc-100"
+                        >
+                          {palette.map((c) => (
+                            <option key={c} value={c}>
+                              {c}
+                            </option>
+                          ))}
+                        </select>
+                      ) : (
+                        <input
+                          type="color"
+                          value={value}
+                          onChange={(e) => onPreviewColorChange(f.nodeId, e.target.value)}
+                          className="h-9 w-16 rounded-xl border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900"
+                        />
+                      )}
+                    </label>
+                  );
+                }
+
+                return null;
+              })}
+            </div>
+          </div>
+
+          <div className="border-t border-zinc-200 p-4 dark:border-zinc-800">
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                disabled={exporting || !hasEdits}
+                onClick={resetUserWorkspace}
+                className="inline-flex h-9 flex-1 items-center justify-center rounded-xl border border-zinc-200 bg-white px-4 text-sm font-medium text-zinc-900 hover:bg-zinc-50 disabled:opacity-50 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-100 dark:hover:bg-zinc-800"
+              >
+                Reset
+              </button>
+              <button
+                type="button"
+                disabled={exporting}
+                onClick={openExportModal}
+                className="inline-flex h-9 flex-1 items-center justify-center rounded-xl bg-zinc-900 px-4 text-sm font-medium text-white hover:bg-zinc-800 disabled:opacity-60 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-white"
+              >
+                {exporting ? "Exporting…" : "Download PNG"}
+              </button>
+            </div>
+          </div>
+        </aside>
+      </div>
+
+      {/* Mobile: sticky action bar */}
+      <div className="fixed inset-x-0 bottom-0 z-30 border-t border-zinc-200 bg-white/90 p-3 backdrop-blur lg:hidden dark:border-zinc-800 dark:bg-zinc-900/80 pb-[calc(env(safe-area-inset-bottom)+0.75rem)]">
+        <div className="mx-auto flex w-full max-w-xl items-center gap-2">
+          <button
+            type="button"
+            disabled={exporting || !hasEdits}
+            onClick={resetUserWorkspace}
+            className="inline-flex h-11 flex-1 items-center justify-center rounded-2xl border border-zinc-200 bg-white px-4 text-sm font-semibold text-zinc-900 hover:bg-zinc-50 disabled:opacity-50 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-100 dark:hover:bg-zinc-800"
+          >
+            Reset
+          </button>
+          <button
+            type="button"
+            disabled={exporting}
+            onClick={openExportModal}
+            className="inline-flex h-11 flex-1 items-center justify-center rounded-2xl bg-zinc-900 px-4 text-sm font-semibold text-white hover:bg-zinc-800 disabled:opacity-60 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-white"
+          >
+            {exporting ? "Exporting…" : "Download PNG"}
+          </button>
+        </div>
+      </div>
+
+      {/* Mobile: details bottom-sheet */}
+      {mobileDetailsOpen ? (
+        <div className="fixed inset-0 z-40 lg:hidden" role="dialog" aria-modal="true">
+          <button
+            type="button"
+            className="absolute inset-0 bg-black/40"
+            aria-label="Close details"
+            onClick={() => setMobileDetailsOpen(false)}
+          />
+          <div className="absolute inset-x-0 bottom-0 max-h-[82dvh] overflow-hidden rounded-t-3xl border border-zinc-200 bg-white shadow-2xl dark:border-zinc-800 dark:bg-zinc-900">
+            <div className="flex items-center justify-between gap-3 border-b border-zinc-200 px-4 py-3 dark:border-zinc-800">
+              <div className="min-w-0">
+                <div className="text-sm font-semibold text-zinc-950 dark:text-zinc-100">Your details</div>
+                <div className="mt-0.5 text-xs text-zinc-600 dark:text-zinc-300">
+                  Step {Math.min(mobileFormPage + 1, mobilePageCount)} of {mobilePageCount}
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setMobileDetailsOpen(false)}
+                className="inline-flex h-9 items-center justify-center rounded-xl border border-zinc-200 bg-white px-3 text-xs font-medium text-zinc-900 hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-100 dark:hover:bg-zinc-800"
+              >
+                Close
+              </button>
+            </div>
+
+            <div
+              ref={mobileFormScrollRef}
+              className="max-h-[calc(82dvh-56px-56px)] overflow-y-auto px-4 py-4"
+            >
+              <div className="space-y-3">
+                {mobilePageFields.map((f) => {
+                  if (f.kind === "text") {
+                    const value = previewTextByNodeId[f.nodeId] ?? "";
+                    return (
+                      <label key={f.id} className="grid gap-1">
+                        <span className="text-xs font-medium text-zinc-900 dark:text-zinc-100">{f.label}</span>
+                        <input
+                          value={value}
+                          maxLength={f.maxChars}
+                          onChange={(e) => onPreviewTextChange(f.nodeId, e.target.value)}
+                          className="h-11 rounded-2xl border border-zinc-200 bg-white px-3 text-sm text-zinc-900 dark:border-zinc-800 dark:bg-zinc-950/30 dark:text-zinc-100"
+                        />
+                      </label>
+                    );
+                  }
+
+                  if (f.kind === "image") {
+                    const allowReplace = f.imageBehavior?.allowReplace ?? true;
+                    const current = previewImageByNodeId[f.nodeId];
+                    const meta = inferFileMeta(current?.file);
+                    return (
+                      <ImageUpload
+                        key={f.id}
+                        label={f.label}
+                        description={undefined}
+                        valueUrl={current?.url}
+                        valueName={meta}
+                        objectFit={
+                          current?.objectFit ??
+                          (f.imageBehavior?.fit ?? (f.cropRule === "contain" ? "contain" : "cover"))
+                        }
+                        disabled={!allowReplace}
+                        onPick={(file) => onPreviewImageChange(f.nodeId, file)}
+                        onClear={allowReplace ? () => onPreviewImageChange(f.nodeId, null) : undefined}
+                      />
+                    );
+                  }
+
+                  if (f.kind === "color") {
+                    const enabled = f.colorBehavior?.enabled ?? true;
+                    if (!enabled) return null;
+
+                    const palette = f.colorBehavior?.palette?.filter(Boolean) ?? [];
+                    const value = previewColorByNodeId[f.nodeId] ?? (palette[0] ?? "#000000");
+
+                    return (
+                      <label key={f.id} className="grid gap-1">
+                        <span className="text-xs font-medium text-zinc-900 dark:text-zinc-100">{f.label}</span>
+                        {palette.length ? (
+                          <select
+                            value={value}
+                            onChange={(e) => onPreviewColorChange(f.nodeId, e.target.value)}
+                            className="h-11 rounded-2xl border border-zinc-200 bg-white px-3 text-sm text-zinc-900 dark:border-zinc-800 dark:bg-zinc-950/30 dark:text-zinc-100"
+                          >
+                            {palette.map((c) => (
+                              <option key={c} value={c}>
+                                {c}
+                              </option>
+                            ))}
+                          </select>
+                        ) : (
+                          <input
+                            type="color"
+                            value={value}
+                            onChange={(e) => onPreviewColorChange(f.nodeId, e.target.value)}
+                            className="h-11 w-24 rounded-2xl border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900"
+                          />
+                        )}
+                      </label>
+                    );
+                  }
+
+                  return null;
+                })}
+              </div>
+            </div>
+
+            <div className="border-t border-zinc-200 px-4 py-3 dark:border-zinc-800 pb-[calc(env(safe-area-inset-bottom)+72px)]">
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  disabled={mobileFormPage <= 0}
+                  onClick={() => {
+                    setMobileFormPage((p) => Math.max(0, p - 1));
+                    requestAnimationFrame(() => mobileFormScrollRef.current?.scrollTo({ top: 0, behavior: "smooth" }));
+                  }}
+                  className="inline-flex h-11 flex-1 items-center justify-center gap-2 rounded-2xl border border-zinc-200 bg-white px-4 text-sm font-semibold text-zinc-900 hover:bg-zinc-50 disabled:opacity-50 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-100 dark:hover:bg-zinc-800"
+                >
+                  <ChevronLeft className="h-4 w-4" />
+                  Back
+                </button>
+                <button
+                  type="button"
+                  disabled={mobileFormPage >= mobilePageCount - 1}
+                  onClick={() => {
+                    setMobileFormPage((p) => Math.min(mobilePageCount - 1, p + 1));
+                    requestAnimationFrame(() => mobileFormScrollRef.current?.scrollTo({ top: 0, behavior: "smooth" }));
+                  }}
+                  className="inline-flex h-11 flex-1 items-center justify-center gap-2 rounded-2xl bg-zinc-900 px-4 text-sm font-semibold text-white hover:bg-zinc-800 disabled:opacity-50 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-white"
+                >
+                  Next
+                  <ChevronRight className="h-4 w-4" />
+                </button>
+              </div>
+              <div className="mt-2 text-center text-[11px] text-zinc-600 dark:text-zinc-300">
+                You can still scroll within a step if needed.
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {/* Mobile: fixed menu drawer */}
+      {mobileMenuOpen ? (
+        <div className="fixed inset-0 z-50 lg:hidden" role="dialog" aria-modal="true">
+          <button
+            type="button"
+            className="absolute inset-0 bg-black/40"
+            aria-label="Close menu"
+            onClick={() => setMobileMenuOpen(false)}
+          />
+          <div className="absolute left-0 top-0 h-full w-[86vw] max-w-sm border-r border-zinc-200 bg-white shadow-2xl dark:border-zinc-800 dark:bg-zinc-900">
+            <div className="flex items-center justify-between border-b border-zinc-200 px-4 py-3 dark:border-zinc-800">
+              <div className="min-w-0">
+                <div className="truncate text-sm font-semibold text-zinc-950 dark:text-zinc-100">{record.name}</div>
+                <div className="truncate text-xs text-zinc-600 dark:text-zinc-300">Menu</div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setMobileMenuOpen(false)}
+                className="inline-flex h-10 w-10 items-center justify-center rounded-2xl border border-zinc-200 bg-white text-zinc-900 hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-100 dark:hover:bg-zinc-800"
+                aria-label="Close menu"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <nav className="p-3">
+              <Link
+                href="/templates"
+                onClick={() => setMobileMenuOpen(false)}
+                className="flex items-center gap-3 rounded-2xl px-3 py-3 text-sm font-medium text-zinc-900 hover:bg-zinc-50 dark:text-zinc-100 dark:hover:bg-zinc-800/60"
+              >
+                <ArrowLeft className="h-5 w-5" />
+                Back to templates
+              </Link>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setMobileMenuOpen(false);
+                  setMobileDetailsOpen(true);
+                }}
+                className="mt-1 flex w-full items-center gap-3 rounded-2xl px-3 py-3 text-left text-sm font-medium text-zinc-900 hover:bg-zinc-50 dark:text-zinc-100 dark:hover:bg-zinc-800/60"
+              >
+                <ChevronRight className="h-5 w-5" />
+                Open details form
+              </button>
+
+              <div className="mt-4 rounded-2xl bg-zinc-50 p-3 text-xs text-zinc-700 dark:bg-zinc-800/40 dark:text-zinc-200">
+                <div className="font-semibold text-zinc-950 dark:text-zinc-100">Tips</div>
+                <div className="mt-1">Pan: hold Space and drag</div>
+                <div>Zoom: Ctrl+Wheel</div>
+              </div>
+            </nav>
+          </div>
+        </div>
+      ) : null}
+
+      {exportModalOpen ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="w-full max-w-md rounded-2xl bg-white p-4 shadow-xl dark:bg-zinc-900">
+            <div className="text-sm font-semibold text-zinc-950 dark:text-zinc-100">Export PNG</div>
+            <div className="mt-1 text-xs text-zinc-600 dark:text-zinc-300">
+              Choose an export quality preset. This prevents accidental low-quality downloads.
+            </div>
+
+            <div className="mt-4 space-y-2">
+              <ExportOption
+                label="WhatsApp"
+                detail={`${Math.round(normalized.canvas.width)}×${Math.round(normalized.canvas.height)} (1×)`}
+                active={exportScale === 1}
+                onClick={() => setExportScale(1)}
+              />
+              <ExportOption
+                label="Instagram / Facebook"
+                detail={`${Math.round(normalized.canvas.width * 2)}×${Math.round(normalized.canvas.height * 2)} (2×)`}
+                active={exportScale === 2}
+                onClick={() => setExportScale(2)}
+              />
+              <ExportOption
+                label="High-Quality / Print"
+                detail={`${Math.round(normalized.canvas.width * 3)}×${Math.round(normalized.canvas.height * 3)} (3×)`}
+                active={exportScale === 3}
+                onClick={() => setExportScale(3)}
+              />
+            </div>
+
+            <div className="mt-4 flex items-center justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setExportModalOpen(false);
+                  setExportScale(null);
+                }}
+                className="inline-flex h-9 items-center justify-center rounded-xl border border-zinc-200 bg-white px-3 text-xs font-medium text-zinc-900 hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-100 dark:hover:bg-zinc-800"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={!exportScale || exporting}
+                onClick={async () => {
+                  if (!exportScale) return;
+                  setExportModalOpen(false);
+                  await doExportPng(exportScale);
+                }}
+                className="inline-flex h-9 items-center justify-center rounded-xl bg-zinc-900 px-3 text-xs font-medium text-white hover:bg-zinc-800 disabled:opacity-50 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-white"
+              >
+                {exporting ? "Exporting…" : "Export"}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      <ProgressModal
+        open={exporting}
+        title="Exporting"
+        subtitle={exportStage || (exportProgress < 0.6 ? "Rendering PNG" : "Finalizing")}
+        percent={Math.round(exportProgress * 100)}
+        hint="Larger designs and custom fonts can take a moment."
+      />
+    </div>
+  );
+}
+
+function ExportOption({
+  label,
+  detail,
+  active,
+  onClick,
+}: {
+  label: string;
+  detail: string;
+  active: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={
+        "flex w-full items-start justify-between gap-3 rounded-xl border px-3 py-2 text-left " +
+        (active
+          ? "border-zinc-900 bg-zinc-50 dark:border-zinc-200 dark:bg-zinc-800/60"
+          : "border-zinc-200 bg-white hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-900 dark:hover:bg-zinc-800/60")
+      }
+    >
+      <div>
+        <div className="text-sm font-medium text-zinc-950 dark:text-zinc-100">{label}</div>
+        <div className="text-xs text-zinc-600 dark:text-zinc-300">{detail}</div>
+      </div>
+      <div
+        className={
+          "mt-1 h-4 w-4 rounded-full border " +
+          (active
+            ? "border-zinc-900 bg-zinc-900 dark:border-zinc-100 dark:bg-zinc-100"
+            : "border-zinc-300 bg-white dark:border-zinc-700 dark:bg-zinc-900")
+        }
+      />
+    </button>
+  );
+}
+

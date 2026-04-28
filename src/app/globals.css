@@ -1,0 +1,254 @@
+@import "tailwindcss";
+
+/*
+  Tailwind v4 defaults `dark:` to prefers-color-scheme media.
+  We want the app-wide toggle (html.dark) to control ALL dark styles.
+*/
+@custom-variant dark (&:where(.dark, .dark *));
+
+:root {
+  --background: #ffffff;
+  --foreground: #0a0a0a;
+  --surface: #ffffff;
+  --surface-muted: #fafafa;
+  --border: #e4e4e7;
+  --muted: #71717a;
+  --placeholder: #a1a1aa;
+  --ring: rgba(59, 130, 246, 0.5);
+
+  /* UI font stack (platform system fonts).
+     iOS/macOS: San Francisco via system-ui / -apple-system
+     Android: Roboto via system-ui
+     Windows 11: Segoe UI Variable (preferred) */
+  --font-ui:
+    "Segoe UI Variable", system-ui, -apple-system, BlinkMacSystemFont,
+    "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", "Liberation Sans",
+    sans-serif;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-ui);
+  --font-mono: var(--font-geist-mono);
+}
+
+html.dark {
+  --background: #09090b;
+  --foreground: #f4f4f5;
+  --surface: #0f0f12;
+  --surface-muted: #141418;
+  --border: #27272a;
+  --muted: #a1a1aa;
+  --placeholder: #71717a;
+  --ring: rgba(59, 130, 246, 0.55);
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-ui);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  @keyframes fyb-modal-overlay-in {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
+  }
+  @keyframes fyb-modal-overlay-out {
+    from {
+      opacity: 1;
+    }
+    to {
+      opacity: 0;
+    }
+  }
+  @keyframes fyb-modal-card-in {
+    from {
+      opacity: 0;
+      transform: translateY(10px) scale(0.985);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0) scale(1);
+    }
+  }
+  @keyframes fyb-modal-card-out {
+    from {
+      opacity: 1;
+      transform: translateY(0) scale(1);
+    }
+    to {
+      opacity: 0;
+      transform: translateY(8px) scale(0.99);
+    }
+  }
+
+  .fyb-modal-overlay-in {
+    animation: fyb-modal-overlay-in 160ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  }
+  .fyb-modal-overlay-out {
+    animation: fyb-modal-overlay-out 160ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  }
+  .fyb-modal-card-in {
+    animation: fyb-modal-card-in 180ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  }
+  .fyb-modal-card-out {
+    animation: fyb-modal-card-out 160ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  }
+
+  .fyb-dots {
+    display: inline-flex;
+    gap: 3px;
+    margin-left: 2px;
+  }
+  .fyb-dots > span {
+    width: 4px;
+    height: 4px;
+    border-radius: 999px;
+    background: currentColor;
+    opacity: 0.35;
+    animation: fyb-dot 900ms ease-in-out infinite;
+  }
+  .fyb-dots > span:nth-child(2) {
+    animation-delay: 120ms;
+  }
+  .fyb-dots > span:nth-child(3) {
+    animation-delay: 240ms;
+  }
+
+  @keyframes fyb-dot {
+    0%,
+    100% {
+      transform: translateY(0);
+      opacity: 0.35;
+    }
+    50% {
+      transform: translateY(-2px);
+      opacity: 0.85;
+    }
+  }
+
+  @keyframes fyb-shimmer {
+    0% {
+      transform: translateX(-120%);
+    }
+    100% {
+      transform: translateX(120%);
+    }
+  }
+
+  .fyb-skeleton-shine {
+    position: relative;
+    overflow: hidden;
+  }
+
+  .fyb-skeleton-shine::before {
+    content: "";
+    position: absolute;
+    inset: -30%;
+    background:
+      radial-gradient(
+        circle at 30% 30%,
+        rgba(16, 185, 129, 0.14),
+        transparent 55%
+      ),
+      radial-gradient(
+        circle at 70% 70%,
+        rgba(168, 85, 247, 0.12),
+        transparent 55%
+      );
+    filter: blur(18px);
+    opacity: 0.55;
+    pointer-events: none;
+  }
+
+  .fyb-skeleton-shine::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(
+      90deg,
+      transparent 0%,
+      rgba(255, 255, 255, 0.55) 35%,
+      transparent 70%
+    );
+    transform: translateX(-120%);
+    animation: fyb-shimmer 1.35s ease-in-out infinite;
+    pointer-events: none;
+    mix-blend-mode: overlay;
+  }
+
+  html.dark .fyb-skeleton-shine::after {
+    background: linear-gradient(
+      90deg,
+      transparent 0%,
+      rgba(255, 255, 255, 0.14) 35%,
+      transparent 70%
+    );
+    mix-blend-mode: screen;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .fyb-modal-overlay-in,
+  .fyb-modal-overlay-out,
+  .fyb-modal-card-in,
+  .fyb-modal-card-out {
+    animation: none !important;
+  }
+}
+
+/* Smooth theme transitions (only when user hasn't requested reduced motion). */
+@media (prefers-reduced-motion: no-preference) {
+  html.theme-transition,
+  html.theme-transition * {
+    transition-property: background-color, border-color, color, fill, stroke;
+    transition-duration: 180ms;
+    transition-timing-function: cubic-bezier(0.2, 0.8, 0.2, 1);
+  }
+}
+
+/* Form controls should stay readable in both themes. */
+input,
+textarea,
+select {
+  color: var(--foreground);
+  background: var(--surface);
+  border-color: var(--border);
+}
+
+input::placeholder,
+textarea::placeholder {
+  color: var(--placeholder);
+  opacity: 1;
+}
+
+input:focus,
+textarea:focus,
+select:focus {
+  outline: 2px solid transparent;
+  outline-offset: 2px;
+  box-shadow: 0 0 0 3px var(--ring);
+}
+
+/* Keyboard focus should be visible on links/buttons too. */
+a:focus-visible,
+button:focus-visible,
+[role="button"]:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+
+/* Let built-in widgets (scrollbars, etc.) choose appropriate colors. */
+html {
+  color-scheme: light;
+}
+
+html.dark {
+  color-scheme: dark;
+}

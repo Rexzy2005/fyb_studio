@@ -177,53 +177,6 @@ export default function Home() {
 
   return (
     <div className="min-h-dvh bg-zinc-50 dark:bg-zinc-950">
-      <style jsx global>{`
-        @keyframes fybBlink {
-          0%, 49% { opacity: 1; }
-          50%, 100% { opacity: 0; }
-        }
-
-        @keyframes fybPing {
-          0% { transform: scale(1); opacity: 0.55; }
-          70% { transform: scale(2.8); opacity: 0; }
-          100% { transform: scale(3.2); opacity: 0; }
-        }
-
-        @keyframes fybProgress {
-          0% { width: 12%; }
-          55% { width: 78%; }
-          100% { width: 92%; }
-        }
-
-        @keyframes fybFill {
-          0% { width: 14%; opacity: 0.7; }
-          70% { width: 82%; opacity: 1; }
-          100% { width: 82%; opacity: 1; }
-        }
-
-        @keyframes fybFloat {
-          0% { transform: translateY(0px); }
-          50% { transform: translateY(-3px); }
-          100% { transform: translateY(0px); }
-        }
-
-        @keyframes fybCursor {
-          0% { transform: translate(0px, 0px); opacity: 0; }
-          8% { opacity: 1; }
-          92% { opacity: 1; }
-          100% { transform: translate(var(--cx, 0px), var(--cy, 0px)); opacity: 0; }
-        }
-
-        @keyframes fybGlow {
-          0% { opacity: 0.35; }
-          50% { opacity: 0.8; }
-          100% { opacity: 0.35; }
-        }
-
-        @media (prefers-reduced-motion: reduce) {
-          * { scroll-behavior: auto !important; }
-        }
-      `}</style>
       <div className="pointer-events-none fixed inset-0 -z-10 overflow-hidden">
         <div className="absolute -top-24 left-1/2 h-130 w-130 -translate-x-1/2 rounded-full bg-zinc-200/40 blur-3xl dark:bg-zinc-800/50" />
         <div className="absolute -top-10 -right-35 h-105 w-105 rounded-full bg-emerald-200/25 blur-3xl dark:bg-emerald-900/10" />

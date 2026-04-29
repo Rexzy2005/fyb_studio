@@ -2,7 +2,7 @@
 
 import { use, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { ArrowLeft, ChevronLeft, ChevronRight, Menu, X } from "lucide-react";
 
 import type { NormalizedDesignV1 } from "@/lib/figma";
@@ -40,6 +40,7 @@ export default function UseTemplatePage({
   params: Promise<{ id: string }>;
 }) {
   const { id: templateId } = use(params);
+  const router = useRouter();
   const searchParams = useSearchParams();
   const requestedDesignId = searchParams.get("userDesignId");
 
@@ -385,6 +386,8 @@ export default function UseTemplatePage({
       }
 
       await markDownloaded(userDesign.id, thumbnail);
+      setExportModalOpen(false);
+      router.push("/dashboard");
     } finally {
       setExporting(false);
       setExportStage("");

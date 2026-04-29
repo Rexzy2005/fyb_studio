@@ -3,9 +3,10 @@
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 
-import { usePreviewUrl } from "@/components/admin/usePreviewUrl";
-import { createLocalTemplateRepository } from "@/lib/storage/templateRepo";
-import type { TemplateMeta } from "@/lib/storage/types";
+import {
+  fetchPublicTemplateList,
+  type PublicTemplateListItem,
+} from "@/lib/api/publicTemplates";
 
 export default function Home() {
   const heroRef = useRef<HTMLDivElement | null>(null);
@@ -65,8 +66,7 @@ export default function Home() {
   );
   const [activeField, setActiveField] = useState(0);
 
-  const repo = useMemo(() => createLocalTemplateRepository(), []);
-  const [teaser, setTeaser] = useState<TemplateMeta[]>([]);
+  const [teaser, setTeaser] = useState<PublicTemplateListItem[]>([]);
 
   useEffect(() => {
     const mq = window.matchMedia?.("(prefers-reduced-motion: reduce)");
@@ -129,15 +129,18 @@ export default function Home() {
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      const list = await repo.listMeta();
-      const publishedWithPreview = list.filter((t) => t.status === "published" && Boolean(t.previewId));
-      if (cancelled) return;
-      setTeaser(publishedWithPreview.slice(0, 9));
+      try {
+        const list = await fetchPublicTemplateList();
+        if (cancelled) return;
+        setTeaser(list.slice(0, 9));
+      } catch (err) {
+        if (!cancelled) console.warn("[home] teaser fetch failed", err);
+      }
     })();
     return () => {
       cancelled = true;
     };
-  }, [repo]);
+  }, []);
 
   useEffect(() => {
     const section = howRef.current;
@@ -522,11 +525,11 @@ export default function Home() {
           <div className="mt-6 columns-2 gap-3 sm:columns-3 lg:columns-4">
             {(teaser.length ? teaser : new Array(8).fill(null)).map((t, idx) => (
               <div
-                key={(t as TemplateMeta | null)?.id ?? `s-${idx}`}
+                key={(t as PublicTemplateListItem | null)?.id ?? `s-${idx}`}
                 className="mb-3 break-inside-avoid overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-900"
               >
                 {t ? (
-                  <TeaserTile templateId={t.id} previewId={t.previewId!} />
+                  <TeaserTile template={t} />
                 ) : (
                   <div className="aspect-4/5 w-full animate-pulse bg-zinc-100 dark:bg-zinc-800/60" />
                 )}
@@ -1040,22 +1043,17 @@ function HowVisual({
   );
 }
 
-function TeaserTile({ templateId, previewId }: { templateId: string; previewId: string }) {
-  const { url } = usePreviewUrl(previewId);
+function TeaserTile({ template }: { template: PublicTemplateListItem }) {
   return (
-    <Link href={`/templates/${templateId}`} className="group block">
+    <Link href={`/templates/${template.id}/use`} className="group block">
       <div className="relative w-full overflow-hidden bg-zinc-100 dark:bg-zinc-800/60">
         <div className="aspect-4/5 w-full" />
-        {url ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={url}
-            alt="Template preview"
-            className="absolute inset-0 h-full w-full object-contain p-3 transition-transform duration-500 ease-out group-hover:scale-[1.03] motion-reduce:transition-none"
-          />
-        ) : (
-          <div className="absolute inset-0 animate-pulse bg-zinc-100 dark:bg-zinc-800/60" />
-        )}
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src={template.coverUrl}
+          alt={`${template.name} preview`}
+          className="absolute inset-0 h-full w-full object-contain p-3 transition-transform duration-500 ease-out group-hover:scale-[1.03] motion-reduce:transition-none"
+        />
         <div className="pointer-events-none absolute inset-x-0 bottom-0 h-12 bg-linear-to-t from-zinc-950/10 to-transparent dark:from-black/25" />
       </div>
     </Link>

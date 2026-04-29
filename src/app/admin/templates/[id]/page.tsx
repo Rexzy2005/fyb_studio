@@ -18,6 +18,15 @@ import { ImageUpload } from "@/components/forms/ImageUpload";
 import { ProgressModal } from "@/components/ui/ProgressModal";
 import { useSimulatedProgress } from "@/components/ui/useSimulatedProgress";
 import { NormalizationWarningsModal } from "@/components/ui/NormalizationWarningsModal";
+import {
+  fetchAdminTemplate,
+  publishTemplateToBackend,
+  unpublishTemplate,
+  updateTemplateOnBackend,
+  type RemoteTemplate,
+} from "@/lib/api/adminTemplates";
+
+type EditorMode = "draft" | "published";
 
 type TemplateCategoryPreset = "fyb" | "signout" | "other";
 
@@ -46,7 +55,9 @@ export default function TemplateEditorPage({
   const { id } = use(params);
   const repo = useMemo(() => createLocalTemplateRepository(), []);
   const router = useRouter();
+  const [mode, setMode] = useState<EditorMode | null>(null);
   const [record, setRecord] = useState<TemplateRecord | null>(null);
+  const [remoteAssets, setRemoteAssets] = useState<RemoteTemplate["designAssets"]>([]);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [normalizing, setNormalizing] = useState(false);
@@ -60,6 +71,17 @@ export default function TemplateEditorPage({
   const [publishing, setPublishing] = useState(false);
   const [publishCategoryPreset, setPublishCategoryPreset] = useState<TemplateCategoryPreset>("fyb");
   const [publishCategoryOther, setPublishCategoryOther] = useState("");
+
+  const [updateModalOpen, setUpdateModalOpen] = useState(false);
+  const [updateCoverFile, setUpdateCoverFile] = useState<File | null>(null);
+  const [updateCoverUrl, setUpdateCoverUrl] = useState<string | null>(null);
+  const [updateError, setUpdateError] = useState<string | null>(null);
+  const [updating, setUpdating] = useState(false);
+
+  const [unpublishModalOpen, setUnpublishModalOpen] = useState(false);
+  const [unpublishConfirmInput, setUnpublishConfirmInput] = useState("");
+  const [unpublishError, setUnpublishError] = useState<string | null>(null);
+  const [unpublishing, setUnpublishing] = useState(false);
 
   const [warningsModalOpen, setWarningsModalOpen] = useState(false);
 
@@ -77,7 +99,22 @@ export default function TemplateEditorPage({
   const selectedNodeId = useTemplateEditorStore((s) => s.selectedNodeId);
   const setSelectedNodeId = useTemplateEditorStore((s) => s.setSelectedNodeId);
 
-  const { designAssetImageByNodeId, reloadDesignAssets } = useDesignAssets(id);
+  const localAssetTemplateId = mode === "draft" ? id : null;
+  const { designAssetImageByNodeId: localDesignAssets, reloadDesignAssets } =
+    useDesignAssets(localAssetTemplateId);
+
+  const remoteDesignAssetMap = useMemo(() => {
+    if (mode !== "published") return {};
+    const out: Record<string, { url: string; objectFit: "cover" | "contain" }> = {};
+    for (const a of remoteAssets) {
+      out[a.nodeId] = { url: a.url, objectFit: "cover" };
+    }
+    return out;
+  }, [mode, remoteAssets]);
+
+  const designAssetImageByNodeId =
+    mode === "published" ? remoteDesignAssetMap : localDesignAssets;
+
   const renderImageByNodeId = useMemo(
     () => composeImageMap(previewImageByNodeId, designAssetImageByNodeId, record?.fieldConfig),
     [previewImageByNodeId, designAssetImageByNodeId, record?.fieldConfig],
@@ -97,19 +134,52 @@ export default function TemplateEditorPage({
         if (v._revoke) URL.revokeObjectURL(v.url);
       }
       if (publishPreviewUrl) URL.revokeObjectURL(publishPreviewUrl);
+      if (updateCoverUrl) URL.revokeObjectURL(updateCoverUrl);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
+    let cancelled = false;
     (async () => {
       try {
-        const r = await repo.get(id);
-        setRecord(r);
+        const local = await repo.get(id);
+        if (cancelled) return;
+        if (local) {
+          setMode("draft");
+          setRecord(local);
+          setRemoteAssets([]);
+          return;
+        }
+
+        const remote = await fetchAdminTemplate(id);
+        if (cancelled) return;
+        if (!remote) {
+          setError("Template not found");
+          return;
+        }
+
+        setMode("published");
+        setRemoteAssets(remote.designAssets);
+        setRecord({
+          id: remote.id,
+          name: remote.name,
+          category: remote.category ?? undefined,
+          status: "published",
+          createdAt: remote.publishedAt,
+          updatedAt: remote.updatedAt,
+          designJson: remote.designJson,
+          normalized: remote.normalized,
+          fieldConfig: remote.fieldConfig as TemplateRecord["fieldConfig"],
+          previewId: undefined,
+        });
       } catch (e) {
-        setError(e instanceof Error ? e.message : "Unknown error");
+        if (!cancelled) setError(e instanceof Error ? e.message : "Unknown error");
       }
     })();
+    return () => {
+      cancelled = true;
+    };
   }, [id, repo]);
 
   if (error) {
@@ -140,6 +210,10 @@ export default function TemplateEditorPage({
 
   async function normalizeNow() {
     if (!record) return;
+    if (mode !== "draft") {
+      setError("Re-normalization is only available for drafts. Unpublish to re-normalize.");
+      return;
+    }
     setError(null);
     setBusy(true);
     setNormalizing(true);
@@ -158,21 +232,6 @@ export default function TemplateEditorPage({
     } finally {
       setBusy(false);
       setNormalizing(false);
-    }
-  }
-
-  async function setStatus(status: "draft" | "published") {
-    if (!record) return;
-    setError(null);
-    setBusy(true);
-    try {
-      await repo.setStatus(record.id, status);
-      const refreshed = await repo.get(record.id);
-      setRecord(refreshed);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to update status");
-    } finally {
-      setBusy(false);
     }
   }
 
@@ -236,6 +295,7 @@ export default function TemplateEditorPage({
   async function confirmPublishWithPreview() {
     if (!record) return;
     if (!normalized) return;
+    if (mode !== "draft") return;
 
     const categoryValue = resolveCategoryValue(publishCategoryPreset, publishCategoryOther);
     if (!categoryValue) {
@@ -251,20 +311,23 @@ export default function TemplateEditorPage({
     setPublishing(true);
     setBusy(true);
     try {
-      // Persist category/type before publishing so lists/search can use it.
-      const updated = await repo.upsertDraft({
-        id: record.id,
+      const localAssets = await repo.listDesignAssets(record.id);
+      const assetFiles = localAssets.map((a) => ({
+        nodeId: a.nodeId,
+        file: new File([a.blob], `${a.nodeId}.bin`, { type: a.mime || "image/png" }),
+      }));
+
+      await publishTemplateToBackend({
         name: record.name,
         category: categoryValue,
         designJson: record.designJson,
         normalized: record.normalized,
         fieldConfig: record.fieldConfig,
+        coverFile: publishFile,
+        assetFiles,
       });
-      setRecord(updated);
 
-      const { width, height } = await getImageDimensionsFromBlob(publishFile);
-      await repo.attachPreview({ templateId: record.id, blob: publishFile, width, height });
-      await repo.setStatus(record.id, "published");
+      await repo.delete(record.id);
       closePublishModal();
       router.push("/admin/templates");
       router.refresh();
@@ -276,10 +339,121 @@ export default function TemplateEditorPage({
     }
   }
 
+  function openUpdateModal() {
+    setUpdateError(null);
+    setUpdateCoverFile(null);
+    if (updateCoverUrl) {
+      URL.revokeObjectURL(updateCoverUrl);
+      setUpdateCoverUrl(null);
+    }
+    setUpdateModalOpen(true);
+  }
+
+  function closeUpdateModal() {
+    setUpdateModalOpen(false);
+    setUpdateError(null);
+    setUpdateCoverFile(null);
+    if (updateCoverUrl) {
+      URL.revokeObjectURL(updateCoverUrl);
+      setUpdateCoverUrl(null);
+    }
+  }
+
+  function onPickUpdateCover(file: File) {
+    setUpdateError(null);
+    if (!file.type.startsWith("image/")) {
+      setUpdateError("Please upload an image file (PNG, JPG, or WebP).");
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      setUpdateError("Cover image must be under 5MB.");
+      return;
+    }
+    if (updateCoverUrl) URL.revokeObjectURL(updateCoverUrl);
+    setUpdateCoverFile(file);
+    setUpdateCoverUrl(URL.createObjectURL(file));
+  }
+
+  async function confirmUpdate() {
+    if (!record || mode !== "published") return;
+    setUpdateError(null);
+    setUpdating(true);
+    setBusy(true);
+    try {
+      const updated = await updateTemplateOnBackend({
+        templateId: record.id,
+        name: record.name,
+        category: record.category ?? null,
+        designJson: record.designJson,
+        normalized: record.normalized,
+        fieldConfig: record.fieldConfig,
+        replaceCoverFile: updateCoverFile,
+      });
+      setRecord({
+        id: updated.id,
+        name: updated.name,
+        category: updated.category ?? undefined,
+        status: "published",
+        createdAt: updated.publishedAt,
+        updatedAt: updated.updatedAt,
+        designJson: updated.designJson,
+        normalized: updated.normalized,
+        fieldConfig: updated.fieldConfig as TemplateRecord["fieldConfig"],
+        previewId: undefined,
+      });
+      setRemoteAssets(updated.designAssets);
+      closeUpdateModal();
+    } catch (e) {
+      setUpdateError(e instanceof Error ? e.message : "Failed to update template");
+    } finally {
+      setBusy(false);
+      setUpdating(false);
+    }
+  }
+
+  function openUnpublishModal() {
+    setUnpublishConfirmInput("");
+    setUnpublishError(null);
+    setUnpublishModalOpen(true);
+  }
+
+  function closeUnpublishModal() {
+    if (unpublishing) return;
+    setUnpublishModalOpen(false);
+    setUnpublishConfirmInput("");
+    setUnpublishError(null);
+  }
+
+  async function confirmUnpublish() {
+    if (!record || mode !== "published") return;
+    if (unpublishConfirmInput.trim() !== record.name.trim()) {
+      setUnpublishError("Name doesn't match. Please type it exactly.");
+      return;
+    }
+    setUnpublishError(null);
+    setUnpublishing(true);
+    setBusy(true);
+    try {
+      await unpublishTemplate(record.id, unpublishConfirmInput.trim());
+      router.push("/admin/templates");
+      router.refresh();
+    } catch (e) {
+      setUnpublishError(e instanceof Error ? e.message : "Failed to unpublish");
+      setUnpublishing(false);
+      setBusy(false);
+    }
+  }
+
   async function updateFieldConfig(nextConfig: TemplateRecord["fieldConfig"]) {
     if (!record) return;
-    const { id, name, designJson, normalized: normalizedAny } = record;
     setRecord({ ...record, fieldConfig: nextConfig });
+
+    if (mode !== "draft") {
+      // Published: edits stay in-memory until admin clicks Update.
+      return;
+    }
+
+    const { id, name, designJson, normalized: normalizedAny } = record;
     setSavingConfig(true);
     setError(null);
 
@@ -410,7 +584,7 @@ export default function TemplateEditorPage({
             </button>
           )}
 
-          {record.status === "draft" ? (
+          {mode === "draft" ? (
             <button
               type="button"
               onClick={openPublishModal}
@@ -420,16 +594,28 @@ export default function TemplateEditorPage({
             >
               Publish
             </button>
-          ) : (
-            <button
-              type="button"
-              onClick={() => setStatus("draft")}
-              disabled={busy}
-              className="inline-flex h-9 items-center justify-center rounded-xl border border-zinc-200 bg-white px-3 text-xs font-medium text-zinc-900 hover:bg-zinc-50 disabled:opacity-50 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-100 dark:hover:bg-zinc-800"
-            >
-              Unpublish
-            </button>
-          )}
+          ) : null}
+
+          {mode === "published" ? (
+            <>
+              <button
+                type="button"
+                onClick={openUpdateModal}
+                disabled={busy}
+                className="inline-flex h-9 items-center justify-center rounded-xl bg-emerald-600 px-3 text-xs font-medium text-white disabled:opacity-50"
+              >
+                Update
+              </button>
+              <button
+                type="button"
+                onClick={openUnpublishModal}
+                disabled={busy}
+                className="inline-flex h-9 items-center justify-center rounded-xl border border-red-200 bg-red-50 px-3 text-xs font-medium text-red-700 hover:bg-red-100 disabled:opacity-50 dark:border-red-900/40 dark:bg-red-950/30 dark:text-red-200 dark:hover:bg-red-950/50"
+              >
+                Unpublish
+              </button>
+            </>
+          ) : null}
         </div>
       </header>
 
@@ -488,7 +674,7 @@ export default function TemplateEditorPage({
                 onPreviewImageChange={onPreviewImageChange}
                 previewColorByNodeId={previewColorByNodeId}
                 onPreviewColorChange={onPreviewColorChange}
-                templateId={id}
+                templateId={mode === "draft" ? id : null}
                 onDesignAssetsChanged={reloadDesignAssets}
               />
             </div>
@@ -644,6 +830,156 @@ export default function TemplateEditorPage({
           return node?.name || node?.figmaType;
         }}
       />
+
+      {updateModalOpen ? (
+        <div className="fixed inset-0 z-50">
+          <div
+            className="absolute inset-0 bg-black/40 backdrop-blur-sm"
+            onClick={() => {
+              if (updating) return;
+              closeUpdateModal();
+            }}
+          />
+          <div className="absolute inset-0 flex items-center justify-center p-4">
+            <div className="w-full max-w-xl overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-2xl dark:border-zinc-800 dark:bg-zinc-900">
+              <div className="border-b border-zinc-200 px-5 py-4 dark:border-zinc-800">
+                <div className="text-sm font-semibold text-zinc-950 dark:text-zinc-100">
+                  Update published template
+                </div>
+                <div className="mt-1 text-xs text-zinc-600 dark:text-zinc-300">
+                  Replace the cover photo, or skip to keep the current one.
+                </div>
+              </div>
+
+              <div className="space-y-4 px-5 py-4">
+                <ImageUpload
+                  label="Cover photo (optional)"
+                  description="Drag & drop or click to choose. Skip to keep the current cover."
+                  accept="image/*"
+                  objectFit="contain"
+                  valueUrl={updateCoverUrl ?? undefined}
+                  valueName={
+                    updateCoverFile
+                      ? `${updateCoverFile.name} • ${Math.round(updateCoverFile.size / 1024)} KB`
+                      : undefined
+                  }
+                  disabled={updating}
+                  onPick={onPickUpdateCover}
+                  onClear={
+                    updating
+                      ? undefined
+                      : () => {
+                          setUpdateCoverFile(null);
+                          if (updateCoverUrl) {
+                            URL.revokeObjectURL(updateCoverUrl);
+                            setUpdateCoverUrl(null);
+                          }
+                        }
+                  }
+                />
+
+                <div className="rounded-2xl border border-zinc-200 bg-zinc-50 p-3 text-[11px] text-zinc-600 dark:border-zinc-800 dark:bg-zinc-800/30 dark:text-zinc-300">
+                  Updates push silently to all users in real time. Locked images
+                  cannot be replaced from this screen — unpublish and republish to
+                  swap them.
+                </div>
+
+                {updateError ? (
+                  <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-xs text-red-700 dark:border-red-900/40 dark:bg-red-950/40 dark:text-red-200">
+                    {updateError}
+                  </div>
+                ) : null}
+              </div>
+
+              <div className="flex items-center justify-end gap-2 border-t border-zinc-200 px-5 py-4 dark:border-zinc-800">
+                <button
+                  type="button"
+                  onClick={closeUpdateModal}
+                  disabled={updating}
+                  className="inline-flex h-9 items-center justify-center rounded-xl border border-zinc-200 bg-white px-3 text-xs font-medium text-zinc-900 hover:bg-zinc-50 disabled:opacity-50 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-100 dark:hover:bg-zinc-800"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={confirmUpdate}
+                  disabled={updating}
+                  className="inline-flex h-9 items-center justify-center rounded-xl bg-emerald-600 px-3 text-xs font-medium text-white disabled:opacity-50"
+                >
+                  {updating
+                    ? "Updating…"
+                    : updateCoverFile
+                      ? "Update with new cover"
+                      : "Update (keep cover)"}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {unpublishModalOpen ? (
+        <div className="fixed inset-0 z-50">
+          <div
+            className="absolute inset-0 bg-black/40 backdrop-blur-sm"
+            onClick={closeUnpublishModal}
+          />
+          <div className="absolute inset-0 flex items-center justify-center p-4">
+            <div className="w-full max-w-md overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-2xl dark:border-zinc-800 dark:bg-zinc-900">
+              <div className="border-b border-zinc-200 px-5 py-4 dark:border-zinc-800">
+                <div className="text-sm font-semibold text-red-700 dark:text-red-300">
+                  Unpublish template
+                </div>
+                <div className="mt-1 text-xs text-zinc-600 dark:text-zinc-300">
+                  This permanently deletes the template and all its assets from
+                  Cloudinary. This action cannot be undone.
+                </div>
+              </div>
+
+              <div className="space-y-3 px-5 py-4">
+                <div className="text-xs text-zinc-700 dark:text-zinc-200">
+                  Type <span className="font-semibold">{record?.name}</span> to confirm.
+                </div>
+                <input
+                  value={unpublishConfirmInput}
+                  onChange={(e) => setUnpublishConfirmInput(e.target.value)}
+                  disabled={unpublishing}
+                  placeholder={record?.name ?? ""}
+                  className="h-10 w-full rounded-xl border border-zinc-200 bg-white px-3 text-sm text-zinc-900 shadow-sm outline-none transition focus-visible:ring-2 focus-visible:ring-red-500/40 disabled:opacity-50 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-100"
+                />
+                {unpublishError ? (
+                  <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-xs text-red-700 dark:border-red-900/40 dark:bg-red-950/40 dark:text-red-200">
+                    {unpublishError}
+                  </div>
+                ) : null}
+              </div>
+
+              <div className="flex items-center justify-end gap-2 border-t border-zinc-200 px-5 py-4 dark:border-zinc-800">
+                <button
+                  type="button"
+                  onClick={closeUnpublishModal}
+                  disabled={unpublishing}
+                  className="inline-flex h-9 items-center justify-center rounded-xl border border-zinc-200 bg-white px-3 text-xs font-medium text-zinc-900 hover:bg-zinc-50 disabled:opacity-50 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-100 dark:hover:bg-zinc-800"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={confirmUnpublish}
+                  disabled={
+                    unpublishing ||
+                    !record ||
+                    unpublishConfirmInput.trim() !== record.name.trim()
+                  }
+                  className="inline-flex h-9 items-center justify-center rounded-xl bg-red-600 px-3 text-xs font-medium text-white disabled:opacity-50"
+                >
+                  {unpublishing ? "Deleting…" : "Yes, unpublish"}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

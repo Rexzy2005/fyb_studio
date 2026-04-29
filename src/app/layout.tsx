@@ -4,6 +4,7 @@ import "./globals.css";
 import { ThemeScript } from "@/components/theme/ThemeScript";
 import { ThemeToggleFloating } from "@/components/theme/ThemeToggleFloating";
 import { SessionProvider } from "@/components/auth/SessionProvider";
+import { ExpirySweeper } from "@/components/userDesigns/ExpirySweeper";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -40,6 +41,7 @@ export default function RootLayout({
         className={`${geistSans.variable} ${geistMono.variable} ${msMadi.variable} min-h-screen bg-background text-foreground antialiased`}
       >
         <SessionProvider>
+          <ExpirySweeper />
           <ThemeToggleFloating />
           {children}
         </SessionProvider>

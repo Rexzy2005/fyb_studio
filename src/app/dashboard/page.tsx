@@ -2,6 +2,7 @@ import Link from "next/link";
 import { auth } from "@/backend/auth/config";
 import { getUserProfile } from "@/backend/services/user.service";
 import { SignOutButton } from "@/components/auth/SignOutButton";
+import { RecentDownloads } from "@/components/dashboard/RecentDownloads";
 
 export const metadata = {
   title: "Dashboard — FYB Studio",
@@ -93,14 +94,12 @@ export default async function DashboardPage() {
                 Pick a sign-out tee, face cap, or banner.
               </div>
             </Link>
-            <div className="rounded-2xl border border-dashed border-zinc-200 bg-zinc-50 p-4 text-zinc-500 dark:border-zinc-800 dark:bg-zinc-900/50 dark:text-zinc-400">
-              <div className="text-xs font-semibold tracking-wide">Your designs</div>
-              <div className="mt-1 text-[11px]">
-                Coming soon — this is where your saved designs will live.
-              </div>
-            </div>
           </div>
         </section>
+
+        <div className="mt-6">
+          <RecentDownloads />
+        </div>
       </main>
     </div>
   );

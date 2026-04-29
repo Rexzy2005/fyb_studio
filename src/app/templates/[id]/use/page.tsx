@@ -1,16 +1,24 @@
 "use client";
 
-import { use, useEffect, useMemo, useRef, useState } from "react";
+import { use, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { ArrowLeft, ChevronLeft, ChevronRight, Menu, X } from "lucide-react";
 
 import type { NormalizedDesignV1 } from "@/lib/figma";
 import { composeImageMap } from "@/lib/render/composeImageMap";
 import { exportTemplatePng } from "@/lib/render/exportPng";
-import { useDesignAssets } from "@/lib/render/useDesignAssets";
+import { useRemoteDesignAssets } from "@/lib/render/useRemoteDesignAssets";
 import { useTemplateEditorStore } from "@/lib/stores/templateEditorStore";
-import { createLocalTemplateRepository } from "@/lib/storage/templateRepo";
-import type { TemplateRecord } from "@/lib/storage/types";
+import type { FieldConfig, UserDesignRecord } from "@/lib/storage/types";
+import {
+  createInProgressDesign,
+  findInProgressByTemplate,
+  getUserDesign,
+  markDownloaded,
+  saveInputs,
+} from "@/lib/storage/userDesignRepo";
+import { fetchPublicTemplate } from "@/lib/api/publicTemplates";
 
 import { DesignWorkspace } from "@/components/editor/DesignWorkspace";
 import { useGoogleFonts } from "@/components/editor/useGoogleFonts";
@@ -18,14 +26,25 @@ import { ImageUpload, inferFileMeta } from "@/components/forms/ImageUpload";
 import { ProgressModal } from "@/components/ui/ProgressModal";
 import { useSimulatedProgress } from "@/components/ui/useSimulatedProgress";
 
+function deriveCategoryLabel(name: string, explicit: string | null): string {
+  const e = explicit?.trim();
+  if (e) return e;
+  const n = name.toLowerCase();
+  if (/(sign\s*-?\s*out|signed\s*out)/.test(n)) return "Sign-out";
+  return "FYB";
+}
+
 export default function UseTemplatePage({
   params,
 }: {
   params: Promise<{ id: string }>;
 }) {
-  const { id } = use(params);
-  const repo = useMemo(() => createLocalTemplateRepository(), []);
-  const [record, setRecord] = useState<TemplateRecord | null>(null);
+  const { id: templateId } = use(params);
+  const searchParams = useSearchParams();
+  const requestedDesignId = searchParams.get("userDesignId");
+
+  const [userDesign, setUserDesign] = useState<UserDesignRecord | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [exportStage, setExportStage] = useState<string>("");
@@ -40,22 +59,32 @@ export default function UseTemplatePage({
   const [previewTextByNodeId, setPreviewTextByNodeId] = useState<Record<string, string>>({});
   const [previewImageByNodeId, setPreviewImageByNodeId] = useState<Record<
     string,
-    { url: string; file?: File; objectFit: "cover" | "contain"; _revoke?: boolean }
+    { url: string; blob: Blob; objectFit: "cover" | "contain"; _revoke?: boolean }
   >>({});
   const [previewColorByNodeId, setPreviewColorByNodeId] = useState<Record<string, string>>({});
   const previewImagesRef = useRef(previewImageByNodeId);
   const resetView = useTemplateEditorStore((s) => s.resetView);
   const exportProgress = useSimulatedProgress(exporting);
 
-  const { designAssetImageByNodeId } = useDesignAssets(id);
+  const userDesignId = userDesign?.id ?? null;
+  const fieldConfig = userDesign?.fieldConfig ?? null;
+  const normalized = (userDesign?.normalized as NormalizedDesignV1 | undefined) ?? undefined;
+
+  const remoteAssetUrls = useMemo(
+    () => userDesign?.assetUrlsByNodeId ?? {},
+    [userDesign]
+  );
+  const { designAssetImageByNodeId } = useRemoteDesignAssets(remoteAssetUrls);
+
   const renderImageByNodeId = useMemo(
-    () => composeImageMap(previewImageByNodeId, designAssetImageByNodeId, record?.fieldConfig),
-    [previewImageByNodeId, designAssetImageByNodeId, record?.fieldConfig],
+    () => composeImageMap(previewImageByNodeId, designAssetImageByNodeId, fieldConfig),
+    [previewImageByNodeId, designAssetImageByNodeId, fieldConfig]
   );
 
-  const normalized = record?.normalized as NormalizedDesignV1 | undefined;
-  const pageLoading = !record || !normalized;
+  const pageLoading = !userDesign && !loadError;
   const pageProgress = useSimulatedProgress(pageLoading, { start: 0.12, cap: 0.96 });
+
+  useGoogleFonts(["Ms Madi", ...(normalized?.assets.fonts ?? [])]);
 
   useEffect(() => {
     previewImagesRef.current = previewImageByNodeId;
@@ -69,19 +98,107 @@ export default function UseTemplatePage({
     };
   }, []);
 
+  // Load or create the user-design working copy.
   useEffect(() => {
+    let cancelled = false;
     (async () => {
-      const r = await repo.get(id);
-      setRecord(r);
+      try {
+        let record: UserDesignRecord | null = null;
+
+        if (requestedDesignId) {
+          record = await getUserDesign(requestedDesignId);
+        } else {
+          record = await findInProgressByTemplate(templateId);
+        }
+
+        if (!record) {
+          const remote = await fetchPublicTemplate(templateId);
+          if (cancelled) return;
+          if (!remote) {
+            setLoadError("Template not found or no longer available.");
+            return;
+          }
+          const assetUrlsByNodeId: Record<string, string> = {};
+          for (const a of remote.designAssets) assetUrlsByNodeId[a.nodeId] = a.url;
+          record = await createInProgressDesign({
+            templateId: remote.id,
+            name: remote.name,
+            categoryLabel: deriveCategoryLabel(remote.name, remote.category),
+            designJson: remote.designJson,
+            normalized: remote.normalized,
+            fieldConfig: remote.fieldConfig as FieldConfig,
+            assetUrlsByNodeId,
+          });
+        }
+
+        if (cancelled) return;
+        setUserDesign(record);
+
+        // Hydrate workspace state from saved inputs.
+        setPreviewTextByNodeId({ ...record.inputs.textByNodeId });
+        setPreviewColorByNodeId({ ...record.inputs.colorByNodeId });
+
+        const hydrated: Record<
+          string,
+          { url: string; blob: Blob; objectFit: "cover" | "contain"; _revoke?: boolean }
+        > = {};
+        for (const [nodeId, entry] of Object.entries(record.inputs.imageBlobsByNodeId)) {
+          const url = URL.createObjectURL(entry.blob);
+          hydrated[nodeId] = {
+            url,
+            blob: entry.blob,
+            objectFit: entry.objectFit,
+            _revoke: true,
+          };
+        }
+        setPreviewImageByNodeId(hydrated);
+      } catch (e) {
+        if (!cancelled) {
+          setLoadError(e instanceof Error ? e.message : "Failed to load template");
+        }
+      }
     })();
-  }, [id, repo]);
+    return () => {
+      cancelled = true;
+    };
+  }, [templateId, requestedDesignId]);
 
   useEffect(() => {
     const v = window.localStorage.getItem("fyb:use:sidebar") === "collapsed";
     setSidebarCollapsed(v);
   }, []);
 
-  useGoogleFonts(["Ms Madi", ...(normalized?.assets.fonts ?? [])]);
+  // Debounced persistence of text/color/image inputs to IDB.
+  const persistTimer = useRef<number | null>(null);
+  const schedulePersist = useCallback(() => {
+    if (!userDesignId) return;
+    if (persistTimer.current) window.clearTimeout(persistTimer.current);
+    persistTimer.current = window.setTimeout(() => {
+      const imageBlobsByNodeId: Record<
+        string,
+        { blob: Blob; mime: string; objectFit: "cover" | "contain" }
+      > = {};
+      for (const [nodeId, v] of Object.entries(previewImagesRef.current)) {
+        imageBlobsByNodeId[nodeId] = {
+          blob: v.blob,
+          mime: v.blob.type || "image/png",
+          objectFit: v.objectFit,
+        };
+      }
+      void saveInputs(userDesignId, {
+        textByNodeId: previewTextByNodeId,
+        colorByNodeId: previewColorByNodeId,
+        imageBlobsByNodeId,
+      });
+    }, 300);
+  }, [userDesignId, previewTextByNodeId, previewColorByNodeId]);
+
+  useEffect(() => {
+    schedulePersist();
+    return () => {
+      if (persistTimer.current) window.clearTimeout(persistTimer.current);
+    };
+  }, [schedulePersist, previewImageByNodeId]);
 
   const hasEdits =
     Object.keys(previewTextByNodeId).length > 0 ||
@@ -89,14 +206,13 @@ export default function UseTemplatePage({
     Object.keys(previewColorByNodeId).length > 0;
 
   const mobileFields = useMemo(() => {
-    const fields = record?.fieldConfig.fields ?? [];
+    const fields = fieldConfig?.fields ?? [];
     return fields.filter((f) => {
       if (f.kind === "color") return (f.colorBehavior?.enabled ?? true) !== false;
-      // Design-asset image slots are admin-controlled and not editable on user side.
       if (f.kind === "image") return f.imageSource !== "design_asset";
       return true;
     });
-  }, [record]);
+  }, [fieldConfig]);
 
   const mobilePageSize = 6;
   const mobilePageCount = Math.max(1, Math.ceil(mobileFields.length / mobilePageSize));
@@ -110,7 +226,17 @@ export default function UseTemplatePage({
     return () => cancelAnimationFrame(raf);
   }, [mobileDetailsOpen]);
 
-  if (pageLoading) {
+  if (loadError) {
+    return (
+      <div className="min-h-screen bg-zinc-50 p-6 dark:bg-zinc-950">
+        <div className="rounded-2xl border border-zinc-200 bg-white p-6 text-sm text-zinc-700 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-200">
+          {loadError}
+        </div>
+      </div>
+    );
+  }
+
+  if (pageLoading || !userDesign || !fieldConfig || !normalized) {
     return (
       <div className="min-h-dvh bg-zinc-50 dark:bg-zinc-950">
         <ProgressModal
@@ -130,19 +256,11 @@ export default function UseTemplatePage({
     );
   }
 
-  if (record.status !== "published") {
-    return (
-      <div className="min-h-screen bg-zinc-50 p-6 dark:bg-zinc-950">
-        <div className="rounded-2xl border border-zinc-200 bg-white p-6 text-sm text-zinc-700 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-200">
-          This template is not published.
-        </div>
-      </div>
-    );
-  }
+  const recordName = userDesign.name;
 
   function onPreviewTextChange(nodeId: string, value: string) {
-    const field = record?.fieldConfig.fields.find(
-      (f): f is Extract<typeof f, { kind: "text" }> => f.nodeId === nodeId && f.kind === "text",
+    const field = fieldConfig?.fields.find(
+      (f): f is Extract<typeof f, { kind: "text" }> => f.nodeId === nodeId && f.kind === "text"
     );
     const mode = field?.textBehavior?.case ?? "as_design";
     const nextValue =
@@ -171,23 +289,23 @@ export default function UseTemplatePage({
         return next;
       }
 
-      const url = URL.createObjectURL(file);
-      const imageField = record?.fieldConfig.fields.find(
-        (f): f is Extract<typeof f, { kind: "image" }> => f.nodeId === nodeId && f.kind === "image",
+      const imageField = fieldConfig?.fields.find(
+        (f): f is Extract<typeof f, { kind: "image" }> => f.nodeId === nodeId && f.kind === "image"
       );
 
-      // Enforce allowReplace at the UI boundary.
       if (imageField?.imageBehavior?.allowReplace === false) {
         return prev;
       }
 
-      const fit = imageField?.imageBehavior?.fit ?? (imageField?.cropRule === "contain" ? "contain" : "cover");
+      const url = URL.createObjectURL(file);
+      const fit =
+        imageField?.imageBehavior?.fit ?? (imageField?.cropRule === "contain" ? "contain" : "cover");
 
       return {
         ...prev,
         [nodeId]: {
           url,
-          file,
+          blob: file,
           objectFit: fit,
           _revoke: true,
         },
@@ -196,18 +314,15 @@ export default function UseTemplatePage({
   }
 
   async function doExportPng(scale: 1 | 2 | 3) {
-    if (!record || !normalized) return;
+    if (!userDesign || !normalized || !fieldConfig) return;
     setExporting(true);
     setExportStage("Preparing images");
     try {
       const imageBlobs: Record<string, { blob: Blob; objectFit: "cover" | "contain" }> = {};
       for (const [nodeId, v] of Object.entries(previewImageByNodeId)) {
-        if (!v.file) continue;
-        imageBlobs[nodeId] = { blob: v.file, objectFit: v.objectFit };
+        imageBlobs[nodeId] = { blob: v.blob, objectFit: v.objectFit };
       }
-      // Design-asset overrides: admin-uploaded blobs always win for design_asset fields.
-      // Slots without an uploaded asset are dropped so they render as placeholders.
-      for (const f of record.fieldConfig.fields) {
+      for (const f of fieldConfig.fields) {
         if (f.kind !== "image") continue;
         if (f.imageSource !== "design_asset") continue;
         const asset = designAssetImageByNodeId[f.nodeId];
@@ -224,7 +339,7 @@ export default function UseTemplatePage({
       setExportStage("Rendering design");
       const { blob } = await exportTemplatePng({
         design: normalized,
-        fieldConfig: record.fieldConfig,
+        fieldConfig,
         previewTextByNodeId,
         previewImageByNodeId: imageBlobs,
         previewColorByNodeId,
@@ -235,9 +350,41 @@ export default function UseTemplatePage({
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = `${record.name.replaceAll(/[^a-z0-9-_ ]/gi, "").trim() || "template"}.png`;
+      a.download = `${recordName.replaceAll(/[^a-z0-9-_ ]/gi, "").trim() || "template"}.png`;
       a.click();
       URL.revokeObjectURL(url);
+
+      // Save a thumbnail at scale 1 for the dashboard recents.
+      let thumbnail: { blob: Blob; mime: string; width: number; height: number } | null = null;
+      try {
+        if (scale === 1) {
+          thumbnail = {
+            blob,
+            mime: blob.type || "image/png",
+            width: Math.round(normalized.canvas.width),
+            height: Math.round(normalized.canvas.height),
+          };
+        } else {
+          const { blob: thumbBlob } = await exportTemplatePng({
+            design: normalized,
+            fieldConfig,
+            previewTextByNodeId,
+            previewImageByNodeId: imageBlobs,
+            previewColorByNodeId,
+            scale: 1,
+          });
+          thumbnail = {
+            blob: thumbBlob,
+            mime: thumbBlob.type || "image/png",
+            width: Math.round(normalized.canvas.width),
+            height: Math.round(normalized.canvas.height),
+          };
+        }
+      } catch (err) {
+        console.warn("[use] thumbnail render failed", err);
+      }
+
+      await markDownloaded(userDesign.id, thumbnail);
     } finally {
       setExporting(false);
       setExportStage("");
@@ -264,7 +411,6 @@ export default function UseTemplatePage({
 
   return (
     <div className="flex h-dvh min-w-0 flex-col bg-zinc-50 dark:bg-zinc-950">
-      {/* Mobile: compact top bar */}
       <div className="sticky top-0 z-20 flex items-center justify-between gap-3 border-b border-zinc-200 bg-white/90 px-3 py-2 backdrop-blur lg:hidden dark:border-zinc-800 dark:bg-zinc-900/80">
         <button
           type="button"
@@ -275,7 +421,9 @@ export default function UseTemplatePage({
           <Menu className="h-5 w-5" />
         </button>
         <div className="min-w-0 text-center">
-          <div className="truncate text-sm font-semibold text-zinc-950 dark:text-zinc-100">{record.name}</div>
+          <div className="truncate text-sm font-semibold text-zinc-950 dark:text-zinc-100">
+            {recordName}
+          </div>
           <div className="truncate text-[11px] text-zinc-600 dark:text-zinc-300">Workspace</div>
         </div>
         <button
@@ -288,7 +436,6 @@ export default function UseTemplatePage({
       </div>
 
       <div className="flex min-h-0 min-w-0 flex-1">
-        {/* Left sidebar (collapsible) */}
         <aside
           className={
             "hidden h-full flex-col border-r border-zinc-200 bg-white lg:flex dark:border-zinc-800 dark:bg-zinc-900 " +
@@ -296,9 +443,10 @@ export default function UseTemplatePage({
           }
         >
           <div className="flex items-center justify-between gap-2 border-b border-zinc-200 px-3 py-3 dark:border-zinc-800">
-            <div className={"min-w-0 " + (sidebarCollapsed ? "sr-only" : "")}
-            >
-              <div className="truncate text-sm font-semibold text-zinc-950 dark:text-zinc-100">{record.name}</div>
+            <div className={"min-w-0 " + (sidebarCollapsed ? "sr-only" : "")}>
+              <div className="truncate text-sm font-semibold text-zinc-950 dark:text-zinc-100">
+                {recordName}
+              </div>
               <div className="truncate text-xs text-zinc-600 dark:text-zinc-300">Template</div>
             </div>
             <button
@@ -327,17 +475,26 @@ export default function UseTemplatePage({
               <span className={sidebarCollapsed ? "sr-only" : ""}>Back</span>
             </Link>
             <div className="mt-2 rounded-xl bg-zinc-50 p-3 dark:bg-zinc-800/40">
-              <div className={"text-xs font-medium text-zinc-900 dark:text-zinc-100 " + (sidebarCollapsed ? "sr-only" : "")}>
+              <div
+                className={
+                  "text-xs font-medium text-zinc-900 dark:text-zinc-100 " +
+                  (sidebarCollapsed ? "sr-only" : "")
+                }
+              >
                 Tips
               </div>
-              <div className={"mt-1 text-xs text-zinc-600 dark:text-zinc-300 " + (sidebarCollapsed ? "sr-only" : "")}>
+              <div
+                className={
+                  "mt-1 text-xs text-zinc-600 dark:text-zinc-300 " +
+                  (sidebarCollapsed ? "sr-only" : "")
+                }
+              >
                 Pan: Space + drag • Zoom: Ctrl+Wheel
               </div>
             </div>
           </nav>
         </aside>
 
-        {/* Center workspace */}
         <main className="flex h-full min-w-0 flex-1 flex-col overflow-hidden">
           <div className="hidden items-center justify-between border-b border-zinc-200 bg-white px-4 py-3 lg:flex dark:border-zinc-800 dark:bg-zinc-900">
             <div className="text-sm font-semibold text-zinc-950 dark:text-zinc-100">Workspace</div>
@@ -348,7 +505,7 @@ export default function UseTemplatePage({
             <div className="h-full min-h-0 w-full overflow-hidden bg-white sm:rounded-2xl sm:border sm:border-zinc-200 dark:bg-zinc-900 dark:sm:border-zinc-800">
               <DesignWorkspace
                 design={normalized}
-                fieldConfig={record.fieldConfig}
+                fieldConfig={fieldConfig}
                 previewTextByNodeId={previewTextByNodeId}
                 previewImageByNodeId={renderImageByNodeId}
                 selectedNodeId={null}
@@ -363,88 +520,94 @@ export default function UseTemplatePage({
           </div>
         </main>
 
-        {/* Right panel (form) */}
         <aside className="hidden h-full w-80 flex-col border-l border-zinc-200 bg-white lg:flex xl:w-95 dark:border-zinc-800 dark:bg-zinc-900">
           <div className="border-b border-zinc-200 px-4 py-2.5 dark:border-zinc-800">
             <div className="text-sm font-semibold text-zinc-950 dark:text-zinc-100">Your details</div>
-            <div className="mt-1 text-xs text-zinc-600 dark:text-zinc-300">Generated from admin configuration.</div>
+            <div className="mt-1 text-xs text-zinc-600 dark:text-zinc-300">
+              Generated from admin configuration.
+            </div>
           </div>
 
           <div className="min-h-0 flex-1 overflow-y-auto p-3 xl:p-4">
             <div className="space-y-2">
-              {record.fieldConfig.fields
+              {fieldConfig.fields
                 .filter((f) => !(f.kind === "image" && f.imageSource === "design_asset"))
                 .map((f) => {
-                if (f.kind === "text") {
-                  const value = previewTextByNodeId[f.nodeId] ?? "";
-                  return (
-                    <label key={f.id} className="grid gap-1">
-                      <span className="text-xs font-medium text-zinc-900 dark:text-zinc-100">{f.label}</span>
-                      <input
-                        value={value}
-                        maxLength={f.maxChars}
-                        onChange={(e) => onPreviewTextChange(f.nodeId, e.target.value)}
-                        className="h-9 rounded-xl border border-zinc-200 bg-white px-3 text-[13px] text-zinc-900 dark:border-zinc-800 dark:bg-zinc-950/30 dark:text-zinc-100"
-                      />
-                    </label>
-                  );
-                }
-
-                if (f.kind === "image") {
-                  const allowReplace = f.imageBehavior?.allowReplace ?? true;
-                  const current = previewImageByNodeId[f.nodeId];
-                  const meta = inferFileMeta(current?.file);
-                  return (
-                    <ImageUpload
-                      key={f.id}
-                      label={f.label}
-                      description={undefined}
-                      valueUrl={current?.url}
-                      valueName={meta}
-                      objectFit={current?.objectFit ?? (f.imageBehavior?.fit ?? (f.cropRule === "contain" ? "contain" : "cover"))}
-                      disabled={!allowReplace}
-                      onPick={(file) => onPreviewImageChange(f.nodeId, file)}
-                      onClear={allowReplace ? () => onPreviewImageChange(f.nodeId, null) : undefined}
-                    />
-                  );
-                }
-
-                if (f.kind === "color") {
-                  const enabled = f.colorBehavior?.enabled ?? true;
-                  if (!enabled) return null;
-
-                  const palette = f.colorBehavior?.palette?.filter(Boolean) ?? [];
-                  const value = previewColorByNodeId[f.nodeId] ?? (palette[0] ?? "#000000");
-
-                  return (
-                    <label key={f.id} className="grid gap-1">
-                      <span className="text-xs font-medium text-zinc-900 dark:text-zinc-100">{f.label}</span>
-                      {palette.length ? (
-                        <select
-                          value={value}
-                          onChange={(e) => onPreviewColorChange(f.nodeId, e.target.value)}
-                          className="h-9 rounded-xl border border-zinc-200 bg-white px-3 text-[13px] text-zinc-900 dark:border-zinc-800 dark:bg-zinc-950/30 dark:text-zinc-100"
-                        >
-                          {palette.map((c) => (
-                            <option key={c} value={c}>
-                              {c}
-                            </option>
-                          ))}
-                        </select>
-                      ) : (
+                  if (f.kind === "text") {
+                    const value = previewTextByNodeId[f.nodeId] ?? "";
+                    return (
+                      <label key={f.id} className="grid gap-1">
+                        <span className="text-xs font-medium text-zinc-900 dark:text-zinc-100">{f.label}</span>
                         <input
-                          type="color"
                           value={value}
-                          onChange={(e) => onPreviewColorChange(f.nodeId, e.target.value)}
-                          className="h-9 w-16 rounded-xl border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900"
+                          maxLength={f.maxChars}
+                          onChange={(e) => onPreviewTextChange(f.nodeId, e.target.value)}
+                          className="h-9 rounded-xl border border-zinc-200 bg-white px-3 text-[13px] text-zinc-900 dark:border-zinc-800 dark:bg-zinc-950/30 dark:text-zinc-100"
                         />
-                      )}
-                    </label>
-                  );
-                }
+                      </label>
+                    );
+                  }
 
-                return null;
-              })}
+                  if (f.kind === "image") {
+                    const allowReplace = f.imageBehavior?.allowReplace ?? true;
+                    const current = previewImageByNodeId[f.nodeId];
+                    const meta = inferFileMeta(
+                      current?.blob ? new File([current.blob], "image") : undefined
+                    );
+                    return (
+                      <ImageUpload
+                        key={f.id}
+                        label={f.label}
+                        description={undefined}
+                        valueUrl={current?.url}
+                        valueName={meta}
+                        objectFit={
+                          current?.objectFit ??
+                          (f.imageBehavior?.fit ?? (f.cropRule === "contain" ? "contain" : "cover"))
+                        }
+                        disabled={!allowReplace}
+                        onPick={(file) => onPreviewImageChange(f.nodeId, file)}
+                        onClear={allowReplace ? () => onPreviewImageChange(f.nodeId, null) : undefined}
+                      />
+                    );
+                  }
+
+                  if (f.kind === "color") {
+                    const enabled = f.colorBehavior?.enabled ?? true;
+                    if (!enabled) return null;
+
+                    const palette = f.colorBehavior?.palette?.filter(Boolean) ?? [];
+                    const value = previewColorByNodeId[f.nodeId] ?? (palette[0] ?? "#000000");
+
+                    return (
+                      <label key={f.id} className="grid gap-1">
+                        <span className="text-xs font-medium text-zinc-900 dark:text-zinc-100">{f.label}</span>
+                        {palette.length ? (
+                          <select
+                            value={value}
+                            onChange={(e) => onPreviewColorChange(f.nodeId, e.target.value)}
+                            className="h-9 rounded-xl border border-zinc-200 bg-white px-3 text-[13px] text-zinc-900 dark:border-zinc-800 dark:bg-zinc-950/30 dark:text-zinc-100"
+                          >
+                            {palette.map((c) => (
+                              <option key={c} value={c}>
+                                {c}
+                              </option>
+                            ))}
+                          </select>
+                        ) : (
+                          <input
+                            type="color"
+                            value={value}
+                            onChange={(e) => onPreviewColorChange(f.nodeId, e.target.value)}
+                            className="h-9 w-16 rounded-xl border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900"
+                          />
+                        )}
+                      </label>
+                    );
+                  }
+
+                  return null;
+                })}
             </div>
           </div>
 
@@ -471,7 +634,6 @@ export default function UseTemplatePage({
         </aside>
       </div>
 
-      {/* Mobile: sticky action bar */}
       <div className="fixed inset-x-0 bottom-0 z-30 border-t border-zinc-200 bg-white/90 p-3 backdrop-blur lg:hidden dark:border-zinc-800 dark:bg-zinc-900/80 pb-[calc(env(safe-area-inset-bottom)+0.75rem)]">
         <div className="mx-auto flex w-full max-w-xl items-center gap-2">
           <button
@@ -493,7 +655,6 @@ export default function UseTemplatePage({
         </div>
       </div>
 
-      {/* Mobile: details bottom-sheet */}
       {mobileDetailsOpen ? (
         <div className="fixed inset-0 z-40 lg:hidden" role="dialog" aria-modal="true">
           <button
@@ -543,7 +704,9 @@ export default function UseTemplatePage({
                   if (f.kind === "image") {
                     const allowReplace = f.imageBehavior?.allowReplace ?? true;
                     const current = previewImageByNodeId[f.nodeId];
-                    const meta = inferFileMeta(current?.file);
+                    const meta = inferFileMeta(
+                      current?.blob ? new File([current.blob], "image") : undefined
+                    );
                     return (
                       <ImageUpload
                         key={f.id}
@@ -608,7 +771,9 @@ export default function UseTemplatePage({
                   disabled={mobileFormPage <= 0}
                   onClick={() => {
                     setMobileFormPage((p) => Math.max(0, p - 1));
-                    requestAnimationFrame(() => mobileFormScrollRef.current?.scrollTo({ top: 0, behavior: "smooth" }));
+                    requestAnimationFrame(() =>
+                      mobileFormScrollRef.current?.scrollTo({ top: 0, behavior: "smooth" })
+                    );
                   }}
                   className="inline-flex h-11 flex-1 items-center justify-center gap-2 rounded-2xl border border-zinc-200 bg-white px-4 text-sm font-semibold text-zinc-900 hover:bg-zinc-50 disabled:opacity-50 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-100 dark:hover:bg-zinc-800"
                 >
@@ -620,7 +785,9 @@ export default function UseTemplatePage({
                   disabled={mobileFormPage >= mobilePageCount - 1}
                   onClick={() => {
                     setMobileFormPage((p) => Math.min(mobilePageCount - 1, p + 1));
-                    requestAnimationFrame(() => mobileFormScrollRef.current?.scrollTo({ top: 0, behavior: "smooth" }));
+                    requestAnimationFrame(() =>
+                      mobileFormScrollRef.current?.scrollTo({ top: 0, behavior: "smooth" })
+                    );
                   }}
                   className="inline-flex h-11 flex-1 items-center justify-center gap-2 rounded-2xl bg-zinc-900 px-4 text-sm font-semibold text-white hover:bg-zinc-800 disabled:opacity-50 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-white"
                 >
@@ -636,7 +803,6 @@ export default function UseTemplatePage({
         </div>
       ) : null}
 
-      {/* Mobile: fixed menu drawer */}
       {mobileMenuOpen ? (
         <div className="fixed inset-0 z-50 lg:hidden" role="dialog" aria-modal="true">
           <button
@@ -648,7 +814,9 @@ export default function UseTemplatePage({
           <div className="absolute left-0 top-0 h-full w-[86vw] max-w-sm border-r border-zinc-200 bg-white shadow-2xl dark:border-zinc-800 dark:bg-zinc-900">
             <div className="flex items-center justify-between border-b border-zinc-200 px-4 py-3 dark:border-zinc-800">
               <div className="min-w-0">
-                <div className="truncate text-sm font-semibold text-zinc-950 dark:text-zinc-100">{record.name}</div>
+                <div className="truncate text-sm font-semibold text-zinc-950 dark:text-zinc-100">
+                  {recordName}
+                </div>
                 <div className="truncate text-xs text-zinc-600 dark:text-zinc-300">Menu</div>
               </div>
               <button
@@ -798,4 +966,3 @@ function ExportOption({
     </button>
   );
 }
-

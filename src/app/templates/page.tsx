@@ -1,15 +1,17 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 
-import { createLocalTemplateRepository } from "@/lib/storage/templateRepo";
-import type { TemplateMeta } from "@/lib/storage/types";
-import { usePreviewUrl } from "@/components/admin/usePreviewUrl";
+import {
+  fetchPublicTemplateList,
+  type PublicTemplateListItem,
+} from "@/lib/api/publicTemplates";
+import { useTemplateChangeStream } from "@/lib/realtime/templatesStream";
 
 type CategoryFilter = "all" | "fyb" | "signout";
 
-function deriveCategoryLabel(template: Pick<TemplateMeta, "name" | "category">): string {
+function deriveCategoryLabel(template: Pick<PublicTemplateListItem, "name" | "category">): string {
   const explicit = template.category?.trim();
   if (explicit) return explicit;
 
@@ -19,21 +21,44 @@ function deriveCategoryLabel(template: Pick<TemplateMeta, "name" | "category">):
 }
 
 export default function UserTemplatesPage() {
-  const repo = useMemo(() => createLocalTemplateRepository(), []);
-  const [loading, setLoading] = useState(true);
-  const [templates, setTemplates] = useState<TemplateMeta[]>([]);
+  const [initialLoad, setInitialLoad] = useState(true);
+  const [templates, setTemplates] = useState<PublicTemplateListItem[]>([]);
   const [category, setCategory] = useState<CategoryFilter>("all");
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
 
+  const refreshSilently = useCallback(async () => {
+    try {
+      const list = await fetchPublicTemplateList();
+      setTemplates(list);
+    } catch (err) {
+      console.warn("[templates] refresh failed", err);
+    }
+  }, []);
+
   useEffect(() => {
+    let cancelled = false;
     (async () => {
-      setLoading(true);
-      const list = await repo.listMeta();
-      setTemplates(list.filter((t) => t.status === "published" && Boolean(t.previewId)));
-      setLoading(false);
+      try {
+        const list = await fetchPublicTemplateList();
+        if (cancelled) return;
+        setTemplates(list);
+      } catch (err) {
+        console.warn("[templates] initial load failed", err);
+      } finally {
+        if (!cancelled) setInitialLoad(false);
+      }
     })();
-  }, [repo]);
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useTemplateChangeStream(
+    useCallback(() => {
+      void refreshSilently();
+    }, [refreshSilently])
+  );
 
   useEffect(() => {
     const t = window.setTimeout(() => setDebouncedSearch(search.trim()), 300);
@@ -59,7 +84,9 @@ export default function UserTemplatesPage() {
       <main className="mx-auto w-full max-w-7xl px-4 py-10">
         <header className="flex flex-col gap-6 sm:flex-row sm:items-end sm:justify-between">
           <div className="max-w-xl">
-            <div className="text-xs font-semibold tracking-wide text-zinc-900 dark:text-zinc-100">Gallery</div>
+            <div className="text-xs font-semibold tracking-wide text-zinc-900 dark:text-zinc-100">
+              Gallery
+            </div>
             <h1 className="mt-2 text-3xl font-semibold tracking-tight text-zinc-950 dark:text-zinc-100">
               FYB templates you can personalize fast.
             </h1>
@@ -75,7 +102,6 @@ export default function UserTemplatesPage() {
           </div>
         </header>
 
-        {/* Sticky filters */}
         <div className="sticky top-0 z-20 -mx-4 mt-6 border-b border-zinc-200/70 bg-zinc-50/85 px-4 py-3 backdrop-blur dark:border-zinc-800/70 dark:bg-zinc-950/70">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <CategoryTabs value={category} onChange={setCategory} />
@@ -103,16 +129,13 @@ export default function UserTemplatesPage() {
           </div>
         </div>
 
-        {loading ? (
+        {initialLoad ? (
           <>
-            {/* Mobile: Pinterest masonry */}
             <div className="mt-6 columns-2 gap-x-4 lg:hidden">
               {Array.from({ length: 14 }).map((_, i) => (
                 <UserTemplateCardSkeleton key={i} index={i} />
               ))}
             </div>
-
-            {/* Desktop: fixed grid */}
             <div className="mt-6 hidden grid-cols-2 gap-4 lg:grid lg:grid-cols-3 xl:grid-cols-4">
               {Array.from({ length: 14 }).map((_, i) => (
                 <UserTemplateCardSkeleton key={i} index={i} />
@@ -125,14 +148,11 @@ export default function UserTemplatesPage() {
           </div>
         ) : (
           <>
-            {/* Mobile: Pinterest masonry */}
             <div className="mt-6 columns-2 gap-x-4 lg:hidden">
               {filtered.map((t) => (
                 <UserTemplateCard key={t.id} template={t} />
               ))}
             </div>
-
-            {/* Desktop: fixed grid */}
             <div className="mt-6 hidden grid-cols-2 gap-4 lg:grid lg:grid-cols-3 xl:grid-cols-4">
               {filtered.map((t) => (
                 <UserTemplateCard key={t.id} template={t} />
@@ -157,27 +177,24 @@ function UserTemplateCardSkeleton({ index }: { index: number }) {
           <div className="fyb-skeleton-shine absolute inset-0" />
         </div>
       </div>
-
       <div className="p-3 sm:p-4">
         <div className="h-4 w-3/4 rounded-full bg-zinc-200/80 dark:bg-zinc-700/70" />
         <div className="mt-2 h-3 w-1/2 rounded-full bg-zinc-200/60 dark:bg-zinc-700/50" />
-      </div>
-
-      <div className="pointer-events-none absolute inset-x-0 bottom-0 p-2.5">
-        <div className="rounded-2xl border border-white/30 bg-white/75 p-2.5 shadow-sm backdrop-blur-md dark:border-zinc-700/60 dark:bg-zinc-900/70">
-          <div className="flex items-center justify-between gap-2.5">
-            <div className="h-3 w-24 rounded-full bg-zinc-200/70 dark:bg-zinc-700/60" />
-            <div className="h-8 w-18 rounded-xl bg-zinc-200/80 dark:bg-zinc-700/70" />
-          </div>
-        </div>
       </div>
     </div>
   );
 }
 
-function UserTemplateCard({ template }: { template: TemplateMeta }) {
+function UserTemplateCard({ template }: { template: PublicTemplateListItem }) {
   const categoryLabel = deriveCategoryLabel(template);
   const href = `/templates/${template.id}/use`;
+  const ratio =
+    typeof template.coverWidth === "number" &&
+    typeof template.coverHeight === "number" &&
+    template.coverWidth > 0 &&
+    template.coverHeight > 0
+      ? template.coverWidth / template.coverHeight
+      : 4 / 5;
 
   return (
     <Link
@@ -185,22 +202,49 @@ function UserTemplateCard({ template }: { template: TemplateMeta }) {
       className="group mb-4 inline-block w-full align-top break-inside-avoid overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-sm transition-all will-change-transform hover:-translate-y-0.5 hover:border-zinc-300 hover:shadow-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/40 lg:mb-0 lg:block dark:border-zinc-800 dark:bg-zinc-900 dark:hover:border-zinc-700"
       aria-label={`Use template ${template.name}`}
     >
-      <UserTemplatePreview previewId={template.previewId!} name={template.name} categoryLabel={categoryLabel} />
+      <div className="w-full bg-zinc-100 dark:bg-zinc-800/60">
+        <div className="relative w-full overflow-hidden">
+          <div className="w-full" style={{ aspectRatio: ratio }} />
+
+          <div className="absolute inset-0 bg-linear-to-br from-white/0 via-white/0 to-zinc-950/5 dark:to-white/5" />
+          <div className="absolute inset-0 bg-[radial-gradient(circle_at_1px_1px,rgba(0,0,0,0.06)_1px,transparent_0)] bg-size-[14px_14px] opacity-35 dark:opacity-25" />
+
+          <div className="pointer-events-none absolute left-2.5 top-2.5 z-10 sm:left-3 sm:top-3">
+            <span className="inline-flex items-center rounded-full border border-white/40 bg-white/70 px-2.5 py-1 text-[11px] font-medium text-zinc-800 shadow-sm backdrop-blur-sm dark:border-zinc-700/60 dark:bg-zinc-900/60 dark:text-zinc-100">
+              {categoryLabel}
+            </span>
+          </div>
+
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={template.coverUrl}
+            alt={`${template.name} preview`}
+            className="absolute inset-0 h-full w-full object-contain p-1.5 transition-transform duration-500 will-change-transform group-hover:scale-[1.02] sm:p-3"
+          />
+
+          <div className="pointer-events-none absolute inset-0 opacity-0 transition-opacity duration-300 group-hover:opacity-100 group-focus-visible:opacity-100 bg-linear-to-t from-zinc-950/25 via-zinc-950/10 to-transparent dark:from-zinc-950/45 dark:via-zinc-950/25" />
+        </div>
+      </div>
 
       <div className="p-3 sm:p-4">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
-            <div className="truncate text-[15px] font-semibold tracking-tight text-zinc-950 dark:text-zinc-100">{template.name}</div>
-            <div className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">{categoryLabel} • Ready to personalize</div>
+            <div className="truncate text-[15px] font-semibold tracking-tight text-zinc-950 dark:text-zinc-100">
+              {template.name}
+            </div>
+            <div className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
+              {categoryLabel} • Ready to personalize
+            </div>
           </div>
         </div>
       </div>
 
-      {/* Overlay CTA (hover on desktop, always visible on mobile) */}
       <div className="pointer-events-none absolute inset-x-0 bottom-0 p-2.5">
         <div className="pointer-events-auto w-full translate-y-0 opacity-100 transition-all duration-200 sm:translate-y-2 sm:opacity-0 sm:group-hover:translate-y-0 sm:group-hover:opacity-100">
           <div className="flex items-center justify-between gap-2.5 rounded-2xl border border-white/30 bg-white/75 p-2.5 shadow-sm backdrop-blur-md dark:border-zinc-700/60 dark:bg-zinc-900/70">
-            <div className="text-[11px] font-medium text-zinc-900 dark:text-zinc-100">Use Template</div>
+            <div className="text-[11px] font-medium text-zinc-900 dark:text-zinc-100">
+              Use Template
+            </div>
             <div className="inline-flex h-8 items-center justify-center rounded-xl bg-zinc-900 px-2.5 text-[11px] font-medium text-white shadow-sm dark:bg-zinc-100 dark:text-zinc-900">
               Open
             </div>
@@ -208,49 +252,6 @@ function UserTemplateCard({ template }: { template: TemplateMeta }) {
         </div>
       </div>
     </Link>
-  );
-}
-
-function UserTemplatePreview({
-  previewId,
-  name,
-  categoryLabel,
-}: {
-  previewId: string;
-  name: string;
-  categoryLabel: string;
-}) {
-  const { url, width, height } = usePreviewUrl(previewId);
-  const ratio = typeof width === "number" && typeof height === "number" && width > 0 && height > 0 ? width / height : 4 / 5;
-
-  return (
-    <div className="w-full bg-zinc-100 dark:bg-zinc-800/60">
-      <div className="relative w-full overflow-hidden">
-        <div className="w-full" style={{ aspectRatio: ratio }} />
-
-        <div className="absolute inset-0 bg-linear-to-br from-white/0 via-white/0 to-zinc-950/5 dark:to-white/5" />
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_1px_1px,rgba(0,0,0,0.06)_1px,transparent_0)] bg-size-[14px_14px] opacity-35 dark:opacity-25" />
-
-        <div className="pointer-events-none absolute left-2.5 top-2.5 z-10 sm:left-3 sm:top-3">
-          <span className="inline-flex items-center rounded-full border border-white/40 bg-white/70 px-2.5 py-1 text-[11px] font-medium text-zinc-800 shadow-sm backdrop-blur-sm dark:border-zinc-700/60 dark:bg-zinc-900/60 dark:text-zinc-100">
-            {categoryLabel}
-          </span>
-        </div>
-
-        {url ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={url}
-            alt={`${name} preview`}
-            className="absolute inset-0 h-full w-full object-contain p-1.5 transition-transform duration-500 will-change-transform group-hover:scale-[1.02] sm:p-3"
-          />
-        ) : (
-          <div className="absolute inset-0 grid place-items-center text-xs text-zinc-500 dark:text-zinc-400">Loading preview…</div>
-        )}
-
-        <div className="pointer-events-none absolute inset-0 opacity-0 transition-opacity duration-300 group-hover:opacity-100 group-focus-visible:opacity-100 bg-linear-to-t from-zinc-950/25 via-zinc-950/10 to-transparent dark:from-zinc-950/45 dark:via-zinc-950/25" />
-      </div>
-    </div>
   );
 }
 
@@ -292,4 +293,3 @@ function CategoryTabs({
     </div>
   );
 }
-

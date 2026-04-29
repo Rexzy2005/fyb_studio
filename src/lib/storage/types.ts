@@ -139,3 +139,35 @@ export type StorageStats = {
   totalBytesDesign: number;
   totalBytesPreview: number;
 };
+
+export type UserDesignAssetUrlMap = Record<string, string>;
+
+export type UserDesignInputs = {
+  textByNodeId: Record<string, string>;
+  colorByNodeId: Record<string, string>;
+  imageBlobsByNodeId: Record<
+    string,
+    {
+      blob: Blob;
+      mime: string;
+      objectFit: "cover" | "contain";
+    }
+  >;
+};
+
+export type UserDesignRecord = {
+  id: string;
+  templateId: string;
+  name: string;
+  categoryLabel: string;
+  designJson: unknown;
+  normalized: unknown;
+  fieldConfig: FieldConfig;
+  assetUrlsByNodeId: UserDesignAssetUrlMap;
+  inputs: UserDesignInputs;
+  createdAt: IsoDateTime;
+  expiresAt: IsoDateTime;
+  downloaded: boolean;
+  lastDownloadedAt: IsoDateTime | null;
+  thumbnail: { blob: Blob; mime: string; width: number; height: number } | null;
+};

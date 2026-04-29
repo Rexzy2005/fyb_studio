@@ -1,9 +1,15 @@
 import { openDB, type DBSchema, type IDBPDatabase } from "idb";
 
-import type { DesignAssetRecord, FontAssetRecord, PreviewRecord, TemplateRecord } from "./types";
+import type {
+  DesignAssetRecord,
+  FontAssetRecord,
+  PreviewRecord,
+  TemplateRecord,
+  UserDesignRecord,
+} from "./types";
 
 const DB_NAME = "fyb-studio" as const;
-const DB_VERSION = 3 as const;
+const DB_VERSION = 4 as const;
 
 interface FybStudioDb extends DBSchema {
   templates: {
@@ -25,6 +31,14 @@ interface FybStudioDb extends DBSchema {
     key: string;
     value: DesignAssetRecord;
     indexes: { "by-templateId": string };
+  };
+  userDesigns: {
+    key: string;
+    value: UserDesignRecord;
+    indexes: {
+      "by-templateId": string;
+      "by-expiresAt": string;
+    };
   };
 }
 
@@ -63,6 +77,12 @@ export function getDb(): Promise<IDBPDatabase<FybStudioDb>> {
         if (!db.objectStoreNames.contains("designAssets")) {
           const store = db.createObjectStore("designAssets", { keyPath: "id" });
           store.createIndex("by-templateId", "templateId");
+        }
+
+        if (!db.objectStoreNames.contains("userDesigns")) {
+          const store = db.createObjectStore("userDesigns", { keyPath: "id" });
+          store.createIndex("by-templateId", "templateId");
+          store.createIndex("by-expiresAt", "expiresAt");
         }
       },
     });

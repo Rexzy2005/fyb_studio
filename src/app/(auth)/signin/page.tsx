@@ -30,7 +30,7 @@ export default async function SignInPage({
               FYB Studio
             </div>
             <div className="text-[11px] text-zinc-600 dark:text-zinc-300">
-              Design your sign-out. Print it. Post it.
+              Design your fyb flyers. sign-out. Print it. Post it.
             </div>
           </div>
         </Link>
@@ -46,7 +46,7 @@ export default async function SignInPage({
             Sign in to FYB Studio
           </h1>
           <p className="mt-2 text-sm leading-6 text-zinc-600 dark:text-zinc-300">
-            Use your school Google account. We&apos;ll set up your profile in the next step.
+            Use your Google account. We&apos;ll set up your profile in the next step.
           </p>
 
           <div className="mt-6">
@@ -54,8 +54,7 @@ export default async function SignInPage({
           </div>
 
           <p className="mt-6 text-[11px] leading-5 text-zinc-500 dark:text-zinc-400">
-            By continuing you agree to FYB Studio&apos;s terms. We only read your name,
-            email, and profile picture from Google — nothing else.
+            By continuing you agree to FYB Studio&apos;s terms.
           </p>
         </div>
       </main>

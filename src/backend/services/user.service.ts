@@ -98,6 +98,85 @@ export async function getUserProfile(userId: string): Promise<UserProfileView | 
   };
 }
 
+export type AdminUserListItem = {
+  id: string;
+  name: string;
+  username: string | null;
+  email: string;
+  avatar: string | null;
+  isOnboarded: boolean;
+  isDepartmentHead: boolean;
+  lastLoginAt: string | null;
+  createdAt: string | null;
+  department: { id: string; name: string; slug: string } | null;
+};
+
+export type UserStats = {
+  total: number;
+  onboarded: number;
+  pending: number;
+  departmentHeads: number;
+};
+
+export async function countUsers(): Promise<UserStats> {
+  await connectDb();
+  const [total, onboarded, departmentHeads] = await Promise.all([
+    User.countDocuments({}),
+    User.countDocuments({ isOnboarded: true }),
+    User.countDocuments({ isDepartmentHead: true }),
+  ]);
+  return {
+    total,
+    onboarded,
+    pending: total - onboarded,
+    departmentHeads,
+  };
+}
+
+export async function listAllUsers(): Promise<AdminUserListItem[]> {
+  await connectDb();
+
+  const users = await User.find({})
+    .sort({ createdAt: -1 })
+    .lean<Array<UserDoc & { createdAt?: Date; updatedAt?: Date }>>();
+
+  const departmentIds = Array.from(
+    new Set(
+      users
+        .map((u) => u.department)
+        .filter((d): d is mongoose.Types.ObjectId => Boolean(d))
+        .map((d) => d.toString())
+    )
+  );
+
+  const departments = departmentIds.length
+    ? await Department.find({ _id: { $in: departmentIds } }).lean<DepartmentDoc[]>()
+    : [];
+
+  const deptById = new Map(
+    departments.map((d) => [d._id.toString(), d])
+  );
+
+  return users.map((u) => {
+    const deptId = u.department ? u.department.toString() : null;
+    const dept = deptId ? deptById.get(deptId) ?? null : null;
+    return {
+      id: u._id.toString(),
+      name: u.name,
+      username: u.username ?? null,
+      email: u.email,
+      avatar: u.avatar ?? null,
+      isOnboarded: u.isOnboarded,
+      isDepartmentHead: u.isDepartmentHead,
+      lastLoginAt: u.lastLoginAt ? new Date(u.lastLoginAt).toISOString() : null,
+      createdAt: u.createdAt ? new Date(u.createdAt).toISOString() : null,
+      department: dept
+        ? { id: dept._id.toString(), name: dept.name, slug: dept.slug }
+        : null,
+    };
+  });
+}
+
 export async function setOnboardedProfile(
   userId: string,
   data: {

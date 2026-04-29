@@ -4,11 +4,13 @@ import { useEffect, useState } from "react";
 
 import { createLocalTemplateRepository } from "@/lib/storage/templateRepo";
 import type { StorageStats, TemplateMeta } from "@/lib/storage/types";
+import type { UserStats } from "@/backend/services/user.service";
 
 export default function AdminDashboardPage() {
   const [loading, setLoading] = useState(true);
   const [meta, setMeta] = useState<TemplateMeta[]>([]);
   const [stats, setStats] = useState<StorageStats | null>(null);
+  const [userStats, setUserStats] = useState<UserStats | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -17,9 +19,17 @@ export default function AdminDashboardPage() {
     (async () => {
       try {
         setLoading(true);
-        const [list, s] = await Promise.all([repo.listMeta(), repo.getStats()]);
+        const [list, s, usersRes] = await Promise.all([
+          repo.listMeta(),
+          repo.getStats(),
+          fetch("/api/admin/users/stats", { cache: "no-store" }),
+        ]);
         setMeta(list);
         setStats(s);
+        if (usersRes.ok) {
+          const data = (await usersRes.json()) as { stats: UserStats };
+          setUserStats(data.stats);
+        }
       } catch (e) {
         setError(e instanceof Error ? e.message : "Unknown error");
       } finally {
@@ -45,6 +55,13 @@ export default function AdminDashboardPage() {
           {error}
         </div>
       ) : null}
+
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <StatCard label="Total users" value={userStats?.total ?? (loading ? "…" : 0)} />
+        <StatCard label="Onboarded" value={userStats?.onboarded ?? (loading ? "…" : 0)} />
+        <StatCard label="Pending onboarding" value={userStats?.pending ?? (loading ? "…" : 0)} />
+        <StatCard label="Department heads" value={userStats?.departmentHeads ?? (loading ? "…" : 0)} />
+      </div>
 
       <div className="grid gap-4 sm:grid-cols-3">
         <StatCard label="Templates" value={stats?.templates ?? (loading ? "…" : 0)} />

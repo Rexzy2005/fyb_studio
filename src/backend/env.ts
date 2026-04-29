@@ -19,6 +19,8 @@ const schema = z.object({
   CLOUDINARY_CLOUD_NAME: z.string().optional(),
   CLOUDINARY_API_KEY: z.string().optional(),
   CLOUDINARY_API_SECRET: z.string().optional(),
+
+  ADMIN_EMAILS: z.string().optional(),
 });
 
 const parsed = schema.safeParse(process.env);

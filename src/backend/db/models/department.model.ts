@@ -4,6 +4,12 @@ const departmentSchema = new Schema(
   {
     name: { type: String, required: true, trim: true },
     slug: { type: String, required: true, unique: true, lowercase: true, trim: true },
+    abbreviation: {
+      type: String,
+      required: true,
+      uppercase: true,
+      trim: true,
+    },
     headUserId: {
       type: Schema.Types.ObjectId,
       ref: "User",

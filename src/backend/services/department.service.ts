@@ -7,19 +7,26 @@ export type DepartmentListItem = {
   id: string;
   name: string;
   slug: string;
+  abbreviation: string;
   hasHead: boolean;
 };
 
 export async function listDepartments(): Promise<DepartmentListItem[]> {
   await connectDb();
-  const docs = await Department.find({}, { name: 1, slug: 1, headUserId: 1 })
+  const docs = await Department.find(
+    {},
+    { name: 1, slug: 1, abbreviation: 1, headUserId: 1 }
+  )
     .sort({ name: 1 })
-    .lean<Pick<DepartmentDoc, "_id" | "name" | "slug" | "headUserId">[]>();
+    .lean<
+      Pick<DepartmentDoc, "_id" | "name" | "slug" | "abbreviation" | "headUserId">[]
+    >();
 
   return docs.map((d) => ({
     id: d._id.toString(),
     name: d.name,
     slug: d.slug,
+    abbreviation: d.abbreviation,
     hasHead: Boolean(d.headUserId),
   }));
 }

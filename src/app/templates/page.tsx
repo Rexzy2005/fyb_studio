@@ -1,13 +1,16 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState, type MouseEvent } from "react";
 import Link from "next/link";
+import { useSession } from "next-auth/react";
 
 import {
   fetchPublicTemplateList,
   type PublicTemplateListItem,
 } from "@/lib/api/publicTemplates";
 import { useTemplateChangeStream } from "@/lib/realtime/templatesStream";
+import { HeaderAuthSlot } from "@/components/auth/HeaderAuthSlot";
+import { HeadEntryModal } from "@/components/templates/HeadEntryModal";
 
 type CategoryFilter = "all" | "fyb" | "signout";
 
@@ -21,11 +24,27 @@ function deriveCategoryLabel(template: Pick<PublicTemplateListItem, "name" | "ca
 }
 
 export default function UserTemplatesPage() {
+  const { data: session } = useSession();
+  const isHead = Boolean(session?.user?.isDepartmentHead);
+  const [headEntry, setHeadEntry] = useState<
+    | { id: string; name: string }
+    | null
+  >(null);
+
   const [initialLoad, setInitialLoad] = useState(true);
   const [templates, setTemplates] = useState<PublicTemplateListItem[]>([]);
   const [category, setCategory] = useState<CategoryFilter>("all");
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
+
+  const onCardActivate = useCallback(
+    (e: MouseEvent, t: PublicTemplateListItem) => {
+      if (!isHead) return;
+      e.preventDefault();
+      setHeadEntry({ id: t.id, name: t.name });
+    },
+    [isHead]
+  );
 
   const refreshSilently = useCallback(async () => {
     try {
@@ -99,6 +118,7 @@ export default function UserTemplatesPage() {
             >
               Home
             </Link>
+            <HeaderAuthSlot />
           </div>
         </header>
 
@@ -150,17 +170,24 @@ export default function UserTemplatesPage() {
           <>
             <div className="mt-6 columns-2 gap-x-4 lg:hidden">
               {filtered.map((t) => (
-                <UserTemplateCard key={t.id} template={t} />
+                <UserTemplateCard key={t.id} template={t} onActivate={onCardActivate} />
               ))}
             </div>
             <div className="mt-6 hidden grid-cols-2 gap-4 lg:grid lg:grid-cols-3 xl:grid-cols-4">
               {filtered.map((t) => (
-                <UserTemplateCard key={t.id} template={t} />
+                <UserTemplateCard key={t.id} template={t} onActivate={onCardActivate} />
               ))}
             </div>
           </>
         )}
       </main>
+
+      <HeadEntryModal
+        open={headEntry !== null}
+        templateId={headEntry?.id ?? ""}
+        templateName={headEntry?.name ?? ""}
+        onClose={() => setHeadEntry(null)}
+      />
     </div>
   );
 }
@@ -185,7 +212,13 @@ function UserTemplateCardSkeleton({ index }: { index: number }) {
   );
 }
 
-function UserTemplateCard({ template }: { template: PublicTemplateListItem }) {
+function UserTemplateCard({
+  template,
+  onActivate,
+}: {
+  template: PublicTemplateListItem;
+  onActivate?: (e: MouseEvent, t: PublicTemplateListItem) => void;
+}) {
   const categoryLabel = deriveCategoryLabel(template);
   const href = `/templates/${template.id}/use`;
   const ratio =
@@ -199,6 +232,7 @@ function UserTemplateCard({ template }: { template: PublicTemplateListItem }) {
   return (
     <Link
       href={href}
+      onClick={onActivate ? (e) => onActivate(e, template) : undefined}
       className="group mb-4 inline-block w-full align-top break-inside-avoid overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-sm transition-all will-change-transform hover:-translate-y-0.5 hover:border-zinc-300 hover:shadow-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/40 lg:mb-0 lg:block dark:border-zinc-800 dark:bg-zinc-900 dark:hover:border-zinc-700"
       aria-label={`Use template ${template.name}`}
     >

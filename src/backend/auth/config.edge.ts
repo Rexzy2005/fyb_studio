@@ -18,6 +18,9 @@ export const edgeAuthConfig: NextAuthConfig = {
         session.user.id = (token.userId as string | undefined) ?? "";
         session.user.isOnboarded = Boolean(token.isOnboarded);
         session.user.username = (token.username as string | null | undefined) ?? null;
+        session.user.isDepartmentHead = Boolean(token.isDepartmentHead);
+        session.user.departmentId =
+          (token.departmentId as string | null | undefined) ?? null;
       }
       return session;
     },

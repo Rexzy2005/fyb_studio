@@ -5,13 +5,15 @@ import { useSession } from "next-auth/react";
 import type { DepartmentListItem } from "@/backend/services/department.service";
 import { UsernameField } from "@/components/onboarding/UsernameField";
 import { DepartmentSelect } from "@/components/onboarding/DepartmentSelect";
+import { safeReturnPath } from "@/lib/auth/safeRedirect";
 
 type ApiError = {
   error?: { code?: string; message?: string };
 };
 
-export function OnboardingForm() {
+export function OnboardingForm({ returnTo }: { returnTo?: string }) {
   const { update: updateSession } = useSession();
+  const destination = safeReturnPath(returnTo, "/dashboard");
 
   const [departments, setDepartments] = useState<DepartmentListItem[]>([]);
   const [loadingDepts, setLoadingDepts] = useState(true);
@@ -95,7 +97,7 @@ export function OnboardingForm() {
       }
 
       await updateSession();
-      window.location.assign("/dashboard");
+      window.location.assign(destination);
       return;
     } catch (err) {
       console.error(err);

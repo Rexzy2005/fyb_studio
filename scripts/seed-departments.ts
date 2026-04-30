@@ -13,20 +13,25 @@ async function main() {
   await connectDb();
 
   let created = 0;
-  let skipped = 0;
+  let updated = 0;
 
-  for (const name of DEPARTMENT_SEED) {
+  for (const { name, abbreviation } of DEPARTMENT_SEED) {
     const slug = slugify(name);
     const result = await Department.updateOne(
       { slug },
-      { $setOnInsert: { name, slug, headUserId: null } },
+      {
+        $setOnInsert: { slug, headUserId: null },
+        $set: { name, abbreviation: abbreviation.toUpperCase() },
+      },
       { upsert: true }
     );
     if (result.upsertedCount > 0) created++;
-    else skipped++;
+    else if (result.modifiedCount > 0) updated++;
   }
 
-  console.log(`[seed] departments — created: ${created}, already-present: ${skipped}`);
+  console.log(
+    `[seed] departments — created: ${created}, updated: ${updated}, total: ${DEPARTMENT_SEED.length}`
+  );
   process.exit(0);
 }
 

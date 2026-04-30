@@ -48,10 +48,37 @@ export async function fetchPublicTemplateList(): Promise<PublicTemplateListItem[
   return data.templates;
 }
 
-export async function fetchPublicTemplate(id: string): Promise<PublicTemplate | null> {
+export type PublicTemplateLockBlock = {
+  templateId: string;
+  departmentId: string;
+  departmentName: string;
+  departmentAbbreviation: string;
+  fromSameDept: boolean;
+  requiresPasscode: boolean;
+};
+
+export type FetchPublicTemplateResult =
+  | { kind: "ok"; template: PublicTemplate }
+  | { kind: "not-found" }
+  | { kind: "locked"; lock: PublicTemplateLockBlock };
+
+export async function fetchPublicTemplate(
+  id: string
+): Promise<FetchPublicTemplateResult> {
   const res = await fetch(`/api/templates/${id}`, { cache: "no-store" });
-  if (res.status === 404) return null;
+  if (res.status === 404) return { kind: "not-found" };
+  if (res.status === 403) {
+    try {
+      const data = (await res.json()) as {
+        lock?: PublicTemplateLockBlock;
+      };
+      if (data.lock) return { kind: "locked", lock: data.lock };
+    } catch {
+      // fall through
+    }
+    throw new Error(`Forbidden (${res.status})`);
+  }
   if (!res.ok) throw new Error(await readError(res));
   const data = (await res.json()) as { template: PublicTemplate };
-  return data.template;
+  return { kind: "ok", template: data.template };
 }

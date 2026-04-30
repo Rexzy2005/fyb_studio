@@ -1,14 +1,41 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type CSSProperties,
+  type MouseEvent,
+} from "react";
+import { useSession } from "next-auth/react";
 
 import {
   fetchPublicTemplateList,
   type PublicTemplateListItem,
 } from "@/lib/api/publicTemplates";
+import { HeaderAuthSlot } from "@/components/auth/HeaderAuthSlot";
+import { HeadEntryModal } from "@/components/templates/HeadEntryModal";
 
 export default function Home() {
+  const { data: session } = useSession();
+  const isHead = Boolean(session?.user?.isDepartmentHead);
+  const [headEntry, setHeadEntry] = useState<
+    | { id: string; name: string }
+    | null
+  >(null);
+
+  const onTeaserActivate = useCallback(
+    (e: MouseEvent, t: PublicTemplateListItem) => {
+      if (!isHead) return;
+      e.preventDefault();
+      setHeadEntry({ id: t.id, name: t.name });
+    },
+    [isHead]
+  );
+
   const heroRef = useRef<HTMLDivElement | null>(null);
   const howRef = useRef<HTMLElement | null>(null);
   const [howStep, setHowStep] = useState<0 | 1 | 2>(0);
@@ -201,12 +228,7 @@ export default function Home() {
           >
             Browse templates
           </Link>
-          <Link
-            href="/signin"
-            className="inline-flex h-10 items-center justify-center rounded-xl bg-zinc-900 px-4 text-sm font-medium text-white shadow-sm transition hover:bg-zinc-800 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-white"
-          >
-            Sign in
-          </Link>
+          <HeaderAuthSlot />
         </div>
       </header>
 
@@ -482,7 +504,7 @@ export default function Home() {
                 className="mb-3 break-inside-avoid overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-900"
               >
                 {t ? (
-                  <TeaserTile template={t} />
+                  <TeaserTile template={t} onActivate={onTeaserActivate} />
                 ) : (
                   <div className="aspect-4/5 w-full animate-pulse bg-zinc-100 dark:bg-zinc-800/60" />
                 )}
@@ -491,6 +513,13 @@ export default function Home() {
           </div>
         </section>
       </main>
+
+      <HeadEntryModal
+        open={headEntry !== null}
+        templateId={headEntry?.id ?? ""}
+        templateName={headEntry?.name ?? ""}
+        onClose={() => setHeadEntry(null)}
+      />
     </div>
   );
 }
@@ -996,9 +1025,19 @@ function HowVisual({
   );
 }
 
-function TeaserTile({ template }: { template: PublicTemplateListItem }) {
+function TeaserTile({
+  template,
+  onActivate,
+}: {
+  template: PublicTemplateListItem;
+  onActivate?: (e: MouseEvent, t: PublicTemplateListItem) => void;
+}) {
   return (
-    <Link href={`/templates/${template.id}/use`} className="group block">
+    <Link
+      href={`/templates/${template.id}/use`}
+      onClick={onActivate ? (e) => onActivate(e, template) : undefined}
+      className="group block"
+    >
       <div className="relative w-full overflow-hidden bg-zinc-100 dark:bg-zinc-800/60">
         <div className="aspect-4/5 w-full" />
         {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -1012,4 +1051,5 @@ function TeaserTile({ template }: { template: PublicTemplateListItem }) {
     </Link>
   );
 }
+
 

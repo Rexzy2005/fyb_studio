@@ -1,6 +1,7 @@
 import NextAuth from "next-auth";
 import { NextResponse } from "next/server";
 import { edgeAuthConfig } from "@/backend/auth/config.edge";
+import { safeReturnPath } from "@/lib/auth/safeRedirect";
 
 const { auth } = NextAuth(edgeAuthConfig);
 
@@ -14,11 +15,18 @@ export default auth((req) => {
   const isSignin = path === "/signin";
   const isOnboardingRoute = path === "/onboarding" || path.startsWith("/onboarding/");
   const isDashboardRoute = path === "/dashboard" || path.startsWith("/dashboard/");
+  const isTemplateUseRoute = /^\/templates\/[^/]+\/use(\/|$)/.test(path);
+  const isTemplatePreviewRoute = /^\/templates\/[^/]+\/preview(\/|$)/.test(path);
+  const isProtected =
+    isOnboardingRoute ||
+    isDashboardRoute ||
+    isTemplateUseRoute ||
+    isTemplatePreviewRoute;
 
   if (!isAuthed) {
-    if (isOnboardingRoute || isDashboardRoute) {
+    if (isProtected) {
       const url = new URL("/signin", nextUrl);
-      url.searchParams.set("from", path);
+      url.searchParams.set("from", path + nextUrl.search);
       return NextResponse.redirect(url);
     }
     return NextResponse.next();
@@ -26,18 +34,48 @@ export default auth((req) => {
 
   if (!isOnboarded) {
     if (isOnboardingRoute) return NextResponse.next();
-    if (isSignin || isDashboardRoute) {
-      return NextResponse.redirect(new URL("/onboarding", nextUrl));
+    if (isSignin || isDashboardRoute || isTemplateUseRoute || isTemplatePreviewRoute) {
+      const url = new URL("/onboarding", nextUrl);
+      const intent =
+        isTemplateUseRoute || isTemplatePreviewRoute
+          ? path + nextUrl.search
+          : isSignin
+            ? nextUrl.searchParams.get("from")
+            : null;
+      const safe = safeReturnPath(intent, "");
+      if (safe) url.searchParams.set("from", safe);
+      return NextResponse.redirect(url);
     }
     return NextResponse.next();
   }
 
+  if (isTemplatePreviewRoute) {
+    const isHead = Boolean(session?.user?.isDepartmentHead);
+    if (!isHead) {
+      const idMatch = path.match(/^\/templates\/([^/]+)\/preview/);
+      const fallback = idMatch
+        ? `/templates/${idMatch[1]}/use`
+        : "/templates";
+      return NextResponse.redirect(new URL(fallback, nextUrl));
+    }
+  }
+
   if (isSignin || isOnboardingRoute) {
-    return NextResponse.redirect(new URL("/dashboard", nextUrl));
+    const intent = nextUrl.searchParams.get("from");
+    const target = safeReturnPath(intent, "/dashboard");
+    return NextResponse.redirect(new URL(target, nextUrl));
   }
   return NextResponse.next();
 });
 
 export const config = {
-  matcher: ["/signin", "/onboarding/:path*", "/dashboard/:path*"],
+  matcher: [
+    "/signin",
+    "/onboarding/:path*",
+    "/dashboard/:path*",
+    "/templates/:id/use",
+    "/templates/:id/use/:path*",
+    "/templates/:id/preview",
+    "/templates/:id/preview/:path*",
+  ],
 };

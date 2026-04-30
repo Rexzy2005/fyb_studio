@@ -6,6 +6,9 @@ export type AppErrorCode =
   | "USERNAME_TAKEN"
   | "DEPARTMENT_HEAD_TAKEN"
   | "ALREADY_ONBOARDED"
+  | "TEMPLATE_LOCKED"
+  | "WRONG_DEPARTMENT"
+  | "INVALID_PASSCODE"
   | "INTERNAL_ERROR";
 
 export class AppError extends Error {

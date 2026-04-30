@@ -3,6 +3,7 @@
 import { use, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
+import { useSession } from "next-auth/react";
 import { ArrowLeft, ChevronLeft, ChevronRight, Menu, X } from "lucide-react";
 
 import type { NormalizedDesignV1 } from "@/lib/figma";
@@ -18,7 +19,11 @@ import {
   markDownloaded,
   saveInputs,
 } from "@/lib/storage/userDesignRepo";
-import { fetchPublicTemplate } from "@/lib/api/publicTemplates";
+import {
+  fetchPublicTemplate,
+  type PublicTemplateLockBlock,
+} from "@/lib/api/publicTemplates";
+import { LockedAccessModal } from "@/components/templates/LockedAccessModal";
 
 import { DesignWorkspace } from "@/components/editor/DesignWorkspace";
 import { useGoogleFonts } from "@/components/editor/useGoogleFonts";
@@ -43,9 +48,13 @@ export default function UseTemplatePage({
   const router = useRouter();
   const searchParams = useSearchParams();
   const requestedDesignId = searchParams.get("userDesignId");
+  const { data: session } = useSession();
+  const isHead = Boolean(session?.user?.isDepartmentHead);
 
   const [userDesign, setUserDesign] = useState<UserDesignRecord | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [lockBlock, setLockBlock] = useState<PublicTemplateLockBlock | null>(null);
+  const [refetchTrigger, setRefetchTrigger] = useState(0);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [exportStage, setExportStage] = useState<string>("");
@@ -99,13 +108,29 @@ export default function UseTemplatePage({
     };
   }, []);
 
-  // Load or create the user-design working copy.
+  // Load or create the user-design working copy. Always hits the server first
+  // to enforce the lock state — even if an IDB record exists.
   useEffect(() => {
     let cancelled = false;
     (async () => {
       try {
-        let record: UserDesignRecord | null = null;
+        const remote = await fetchPublicTemplate(templateId);
+        if (cancelled) return;
 
+        if (remote.kind === "not-found") {
+          setLoadError("Template not found or no longer available.");
+          return;
+        }
+
+        if (remote.kind === "locked") {
+          setLockBlock(remote.lock);
+          setUserDesign(null);
+          return;
+        }
+
+        setLockBlock(null);
+
+        let record: UserDesignRecord | null = null;
         if (requestedDesignId) {
           record = await getUserDesign(requestedDesignId);
         } else {
@@ -113,21 +138,20 @@ export default function UseTemplatePage({
         }
 
         if (!record) {
-          const remote = await fetchPublicTemplate(templateId);
-          if (cancelled) return;
-          if (!remote) {
-            setLoadError("Template not found or no longer available.");
-            return;
-          }
           const assetUrlsByNodeId: Record<string, string> = {};
-          for (const a of remote.designAssets) assetUrlsByNodeId[a.nodeId] = a.url;
+          for (const a of remote.template.designAssets) {
+            assetUrlsByNodeId[a.nodeId] = a.url;
+          }
           record = await createInProgressDesign({
-            templateId: remote.id,
-            name: remote.name,
-            categoryLabel: deriveCategoryLabel(remote.name, remote.category),
-            designJson: remote.designJson,
-            normalized: remote.normalized,
-            fieldConfig: remote.fieldConfig as FieldConfig,
+            templateId: remote.template.id,
+            name: remote.template.name,
+            categoryLabel: deriveCategoryLabel(
+              remote.template.name,
+              remote.template.category
+            ),
+            designJson: remote.template.designJson,
+            normalized: remote.template.normalized,
+            fieldConfig: remote.template.fieldConfig as FieldConfig,
             assetUrlsByNodeId,
           });
         }
@@ -162,7 +186,7 @@ export default function UseTemplatePage({
     return () => {
       cancelled = true;
     };
-  }, [templateId, requestedDesignId]);
+  }, [templateId, requestedDesignId, refetchTrigger]);
 
   useEffect(() => {
     const v = window.localStorage.getItem("fyb:use:sidebar") === "collapsed";
@@ -233,6 +257,24 @@ export default function UseTemplatePage({
         <div className="rounded-2xl border border-zinc-200 bg-white p-6 text-sm text-zinc-700 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-200">
           {loadError}
         </div>
+      </div>
+    );
+  }
+
+  if (lockBlock) {
+    return (
+      <div className="min-h-screen bg-zinc-50 dark:bg-zinc-950">
+        <LockedAccessModal
+          open
+          variant={lockBlock.fromSameDept ? "passcode-required" : "blocked"}
+          templateId={lockBlock.templateId}
+          departmentName={lockBlock.departmentName}
+          onClose={() => router.push("/templates")}
+          onUnlocked={() => {
+            setLockBlock(null);
+            setRefetchTrigger((n) => n + 1);
+          }}
+        />
       </div>
     );
   }
@@ -477,6 +519,15 @@ export default function UseTemplatePage({
             >
               <span className={sidebarCollapsed ? "sr-only" : ""}>Back</span>
             </Link>
+            {isHead ? (
+              <Link
+                href={`/templates/${templateId}/preview`}
+                className="block rounded-xl px-3 py-2 text-emerald-700 hover:bg-emerald-50 dark:text-emerald-300 dark:hover:bg-emerald-900/20"
+                title="Preview & lock for your department"
+              >
+                <span className={sidebarCollapsed ? "sr-only" : ""}>Preview & lock</span>
+              </Link>
+            ) : null}
             <div className="mt-2 rounded-xl bg-zinc-50 p-3 dark:bg-zinc-800/40">
               <div
                 className={

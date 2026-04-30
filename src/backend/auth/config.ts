@@ -46,6 +46,8 @@ const fullAuthConfig: NextAuthConfig = {
         user.id = dbUser._id.toString();
         user.isOnboarded = dbUser.isOnboarded;
         user.username = dbUser.username ?? null;
+        user.isDepartmentHead = Boolean(dbUser.isDepartmentHead);
+        user.departmentId = dbUser.department ? dbUser.department.toString() : null;
         return true;
       } catch (err) {
         console.error("[auth.signIn] upsert failed for", profile.email, err);
@@ -58,6 +60,8 @@ const fullAuthConfig: NextAuthConfig = {
         token.userId = user.id ?? token.userId;
         token.isOnboarded = Boolean(user.isOnboarded);
         token.username = user.username ?? null;
+        token.isDepartmentHead = Boolean(user.isDepartmentHead);
+        token.departmentId = user.departmentId ?? null;
       }
 
       if (trigger === "update" && token.userId) {
@@ -65,6 +69,8 @@ const fullAuthConfig: NextAuthConfig = {
         if (fresh) {
           token.isOnboarded = fresh.isOnboarded;
           token.username = fresh.username ?? null;
+          token.isDepartmentHead = Boolean(fresh.isDepartmentHead);
+          token.departmentId = fresh.department ? fresh.department.toString() : null;
         }
       }
 

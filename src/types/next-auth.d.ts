@@ -10,12 +10,16 @@ declare module "next-auth" {
       image?: string | null;
       isOnboarded: boolean;
       username: string | null;
+      isDepartmentHead: boolean;
+      departmentId: string | null;
     };
   }
   interface User {
     id?: string;
     isOnboarded?: boolean;
     username?: string | null;
+    isDepartmentHead?: boolean;
+    departmentId?: string | null;
   }
 }
 
@@ -24,5 +28,7 @@ declare module "next-auth/jwt" {
     userId?: string;
     isOnboarded?: boolean;
     username?: string | null;
+    isDepartmentHead?: boolean;
+    departmentId?: string | null;
   }
 }

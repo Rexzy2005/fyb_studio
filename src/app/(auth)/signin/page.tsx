@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { GoogleSignInButton } from "@/components/auth/GoogleSignInButton";
+import { safeReturnPath } from "@/lib/auth/safeRedirect";
 
 export const metadata = {
   title: "Sign in — FYB Studio",
@@ -11,7 +12,7 @@ export default async function SignInPage({
   searchParams: Promise<{ from?: string }>;
 }) {
   const { from } = await searchParams;
-  const callbackUrl = from && from.startsWith("/") ? from : "/dashboard";
+  const callbackUrl = safeReturnPath(from, "/dashboard");
 
   return (
     <div className="min-h-dvh bg-zinc-50 dark:bg-zinc-950">

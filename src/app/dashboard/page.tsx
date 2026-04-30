@@ -3,6 +3,7 @@ import { auth } from "@/backend/auth/config";
 import { getUserProfile } from "@/backend/services/user.service";
 import { SignOutButton } from "@/components/auth/SignOutButton";
 import { RecentDownloads } from "@/components/dashboard/RecentDownloads";
+import { DepartmentLocks } from "@/components/dashboard/DepartmentLocks";
 
 export const metadata = {
   title: "Dashboard — FYB Studio",
@@ -97,7 +98,13 @@ export default async function DashboardPage() {
           </div>
         </section>
 
-        <div className="mt-6">
+        {profile.isDepartmentHead && profile.department ? (
+          <div className="mt-6">
+            <DepartmentLocks departmentName={profile.department.name} />
+          </div>
+        ) : null}
+
+        <div id="recent-downloads" className="mt-6 scroll-mt-24">
           <RecentDownloads />
         </div>
       </main>

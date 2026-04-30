@@ -1,11 +1,18 @@
 import Link from "next/link";
 import { OnboardingForm } from "@/components/onboarding/OnboardingForm";
+import { safeReturnPath } from "@/lib/auth/safeRedirect";
 
 export const metadata = {
   title: "Set up your profile — FYB Studio",
 };
 
-export default function OnboardingPage() {
+export default async function OnboardingPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ from?: string }>;
+}) {
+  const { from } = await searchParams;
+  const returnTo = safeReturnPath(from, "/dashboard");
   return (
     <div className="min-h-dvh bg-zinc-50 dark:bg-zinc-950">
       <div className="pointer-events-none fixed inset-0 -z-10 overflow-hidden">
@@ -43,7 +50,7 @@ export default function OnboardingPage() {
           </p>
 
           <div className="mt-6">
-            <OnboardingForm />
+            <OnboardingForm returnTo={returnTo} />
           </div>
         </div>
       </main>

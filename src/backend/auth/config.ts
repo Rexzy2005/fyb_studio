@@ -79,4 +79,5 @@ const fullAuthConfig: NextAuthConfig = {
   },
 };
 
-export const { handlers, signIn, signOut, auth } = NextAuth(fullAuthConfig);
+export const { handlers, signIn, signOut, auth, unstable_update } =
+  NextAuth(fullAuthConfig);

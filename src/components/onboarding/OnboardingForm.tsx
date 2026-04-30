@@ -96,7 +96,18 @@ export function OnboardingForm({ returnTo }: { returnTo?: string }) {
         return;
       }
 
-      await updateSession();
+      // Belt-and-braces: server already refreshed the cookie via
+      // unstable_update, but we also nudge the client session so any
+      // mounted SessionProvider listeners pick up the new claims before
+      // the navigation. Failures here are non-fatal — the cookie set by
+      // the server response is what middleware actually reads.
+      try {
+        await updateSession({
+          user: { isOnboarded: true },
+        } as Parameters<typeof updateSession>[0]);
+      } catch {
+        // ignore — server-side update is the source of truth
+      }
       window.location.assign(destination);
       return;
     } catch (err) {

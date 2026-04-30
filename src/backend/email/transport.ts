@@ -14,6 +14,9 @@ export function getMailTransport(): Transporter | null {
     port: env.SMTP_PORT,
     secure: env.SMTP_PORT === 465,
     auth: { user: env.SMTP_USER, pass: env.SMTP_PASS },
+    connectionTimeout: 15_000,
+    greetingTimeout: 15_000,
+    socketTimeout: 30_000,
   });
   return cached;
 }

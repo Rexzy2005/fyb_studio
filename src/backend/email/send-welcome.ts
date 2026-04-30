@@ -26,11 +26,18 @@ export async function sendWelcomeEmail(input: SendWelcomeInput): Promise<void> {
     templatesUrl: `${baseUrl}/templates`,
   });
 
-  await transport.sendMail({
+  console.log("[email] sending welcome email to", input.email, "via", baseUrl);
+  const info = await transport.sendMail({
     from: getEmailFrom(),
     to: input.email,
     subject,
     html,
     text,
   });
+  console.log(
+    "[email] ✓ welcome email accepted:",
+    info.accepted,
+    "messageId:",
+    info.messageId
+  );
 }

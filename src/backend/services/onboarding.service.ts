@@ -9,7 +9,6 @@ import {
   isUsernameAvailable,
   setOnboardedProfile,
 } from "@/backend/services/user.service";
-import { sendWelcomeEmail } from "@/backend/email/send-welcome";
 import type { CompleteOnboardingInput } from "@/backend/validation/onboarding.schema";
 
 export async function completeOnboarding(
@@ -59,19 +58,11 @@ export async function completeOnboarding(
     throw err;
   }
 
-  void sendWelcomeEmail({
-    email: updatedUser.email,
-    name: updatedUser.name,
-    username: updatedUser.username ?? input.username,
-  }).catch((err) => {
-    console.error("[onboarding] welcome email failed:", err);
-  });
-
   return {
     id: updatedUser._id.toString(),
     email: updatedUser.email,
     name: updatedUser.name,
-    username: updatedUser.username,
+    username: updatedUser.username ?? input.username,
     departmentId: input.departmentId,
     departmentName: department.name,
     isDepartmentHead: updatedUser.isDepartmentHead,

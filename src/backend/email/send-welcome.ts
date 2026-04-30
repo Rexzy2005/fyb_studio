@@ -1,4 +1,4 @@
-import { env } from "@/backend/env";
+import { resolveBaseUrl } from "@/backend/email/baseUrl";
 import { getEmailFrom, getMailTransport } from "@/backend/email/transport";
 import { renderWelcomeEmail } from "@/backend/email/templates/welcome";
 
@@ -18,11 +18,12 @@ export async function sendWelcomeEmail(input: SendWelcomeInput): Promise<void> {
     return;
   }
 
-  const baseUrl = env.AUTH_URL ?? "http://localhost:3000";
+  const baseUrl = resolveBaseUrl();
   const { subject, html, text } = renderWelcomeEmail({
     name: input.name,
     username: input.username,
-    dashboardUrl: `${baseUrl.replace(/\/+$/, "")}/dashboard`,
+    dashboardUrl: `${baseUrl}/dashboard`,
+    templatesUrl: `${baseUrl}/templates`,
   });
 
   await transport.sendMail({

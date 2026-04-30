@@ -4,6 +4,8 @@ import Link from "next/link";
 import { signOut, useSession } from "next-auth/react";
 import { useEffect, useId, useRef, useState } from "react";
 
+import { wipeAllClientStorage } from "@/lib/storage/wipeAll";
+
 export function HeaderAuthSlot() {
   const { data: session, status } = useSession();
   const [open, setOpen] = useState(false);
@@ -65,6 +67,9 @@ export function HeaderAuthSlot() {
     if (signingOut) return;
     setSigningOut(true);
     try {
+      // Wipe browser-side state BEFORE the server-side signOut so that even if
+      // the network call fails the local data is already gone.
+      await wipeAllClientStorage();
       await signOut({ callbackUrl: "/" });
     } catch {
       setSigningOut(false);

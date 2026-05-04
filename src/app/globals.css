@@ -299,3 +299,204 @@ html.dark {
 @media (prefers-reduced-motion: reduce) {
   * { scroll-behavior: auto !important; }
 }
+
+/* ────────────────────────────────────────────────────────────
+   FYB · Cinema theme
+   Scoped via .fyb-cinema wrapper. Always dark — like a theatre.
+   Used by /  (landing) and /templates (gallery).
+   ──────────────────────────────────────────────────────────── */
+.fyb-cinema {
+  --night: #0a0908;
+  --night-2: #11100e;
+  --night-3: #1a1815;
+  --paper: #efe9dc;
+  --paper-soft: #b9b0a0;
+  --paper-faint: rgba(239, 233, 220, 0.55);
+  --accent: #ff5a3c;
+  --accent-soft: #ff8b76;
+  --gold: #d2a35c;
+  --rule: rgba(239, 233, 220, 0.12);
+  --rule-strong: rgba(239, 233, 220, 0.32);
+  background: var(--night);
+  color: var(--paper);
+}
+.fyb-cinema ::selection {
+  background: var(--accent);
+  color: var(--night);
+}
+
+@keyframes fybRise {
+  0%   { opacity: 0; transform: translateY(14px); filter: blur(2px); }
+  100% { opacity: 1; transform: translateY(0); filter: blur(0); }
+}
+.fyb-rise {
+  animation: fybRise 720ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+/* Scroll reveal — staggered via inline --reveal-delay */
+.reveal {
+  opacity: 0;
+  transform: translateY(36px);
+  filter: blur(3px);
+  transition:
+    opacity 900ms cubic-bezier(0.22, 1, 0.36, 1),
+    transform 1100ms cubic-bezier(0.22, 1, 0.36, 1),
+    filter 900ms cubic-bezier(0.22, 1, 0.36, 1);
+  transition-delay: var(--reveal-delay, 0ms);
+}
+.reveal.is-revealed {
+  opacity: 1;
+  transform: translateY(0);
+  filter: blur(0);
+}
+.reveal-kinetic {
+  opacity: 0;
+  transition: opacity 500ms ease 100ms;
+}
+.reveal-kinetic.is-revealed {
+  opacity: 1;
+}
+
+/* Kinetic letter cascade */
+.kinetic-letter {
+  display: inline-block;
+  opacity: 0;
+  transform: translateY(110%) rotate(8deg);
+  will-change: transform, opacity;
+}
+.reveal-kinetic.is-revealed .kinetic-letter {
+  animation: fybKineticIn 950ms cubic-bezier(0.22, 1, 0.36, 1) forwards;
+  animation-delay: calc(var(--ki-i, 0) * 32ms);
+}
+@keyframes fybKineticIn {
+  0%   { opacity: 0; transform: translateY(120%) rotate(10deg); }
+  55%  { opacity: 1; transform: translateY(-6%) rotate(-2deg); }
+  100% { opacity: 1; transform: translateY(0) rotate(0); }
+}
+
+/* Image-clipped giant text — covers shimmer behind the digits */
+.fyb-clip-text {
+  background-clip: text;
+  -webkit-background-clip: text;
+  color: transparent;
+  -webkit-text-fill-color: transparent;
+  background-size: 140% 140%;
+  background-position: 0% 50%;
+  animation: fybClipDrift 14s ease-in-out infinite alternate;
+}
+@keyframes fybClipDrift {
+  0%   { background-position: 0% 30%; }
+  100% { background-position: 100% 70%; }
+}
+
+/* Curtain wipe reveal */
+.fyb-curtain {
+  clip-path: inset(0 100% 0 0);
+  transition: clip-path 1100ms cubic-bezier(0.76, 0, 0.24, 1);
+  transition-delay: var(--curtain-delay, 0ms);
+}
+.fyb-curtain.is-revealed { clip-path: inset(0 0 0 0); }
+
+/* Slow ambient blob behind the page */
+.fyb-blob {
+  position: absolute;
+  border-radius: 9999px;
+  filter: blur(120px);
+  opacity: 0.55;
+  pointer-events: none;
+  will-change: transform;
+}
+@keyframes fybBlobA {
+  0%, 100% { transform: translate3d(-10%, 0%, 0) scale(1); }
+  50%      { transform: translate3d(15%, -8%, 0) scale(1.15); }
+}
+@keyframes fybBlobB {
+  0%, 100% { transform: translate3d(8%, 12%, 0) scale(0.95); }
+  50%      { transform: translate3d(-12%, 0%, 0) scale(1.1); }
+}
+.fyb-blob.a { animation: fybBlobA 22s ease-in-out infinite; }
+.fyb-blob.b { animation: fybBlobB 28s ease-in-out infinite; }
+
+/* Marquee-free now-showing stage — sticky big number scrub */
+.fyb-stage-pin {
+  position: sticky;
+  top: 0;
+  height: 100vh;
+  overflow: hidden;
+}
+
+/* Number flicker (vintage projector vibe) */
+@keyframes fybFlicker {
+  0%, 19%, 22%, 62%, 64%, 100% { opacity: 1; }
+  20%, 21%, 63% { opacity: 0.78; }
+}
+.fyb-flicker { animation: fybFlicker 6s linear infinite; }
+
+/* Hero parallax stack — JS sets transforms, no CSS transition (lerp smooths) */
+[data-stack-card] {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  will-change: transform;
+}
+
+/* Cursor — comet trail (main + 2 lagging) */
+.fyb-cursor {
+  position: fixed;
+  left: 0; top: 0;
+  pointer-events: none;
+  z-index: 100;
+  border-radius: 9999px;
+  mix-blend-mode: difference;
+  transform: translate(-200px, -200px);
+}
+.fyb-cursor.main { width: 12px; height: 12px; margin: -6px 0 0 -6px; background: var(--accent); }
+.fyb-cursor.t1   { width: 28px; height: 28px; margin: -14px 0 0 -14px; border: 1px solid var(--accent); opacity: 0.5; }
+.fyb-cursor.t2   { width: 56px; height: 56px; margin: -28px 0 0 -28px; border: 1px solid var(--accent); opacity: 0.18; }
+.fyb-cursor.is-hot { mix-blend-mode: normal; }
+
+@media (hover: none), (pointer: coarse) {
+  .fyb-cursor-dot { display: none; }
+}
+
+/* Magnetic CTA wrapper */
+.fyb-magnet {
+  display: inline-block;
+  transition: transform 320ms cubic-bezier(0.22, 1, 0.36, 1);
+  will-change: transform;
+}
+
+/* Tilt plate */
+.fyb-tilt {
+  transform-style: preserve-3d;
+  transition: transform 320ms cubic-bezier(0.22, 1, 0.36, 1);
+  will-change: transform;
+}
+
+/* Scroll progress bar */
+.fyb-progress {
+  position: fixed;
+  inset: 0 0 auto 0;
+  height: 2px;
+  z-index: 60;
+  background: var(--accent);
+  transform-origin: 0 0;
+  transform: scaleX(0);
+  transition: transform 80ms linear;
+}
+
+@media (hover: none), (pointer: coarse) {
+  .fyb-cursor { display: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .fyb-rise,
+  .reveal,
+  .reveal-kinetic,
+  .kinetic-letter,
+  .fyb-clip-text,
+  .fyb-curtain,
+  .fyb-blob,
+  .fyb-flicker { animation: none !important; transition: none !important; opacity: 1 !important; transform: none !important; filter: none !important; clip-path: none !important; }
+  .fyb-cursor { display: none; }
+}

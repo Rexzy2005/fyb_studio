@@ -12,7 +12,9 @@
     "seed:departments": "tsx --env-file-if-exists=.env --env-file-if-exists=.env.local scripts/seed-departments.ts",
     "test:email": "tsx --env-file-if-exists=.env --env-file-if-exists=.env.local scripts/test-email.ts",
     "reset:departments": "tsx --env-file-if-exists=.env --env-file-if-exists=.env.local scripts/reset-departments.ts",
-    "reseed:departments": "npm run reset:departments && npm run seed:departments"
+    "reseed:departments": "npm run reset:departments && npm run seed:departments",
+    "test:fixtures": "tsx scripts/test-fixtures.ts",
+    "test:fixtures:update": "tsx scripts/test-fixtures.ts --update"
   },
   "dependencies": {
     "canvg": "^4.0.3",

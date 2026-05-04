@@ -1,6 +1,14 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState, type MouseEvent } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type CSSProperties,
+  type MouseEvent,
+} from "react";
 import Link from "next/link";
 import { useSession } from "next-auth/react";
 
@@ -12,30 +20,57 @@ import { useTemplateChangeStream } from "@/lib/realtime/templatesStream";
 import { HeaderAuthSlot } from "@/components/auth/HeaderAuthSlot";
 import { HeadEntryModal } from "@/components/templates/HeadEntryModal";
 
+const display: CSSProperties = {
+  fontFamily: "var(--font-bricolage)",
+  fontVariationSettings: "'wdth' 75, 'wght' 800",
+  letterSpacing: "-0.04em",
+};
+const displayWide: CSSProperties = {
+  fontFamily: "var(--font-bricolage)",
+  fontVariationSettings: "'wdth' 100, 'wght' 700",
+  letterSpacing: "-0.02em",
+};
+const serif: CSSProperties = {
+  fontFamily: "var(--font-fraunces)",
+  fontVariationSettings: "'SOFT' 100, 'opsz' 144",
+  fontWeight: 700,
+  letterSpacing: "-0.02em",
+};
+const serifBody: CSSProperties = {
+  fontFamily: "var(--font-fraunces)",
+  fontVariationSettings: "'SOFT' 100, 'opsz' 14",
+};
+const script: CSSProperties = { fontFamily: "var(--font-ms-madi)" };
+const mono: CSSProperties = { fontFamily: "var(--font-geist-mono)" };
+
 type CategoryFilter = "all" | "fyb" | "signout";
 
-function deriveCategoryLabel(template: Pick<PublicTemplateListItem, "name" | "category">): string {
+function deriveCategoryLabel(
+  template: Pick<PublicTemplateListItem, "name" | "category">
+): string {
   const explicit = template.category?.trim();
   if (explicit) return explicit;
-
   const n = template.name.toLowerCase();
   if (/(sign\s*-?\s*out|signed\s*out)/.test(n)) return "Sign-out";
   return "FYB";
 }
 
+function getClassYear(): number {
+  const now = new Date();
+  return now.getMonth() >= 7 ? now.getFullYear() + 1 : now.getFullYear();
+}
+
 export default function UserTemplatesPage() {
   const { data: session } = useSession();
   const isHead = Boolean(session?.user?.isDepartmentHead);
-  const [headEntry, setHeadEntry] = useState<
-    | { id: string; name: string }
-    | null
-  >(null);
+  const [headEntry, setHeadEntry] = useState<{ id: string; name: string } | null>(null);
 
   const [initialLoad, setInitialLoad] = useState(true);
   const [templates, setTemplates] = useState<PublicTemplateListItem[]>([]);
   const [category, setCategory] = useState<CategoryFilter>("all");
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
+  const classYear = getClassYear();
 
   const onCardActivate = useCallback(
     (e: MouseEvent, t: PublicTemplateListItem) => {
@@ -84,103 +119,296 @@ export default function UserTemplatesPage() {
     return () => window.clearTimeout(t);
   }, [search]);
 
+  /* Reveal stagger */
+  useEffect(() => {
+    if (typeof window === "undefined" || !("IntersectionObserver" in window)) return;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        for (const entry of entries) {
+          if (entry.isIntersecting) {
+            entry.target.classList.add("is-revealed");
+            observer.unobserve(entry.target);
+          }
+        }
+      },
+      { threshold: 0.1, rootMargin: "0px 0px -40px 0px" }
+    );
+    document
+      .querySelectorAll<HTMLElement>(".reveal, .fyb-curtain")
+      .forEach((el) => observer.observe(el));
+    return () => observer.disconnect();
+  }, [templates.length, debouncedSearch, category]);
+
+  /* Comet cursor — same as landing */
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    if (!window.matchMedia("(hover: hover) and (pointer: fine)").matches) return;
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+
+    function makeDot(kind: "main" | "t1" | "t2") {
+      const d = document.createElement("div");
+      d.className = `fyb-cursor ${kind}`;
+      return d;
+    }
+    const main = makeDot("main");
+    const t1 = makeDot("t1");
+    const t2 = makeDot("t2");
+    document.body.append(main, t1, t2);
+
+    const target = { x: -200, y: -200 };
+    const c0 = { x: -200, y: -200 };
+    const c1 = { x: -200, y: -200 };
+    const c2 = { x: -200, y: -200 };
+    let raf = 0;
+
+    function onMove(e: PointerEvent) {
+      target.x = e.clientX;
+      target.y = e.clientY;
+      const isHot = (e.target as HTMLElement | null)?.closest("a, button");
+      [main, t1, t2].forEach((d) => d.classList.toggle("is-hot", Boolean(isHot)));
+      if (!raf) raf = requestAnimationFrame(tick);
+    }
+    function tick() {
+      c0.x += (target.x - c0.x) * 0.34;
+      c0.y += (target.y - c0.y) * 0.34;
+      c1.x += (c0.x - c1.x) * 0.18;
+      c1.y += (c0.y - c1.y) * 0.18;
+      c2.x += (c1.x - c2.x) * 0.12;
+      c2.y += (c1.y - c2.y) * 0.12;
+      main.style.transform = `translate(${c0.x}px, ${c0.y}px)`;
+      t1.style.transform = `translate(${c1.x}px, ${c1.y}px)`;
+      t2.style.transform = `translate(${c2.x}px, ${c2.y}px)`;
+      const dx = Math.abs(target.x - c2.x);
+      const dy = Math.abs(target.y - c2.y);
+      if (dx > 0.5 || dy > 0.5) raf = requestAnimationFrame(tick);
+      else raf = 0;
+    }
+    document.addEventListener("pointermove", onMove);
+    return () => {
+      document.removeEventListener("pointermove", onMove);
+      if (raf) cancelAnimationFrame(raf);
+      main.remove();
+      t1.remove();
+      t2.remove();
+    };
+  }, []);
+
   const filtered = useMemo(() => {
     const q = debouncedSearch.toLowerCase();
     return templates.filter((t) => {
       const cat = deriveCategoryLabel(t);
       const matchCategory =
         category === "all" ? true : category === "fyb" ? cat === "FYB" : cat === "Sign-out";
-
       if (!matchCategory) return false;
       if (!q) return true;
-
       return t.name.toLowerCase().includes(q) || cat.toLowerCase().includes(q);
     });
   }, [templates, category, debouncedSearch]);
 
   return (
-    <div className="min-h-screen bg-zinc-50 dark:bg-zinc-950">
-      <main className="mx-auto w-full max-w-7xl px-4 py-10">
-        <header className="flex flex-col gap-6 sm:flex-row sm:items-end sm:justify-between">
-          <div className="max-w-xl">
-            <div className="text-xs font-semibold tracking-wide text-zinc-900 dark:text-zinc-100">
-              Gallery
-            </div>
-            <h1 className="mt-2 text-3xl font-semibold tracking-tight text-zinc-950 dark:text-zinc-100">
-              FYB templates you can personalize fast.
-            </h1>
-          </div>
+    <div className="fyb-cinema relative min-h-dvh" style={serifBody}>
+      {/* Ambient glow */}
+      <div aria-hidden className="pointer-events-none fixed inset-0 -z-10 overflow-hidden">
+        <div
+          className="fyb-blob a"
+          style={{
+            background: "radial-gradient(circle, var(--accent) 0%, transparent 65%)",
+            width: 700,
+            height: 700,
+            top: -240,
+            right: -240,
+            opacity: 0.4,
+          }}
+        />
+        <div
+          className="fyb-blob b"
+          style={{
+            background: "radial-gradient(circle, var(--gold) 0%, transparent 70%)",
+            width: 600,
+            height: 600,
+            bottom: -240,
+            left: -200,
+            opacity: 0.25,
+          }}
+        />
+        <div
+          className="absolute inset-0 opacity-[0.5] mix-blend-overlay"
+          style={{
+            backgroundImage:
+              "radial-gradient(circle at 1px 1px, rgba(239,233,220,0.06) 1px, transparent 0)",
+            backgroundSize: "4px 4px",
+          }}
+        />
+      </div>
 
-          <div className="flex items-center gap-3">
+      {/* MASTHEAD */}
+      <header className="relative z-20">
+        <div className="mx-auto flex max-w-[92rem] items-center justify-between gap-4 px-5 py-5 sm:px-10 sm:py-7">
+          <Link href="/" className="flex items-center gap-3 leading-none">
+            <span className="text-[24px] sm:text-[28px]" style={display}>
+              FYB
+            </span>
+            <span
+              className="hidden text-[10px] uppercase tracking-[0.36em] text-[var(--paper-faint)] sm:inline"
+              style={mono}
+            >
+              Studio · Library
+            </span>
+          </Link>
+          <nav className="flex items-center gap-6">
             <Link
               href="/"
-              className="inline-flex h-10 items-center justify-center rounded-xl border border-zinc-200 bg-white px-4 text-sm font-medium text-zinc-900 shadow-sm transition hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-100 dark:hover:bg-zinc-800"
+              className="hidden text-[11px] uppercase tracking-[0.32em] text-[var(--paper)]/80 underline-offset-[6px] hover:text-[var(--paper)] hover:underline sm:inline"
             >
               Home
             </Link>
             <HeaderAuthSlot />
-          </div>
-        </header>
+          </nav>
+        </div>
+      </header>
 
-        <div className="sticky top-0 z-20 -mx-4 mt-6 border-b border-zinc-200/70 bg-zinc-50/85 px-4 py-3 backdrop-blur dark:border-zinc-800/70 dark:bg-zinc-950/70">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <CategoryTabs value={category} onChange={setCategory} />
-
-            <div className="relative w-full sm:w-80">
-              <div className="pointer-events-none absolute inset-y-0 left-3 grid place-items-center text-zinc-400">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden>
-                  <path
-                    d="M10.5 18a7.5 7.5 0 1 1 0-15 7.5 7.5 0 0 1 0 15Z"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                  />
-                  <path d="M21 21l-4.3-4.3" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-                </svg>
+      {/* TITLE */}
+      <section className="relative z-10">
+        <div className="mx-auto max-w-[92rem] px-5 sm:px-10">
+          <div className="grid gap-10 pb-12 pt-8 lg:grid-cols-12 lg:gap-x-12 lg:pb-20 lg:pt-16">
+            <div className="lg:col-span-8">
+              <div
+                className="fyb-rise text-[10px] uppercase tracking-[0.36em] text-[var(--accent)]"
+                style={mono}
+              >
+                The library · {filtered.length || templates.length || "—"} templates
               </div>
-              <input
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                placeholder="Search templates…"
-                className="h-11 w-full rounded-2xl border border-zinc-200 bg-white pl-10 pr-3 text-sm text-zinc-900 shadow-sm outline-none transition focus-visible:ring-2 focus-visible:ring-emerald-500/40 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-100"
-                inputMode="search"
-              />
+              <h1
+                className="fyb-rise mt-4 text-balance text-[44px] leading-[1] sm:text-[80px]"
+                style={{ ...serif, animationDelay: "100ms" }}
+              >
+                Pick your{" "}
+                <em
+                  className="not-italic text-[var(--accent)]"
+                  style={{ ...script, fontStyle: "normal", fontWeight: 400 }}
+                >
+                  moment.
+                </em>
+              </h1>
+              <p
+                className="fyb-rise mt-5 max-w-xl text-[15px] leading-[1.7] text-[var(--paper-soft)]"
+                style={{ ...serifBody, animationDelay: "200ms" }}
+              >
+                Sign-out tees, face caps, FYB-week banners, &ldquo;Face of the
+                Finalist&rdquo; posters — every template ready to personalize.
+                Open one. Drop your details in. Export. Go.
+              </p>
+            </div>
+            <div className="hidden lg:col-span-4 lg:block">
+              <div className="fyb-rise relative" style={{ animationDelay: "260ms" }}>
+                <div
+                  className="text-[10px] uppercase tracking-[0.36em] text-[var(--paper-faint)]"
+                  style={mono}
+                >
+                  Sign-out edition
+                </div>
+                <div
+                  className="mt-2 text-[120px] leading-[0.85] text-[var(--paper)]"
+                  style={display}
+                >
+                  {classYear}
+                </div>
+                <div className="text-[36px] text-[var(--gold)]" style={script}>
+                  Class of yours
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Filter bar */}
+          <div className="reveal sticky top-0 z-20 -mx-5 border-y border-[var(--rule)] bg-[var(--night)]/85 px-5 py-4 backdrop-blur-md sm:-mx-10 sm:px-10">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <CategoryTabs value={category} onChange={setCategory} />
+              <div className="relative w-full sm:w-96">
+                <div className="pointer-events-none absolute inset-y-0 left-4 grid place-items-center text-[var(--paper-faint)]">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden>
+                    <path
+                      d="M10.5 18a7.5 7.5 0 1 1 0-15 7.5 7.5 0 0 1 0 15Z"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                    />
+                    <path
+                      d="M21 21l-4.3-4.3"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                    />
+                  </svg>
+                </div>
+                <input
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  placeholder="Search templates"
+                  className="h-11 w-full border border-[var(--rule)] bg-[var(--night-2)] pl-11 pr-3 text-sm text-[var(--paper)] placeholder:text-[var(--paper-faint)] outline-none transition focus-visible:border-[var(--accent)]"
+                  inputMode="search"
+                />
+                {search ? (
+                  <button
+                    type="button"
+                    onClick={() => setSearch("")}
+                    aria-label="Clear search"
+                    className="absolute inset-y-0 right-3 my-auto h-7 w-7 grid place-items-center rounded-full text-[var(--paper-faint)] hover:text-[var(--paper)]"
+                  >
+                    ✕
+                  </button>
+                ) : null}
+              </div>
             </div>
           </div>
         </div>
+      </section>
 
-        {initialLoad ? (
-          <>
-            <div className="mt-6 columns-2 gap-x-4 lg:hidden">
-              {Array.from({ length: 14 }).map((_, i) => (
-                <UserTemplateCardSkeleton key={i} index={i} />
+      {/* GRID */}
+      <section className="relative z-10">
+        <div className="mx-auto max-w-[92rem] px-5 pb-24 pt-10 sm:px-10 sm:pt-14">
+          {initialLoad ? (
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+              {Array.from({ length: 8 }).map((_, i) => (
+                <SkeletonTile key={i} index={i} />
               ))}
             </div>
-            <div className="mt-6 hidden grid-cols-2 gap-4 lg:grid lg:grid-cols-3 xl:grid-cols-4">
-              {Array.from({ length: 14 }).map((_, i) => (
-                <UserTemplateCardSkeleton key={i} index={i} />
+          ) : filtered.length === 0 ? (
+            <EmptyState
+              query={debouncedSearch}
+              onClear={() => {
+                setSearch("");
+                setCategory("all");
+              }}
+            />
+          ) : (
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+              {filtered.map((t, idx) => (
+                <div
+                  key={t.id}
+                  className="reveal"
+                  style={{ ["--reveal-delay" as never]: `${(idx % 8) * 50}ms` }}
+                >
+                  <CinemaCard t={t} index={idx} onClick={onCardActivate} />
+                </div>
               ))}
             </div>
-          </>
-        ) : filtered.length === 0 ? (
-          <div className="mt-6 rounded-2xl border border-zinc-200 bg-white p-6 text-sm text-zinc-700 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-200">
-            No templates match your filters.
-          </div>
-        ) : (
-          <>
-            <div className="mt-6 columns-2 gap-x-4 lg:hidden">
-              {filtered.map((t) => (
-                <UserTemplateCard key={t.id} template={t} onActivate={onCardActivate} />
-              ))}
-            </div>
-            <div className="mt-6 hidden grid-cols-2 gap-4 lg:grid lg:grid-cols-3 xl:grid-cols-4">
-              {filtered.map((t) => (
-                <UserTemplateCard key={t.id} template={t} onActivate={onCardActivate} />
-              ))}
-            </div>
-          </>
-        )}
-      </main>
+          )}
+        </div>
+      </section>
+
+      <footer className="relative z-10 border-t border-[var(--rule)]">
+        <div className="mx-auto flex max-w-[92rem] flex-wrap items-center justify-between gap-4 px-5 py-7 text-[10px] uppercase tracking-[0.36em] text-[var(--paper-faint)] sm:px-10">
+          <span style={mono}>FYB Studio · Library · {classYear}</span>
+          <Link
+            href="/"
+            className="hover:text-[var(--paper)]"
+            style={mono}
+          >
+            ← Home
+          </Link>
+        </div>
+      </footer>
 
       <HeadEntryModal
         open={headEntry !== null}
@@ -192,102 +420,9 @@ export default function UserTemplatesPage() {
   );
 }
 
-function UserTemplateCardSkeleton({ index }: { index: number }) {
-  const ratios = [4 / 5, 3 / 4, 2 / 3, 1, 5 / 7, 9 / 16, 4 / 6];
-  const ratio = ratios[index % ratios.length] ?? 4 / 5;
-
-  return (
-    <div className="group mb-4 inline-block w-full align-top break-inside-avoid overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-sm lg:mb-0 lg:block dark:border-zinc-800 dark:bg-zinc-900">
-      <div className="w-full bg-zinc-100 dark:bg-zinc-800/60">
-        <div className="relative w-full overflow-hidden">
-          <div className="w-full" style={{ aspectRatio: ratio }} />
-          <div className="fyb-skeleton-shine absolute inset-0" />
-        </div>
-      </div>
-      <div className="p-3 sm:p-4">
-        <div className="h-4 w-3/4 rounded-full bg-zinc-200/80 dark:bg-zinc-700/70" />
-        <div className="mt-2 h-3 w-1/2 rounded-full bg-zinc-200/60 dark:bg-zinc-700/50" />
-      </div>
-    </div>
-  );
-}
-
-function UserTemplateCard({
-  template,
-  onActivate,
-}: {
-  template: PublicTemplateListItem;
-  onActivate?: (e: MouseEvent, t: PublicTemplateListItem) => void;
-}) {
-  const categoryLabel = deriveCategoryLabel(template);
-  const href = `/templates/${template.id}/use`;
-  const ratio =
-    typeof template.coverWidth === "number" &&
-    typeof template.coverHeight === "number" &&
-    template.coverWidth > 0 &&
-    template.coverHeight > 0
-      ? template.coverWidth / template.coverHeight
-      : 4 / 5;
-
-  return (
-    <Link
-      href={href}
-      onClick={onActivate ? (e) => onActivate(e, template) : undefined}
-      className="group mb-4 inline-block w-full align-top break-inside-avoid overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-sm transition-all will-change-transform hover:-translate-y-0.5 hover:border-zinc-300 hover:shadow-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/40 lg:mb-0 lg:block dark:border-zinc-800 dark:bg-zinc-900 dark:hover:border-zinc-700"
-      aria-label={`Use template ${template.name}`}
-    >
-      <div className="w-full bg-zinc-100 dark:bg-zinc-800/60">
-        <div className="relative w-full overflow-hidden">
-          <div className="w-full" style={{ aspectRatio: ratio }} />
-
-          <div className="absolute inset-0 bg-linear-to-br from-white/0 via-white/0 to-zinc-950/5 dark:to-white/5" />
-          <div className="absolute inset-0 bg-[radial-gradient(circle_at_1px_1px,rgba(0,0,0,0.06)_1px,transparent_0)] bg-size-[14px_14px] opacity-35 dark:opacity-25" />
-
-          <div className="pointer-events-none absolute left-2.5 top-2.5 z-10 sm:left-3 sm:top-3">
-            <span className="inline-flex items-center rounded-full border border-white/40 bg-white/70 px-2.5 py-1 text-[11px] font-medium text-zinc-800 shadow-sm backdrop-blur-sm dark:border-zinc-700/60 dark:bg-zinc-900/60 dark:text-zinc-100">
-              {categoryLabel}
-            </span>
-          </div>
-
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src={template.coverUrl}
-            alt={`${template.name} preview`}
-            className="absolute inset-0 h-full w-full object-contain p-1.5 transition-transform duration-500 will-change-transform group-hover:scale-[1.02] sm:p-3"
-          />
-
-          <div className="pointer-events-none absolute inset-0 opacity-0 transition-opacity duration-300 group-hover:opacity-100 group-focus-visible:opacity-100 bg-linear-to-t from-zinc-950/25 via-zinc-950/10 to-transparent dark:from-zinc-950/45 dark:via-zinc-950/25" />
-        </div>
-      </div>
-
-      <div className="p-3 sm:p-4">
-        <div className="flex items-start justify-between gap-3">
-          <div className="min-w-0">
-            <div className="truncate text-[15px] font-semibold tracking-tight text-zinc-950 dark:text-zinc-100">
-              {template.name}
-            </div>
-            <div className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
-              {categoryLabel} • Ready to personalize
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div className="pointer-events-none absolute inset-x-0 bottom-0 p-2.5">
-        <div className="pointer-events-auto w-full translate-y-0 opacity-100 transition-all duration-200 sm:translate-y-2 sm:opacity-0 sm:group-hover:translate-y-0 sm:group-hover:opacity-100">
-          <div className="flex items-center justify-between gap-2.5 rounded-2xl border border-white/30 bg-white/75 p-2.5 shadow-sm backdrop-blur-md dark:border-zinc-700/60 dark:bg-zinc-900/70">
-            <div className="text-[11px] font-medium text-zinc-900 dark:text-zinc-100">
-              Use Template
-            </div>
-            <div className="inline-flex h-8 items-center justify-center rounded-xl bg-zinc-900 px-2.5 text-[11px] font-medium text-white shadow-sm dark:bg-zinc-100 dark:text-zinc-900">
-              Open
-            </div>
-          </div>
-        </div>
-      </div>
-    </Link>
-  );
-}
+/* ────────────────────────────────────────────────────────────
+   Pieces
+   ─────────────────────────────────────────────────────────── */
 
 function CategoryTabs({
   value,
@@ -301,29 +436,172 @@ function CategoryTabs({
     { key: "fyb", label: "FYB" },
     { key: "signout", label: "Sign-out" },
   ];
-
   return (
-    <div className="w-full sm:w-auto">
-      <div className="grid grid-cols-3 gap-1 rounded-2xl border border-zinc-200 bg-white p-1 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
-        {items.map((it) => {
-          const active = it.key === value;
-          return (
-            <button
-              key={it.key}
-              type="button"
-              onClick={() => onChange(it.key)}
-              className={
-                "h-9 rounded-xl px-3 text-sm font-medium transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/40 " +
-                (active
-                  ? "bg-zinc-900 text-white shadow-sm dark:bg-zinc-100 dark:text-zinc-900"
-                  : "bg-transparent text-zinc-700 hover:bg-zinc-50 hover:text-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800/60 dark:hover:text-zinc-100")
-              }
+    <div className="inline-flex items-center gap-1 border border-[var(--rule)] bg-[var(--night-2)] p-1">
+      {items.map((it) => {
+        const active = it.key === value;
+        return (
+          <button
+            key={it.key}
+            type="button"
+            onClick={() => onChange(it.key)}
+            className={
+              "h-9 px-4 text-[11px] font-semibold uppercase tracking-[0.26em] transition " +
+              (active
+                ? "bg-[var(--accent)] text-[var(--night)]"
+                : "text-[var(--paper)]/70 hover:text-[var(--paper)]")
+            }
+            style={mono}
+          >
+            {it.label}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+function CinemaCard({
+  t,
+  index,
+  onClick,
+}: {
+  t: PublicTemplateListItem;
+  index: number;
+  onClick: (e: MouseEvent, t: PublicTemplateListItem) => void;
+}) {
+  const ref = useRef<HTMLAnchorElement>(null);
+  return (
+    <Link
+      ref={ref}
+      href={`/templates/${t.id}/use`}
+      onClick={(e) => onClick(e, t)}
+      onPointerMove={(e) => {
+        const el = ref.current;
+        if (!el) return;
+        if (!window.matchMedia("(hover: hover)").matches) return;
+        const r = el.getBoundingClientRect();
+        const x = (e.clientX - r.left) / r.width - 0.5;
+        const y = (e.clientY - r.top) / r.height - 0.5;
+        el.style.transform = `perspective(1000px) rotateX(${-y * 6}deg) rotateY(${x * 8}deg) translateY(-3px)`;
+      }}
+      onPointerLeave={() => {
+        if (ref.current) ref.current.style.transform = "";
+      }}
+      className="group relative block overflow-hidden border border-[var(--rule)] bg-[var(--night-2)] transition-transform duration-300 will-change-transform"
+      aria-label={`Use template ${t.name}`}
+    >
+      <div className="relative aspect-[4/5] w-full overflow-hidden">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src={t.coverUrl}
+          alt={`${t.name} preview`}
+          className="absolute inset-0 h-full w-full object-contain p-3 transition-transform duration-700 ease-out group-hover:scale-[1.04]"
+        />
+        <div
+          className="pointer-events-none absolute inset-0 ring-1 ring-inset ring-white/5"
+          aria-hidden
+        />
+        <div
+          className="absolute left-2.5 top-2.5 bg-[var(--accent)] px-1.5 py-0.5 text-[9px] uppercase tracking-[0.32em] text-[var(--night)]"
+          style={mono}
+        >
+          {String(index + 1).padStart(2, "0")}
+        </div>
+        <div
+          className="absolute right-2.5 top-2.5 border border-[var(--paper)]/30 bg-[var(--night)]/80 px-2 py-0.5 text-[9px] uppercase tracking-[0.32em] text-[var(--paper)] backdrop-blur"
+          style={mono}
+        >
+          {deriveCategoryLabel(t)}
+        </div>
+
+        {/* hover overlay */}
+        <div className="pointer-events-none absolute inset-0 flex items-end bg-linear-to-t from-[var(--night)]/95 via-[var(--night)]/40 to-transparent opacity-0 transition-opacity duration-300 group-hover:opacity-100">
+          <div className="w-full p-4">
+            <div
+              className="text-[10px] uppercase tracking-[0.36em] text-[var(--accent)]"
+              style={mono}
             >
-              {it.label}
-            </button>
-          );
-        })}
+              Use template
+            </div>
+            <div className="mt-1 inline-flex items-center gap-2 text-[14px] font-semibold text-[var(--paper)]">
+              <span style={{ ...displayWide, fontWeight: 700 }}>Open</span>
+              <span aria-hidden>↗</span>
+            </div>
+          </div>
+        </div>
       </div>
+
+      <div className="border-t border-[var(--rule)] p-3 sm:p-4">
+        <div
+          className="truncate text-[15px] leading-[1.1]"
+          style={{ ...displayWide, fontWeight: 700 }}
+        >
+          {t.name}
+        </div>
+        <div
+          className="mt-1 text-[10px] uppercase tracking-[0.32em] text-[var(--paper-faint)]"
+          style={mono}
+        >
+          Ready to personalize
+        </div>
+      </div>
+    </Link>
+  );
+}
+
+function SkeletonTile({ index }: { index: number }) {
+  const ratios = [4 / 5, 3 / 4, 5 / 7, 4 / 5];
+  const ratio = ratios[index % ratios.length] ?? 4 / 5;
+  return (
+    <div className="overflow-hidden border border-[var(--rule)] bg-[var(--night-2)]">
+      <div className="relative w-full overflow-hidden bg-[var(--night-3)]">
+        <div className="w-full" style={{ aspectRatio: ratio }} />
+        <div className="fyb-skeleton-shine absolute inset-0" />
+      </div>
+      <div className="space-y-2 p-3 sm:p-4">
+        <div className="h-3 w-3/4 bg-[var(--rule-strong)]" />
+        <div className="h-2.5 w-1/2 bg-[var(--rule)]" />
+      </div>
+    </div>
+  );
+}
+
+function EmptyState({
+  query,
+  onClear,
+}: {
+  query: string;
+  onClear: () => void;
+}) {
+  return (
+    <div className="border border-[var(--rule)] bg-[var(--night-2)] p-10 text-center">
+      <div
+        className="text-[10px] uppercase tracking-[0.36em] text-[var(--accent)]"
+        style={mono}
+      >
+        No reels found
+      </div>
+      <h3
+        className="mt-3 text-balance text-[36px] leading-[1] sm:text-[48px]"
+        style={serif}
+      >
+        Nothing for{" "}
+        <em
+          className="not-italic text-[var(--accent)]"
+          style={{ ...script, fontStyle: "normal" }}
+        >
+          {query ? `"${query}"` : "this filter"}.
+        </em>
+      </h3>
+      <button
+        type="button"
+        onClick={onClear}
+        className="mt-6 inline-flex items-center gap-2 border border-[var(--paper)]/30 px-5 py-3 text-[11px] font-semibold uppercase tracking-[0.26em] text-[var(--paper)] hover:border-[var(--paper)]"
+        style={mono}
+      >
+        Clear filters
+      </button>
     </div>
   );
 }

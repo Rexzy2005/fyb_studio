@@ -14,7 +14,9 @@
     "reset:departments": "tsx --env-file-if-exists=.env --env-file-if-exists=.env.local scripts/reset-departments.ts",
     "reseed:departments": "npm run reset:departments && npm run seed:departments",
     "test:fixtures": "tsx scripts/test-fixtures.ts",
-    "test:fixtures:update": "tsx scripts/test-fixtures.ts --update"
+    "test:fixtures:update": "tsx scripts/test-fixtures.ts --update",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "dependencies": {
     "canvg": "^4.0.3",
@@ -40,8 +42,10 @@
     "babel-plugin-react-compiler": "1.0.0",
     "eslint": "^9",
     "eslint-config-next": "16.1.4",
+    "jsdom": "^25.0.1",
     "tailwindcss": "^4",
     "tsx": "^4.21.0",
-    "typescript": "^5"
+    "typescript": "^5",
+    "vitest": "^2.1.9"
   }
 }

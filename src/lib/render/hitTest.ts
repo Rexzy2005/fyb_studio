@@ -1,4 +1,5 @@
 import type { NormalizedDesignV1, NormalizedNode } from "@/lib/figma";
+import { computeRenderOrder } from "@/lib/render/engine/order";
 
 export function hitTestNodeId(
   design: NormalizedDesignV1,
@@ -25,15 +26,4 @@ export function hitTestNodeId(
   }
 
   return null;
-}
-
-function computeRenderOrder(design: NormalizedDesignV1): string[] {
-  const order: string[] = [];
-  function walk(id: string) {
-    order.push(id);
-    const children = design.childrenById[id] ?? [];
-    for (const childId of children) walk(childId);
-  }
-  for (const rootId of design.rootIds) walk(rootId);
-  return order;
 }

@@ -1,8 +1,16 @@
-import type { NormalizedFill, NormalizedTextNode } from "../normalized";
+import type {
+  BlendMode,
+  NormalizedEffect,
+  NormalizedFill,
+  NormalizedTextNode,
+  TextRun,
+} from "../normalized";
 import type { Bounds } from "./geometry";
 import { parseFills } from "./paints";
+import { parseStrokes } from "./strokes";
 import { relativeLuminance } from "./shared/color";
 import { asNumber, asOptionalNumber, asString, isRecord, type AnyRecord } from "./shared/coerce";
+import { asAutoResize } from "./shared/enums";
 import {
   cleanFontFamily,
   inferFontFamilyFromPostScriptName,
@@ -18,7 +26,11 @@ export type TextNodeBuildArgs = {
   visible: boolean;
   opacity: number;
   rotation: number;
+  blendMode: BlendMode;
+  effects: NormalizedEffect[];
+  isMask: boolean;
   transform: AffineMatrix | undefined;
+  relativeTransform?: AffineMatrix;
   size: { width: number; height: number } | undefined;
   frame: Bounds;
   fills: NormalizedFill[];
@@ -26,9 +38,124 @@ export type TextNodeBuildArgs = {
   ctx: NormalizeCtx;
 };
 
+function parseRuns(
+  input: AnyRecord,
+  ctx: NormalizeCtx,
+  characters: string,
+): TextRun[] | undefined {
+  const overrides = Array.isArray(input.characterStyleOverrides)
+    ? (input.characterStyleOverrides as unknown[])
+    : null;
+  const styleTable = isRecord(input.styleOverrideTable)
+    ? (input.styleOverrideTable as AnyRecord)
+    : null;
+
+  if (!overrides || overrides.length === 0 || !styleTable) return undefined;
+  const table: AnyRecord = styleTable;
+
+  // Compress per-character indices into [start,end) runs of identical style ids.
+  const runs: TextRun[] = [];
+  let runStart = 0;
+  let currentKey = String(asNumber(overrides[0], 0));
+
+  function flush(endExclusive: number) {
+    const styleEntry = table[currentKey];
+    if (currentKey !== "0" && isRecord(styleEntry)) {
+      const style = styleEntry as AnyRecord;
+      const fontName = isRecord(style.fontName)
+        ? (style.fontName as AnyRecord)
+        : null;
+      const fontFamily =
+        cleanFontFamily(
+          (fontName && typeof fontName.family === "string"
+            ? (fontName.family as string)
+            : undefined) ??
+            (typeof style.fontFamily === "string"
+              ? (style.fontFamily as string)
+              : undefined),
+        ) ??
+        inferFontFamilyFromPostScriptName(
+          typeof style.fontPostScriptName === "string"
+            ? (style.fontPostScriptName as string)
+            : undefined,
+        );
+
+      if (fontFamily) ctx.fonts.add(fontFamily);
+
+      const runFills = Array.isArray(style.fills)
+        ? parseFills({ fills: style.fills } as AnyRecord, ctx.warnings, ctx.imageHashes)
+        : undefined;
+
+      runs.push({
+        start: runStart,
+        end: endExclusive,
+        fontFamily,
+        fontWeight: asOptionalNumber(style.fontWeight),
+        fontStyle:
+          fontName && typeof fontName.style === "string"
+            ? fontName.style.toLowerCase().includes("italic")
+              ? "italic"
+              : "normal"
+            : undefined,
+        fontSize: asOptionalNumber(style.fontSize),
+        letterSpacing:
+          isRecord(style.letterSpacing) &&
+          typeof (style.letterSpacing as AnyRecord).value === "number"
+            ? {
+                unit:
+                  asString((style.letterSpacing as AnyRecord).unit) === "PIXELS"
+                    ? "PIXELS"
+                    : "PERCENT",
+                value: asNumber((style.letterSpacing as AnyRecord).value, 0),
+              }
+            : undefined,
+        fills: runFills && runFills.length ? runFills : undefined,
+        textDecoration:
+          typeof style.textDecoration === "string"
+            ? (style.textDecoration as string).toLowerCase().includes("underline")
+              ? "underline"
+              : (style.textDecoration as string)
+                    .toLowerCase()
+                    .includes("strikethrough")
+                ? "line-through"
+                : "none"
+            : undefined,
+        textCase: asString(style.textCase),
+      });
+    }
+  }
+
+  for (let i = 1; i < overrides.length; i++) {
+    const key = String(asNumber(overrides[i], 0));
+    if (key !== currentKey) {
+      flush(i);
+      runStart = i;
+      currentKey = key;
+    }
+  }
+  flush(Math.max(overrides.length, characters.length));
+
+  return runs.length ? runs : undefined;
+}
+
 export function buildTextNode(args: TextNodeBuildArgs): NormalizedTextNode {
-  const { id, name, figmaType, visible, opacity, rotation, transform, size, frame, input, ctx } =
-    args;
+  const {
+    id,
+    name,
+    figmaType,
+    visible,
+    opacity,
+    rotation,
+    blendMode,
+    effects,
+    isMask,
+    transform,
+    relativeTransform,
+    size,
+    frame,
+    input,
+    ctx,
+  } = args;
   let { fills } = args;
 
   const characters = asString(input.characters) ?? "";
@@ -100,11 +227,16 @@ export function buildTextNode(args: TextNodeBuildArgs): NormalizedTextNode {
     const bg = ctx.inheritedBg;
     if (bg) {
       const lum = relativeLuminance(bg);
-      const inferred =
-        lum < 0.5
-          ? { kind: "solid" as const, css: "rgba(255, 255, 255, 1)" }
-          : { kind: "solid" as const, css: "rgba(0, 0, 0, 1)" };
-      fills = [inferred];
+      const inferredCss = lum < 0.5 ? "rgba(255, 255, 255, 1)" : "rgba(0, 0, 0, 1)";
+      fills = [
+        {
+          kind: "solid",
+          visible: true,
+          opacity: 1,
+          blendMode: "NORMAL",
+          css: inferredCss,
+        },
+      ];
       ctx.warnings.push({
         code: "text_fill_missing_inferred",
         message: "TEXT node has no fills; inferred a contrasting text color from ancestor background.",
@@ -123,6 +255,9 @@ export function buildTextNode(args: TextNodeBuildArgs): NormalizedTextNode {
     if (data) outlinePaths.push(data);
   }
 
+  const runs = parseRuns(input as AnyRecord, ctx, characters);
+  const strokes = parseStrokes(input as AnyRecord, ctx.warnings, ctx.imageHashes);
+
   return {
     id,
     name,
@@ -131,10 +266,15 @@ export function buildTextNode(args: TextNodeBuildArgs): NormalizedTextNode {
     visible,
     opacity,
     rotation,
+    blendMode,
+    effects,
+    isMask,
     transform,
+    relativeTransform,
     size,
     frame,
     fills,
+    strokes,
     text: {
       characters,
       outlinePaths: outlinePaths.length ? outlinePaths : undefined,
@@ -163,6 +303,10 @@ export function buildTextNode(args: TextNodeBuildArgs): NormalizedTextNode {
       textAlignVertical: asString(input.textAlignVertical),
       textCase: asString(input.textCase),
       textDecoration,
+      paragraphSpacing: asOptionalNumber(input.paragraphSpacing),
+      paragraphIndent: asOptionalNumber(input.paragraphIndent),
+      autoResize: asAutoResize(input.textAutoResize),
+      runs,
     },
   };
 }

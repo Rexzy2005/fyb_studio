@@ -1,6 +1,55 @@
-import type { NormalizedDesignV1, NormalizedFill } from "../normalized";
+import type {
+  AffineMatrix,
+  ImageFilters,
+  NormalizedDesignV1,
+  NormalizedFill,
+} from "../normalized";
 import { rgbaCss } from "./shared/color";
 import { asNumber, asString, isRecord, type AnyRecord } from "./shared/coerce";
+import { asBlendMode, asScaleMode } from "./shared/enums";
+
+const ZERO_FILTERS: ImageFilters = {
+  exposure: 0,
+  contrast: 0,
+  saturation: 0,
+  temperature: 0,
+  tint: 0,
+  highlights: 0,
+  shadows: 0,
+};
+
+function parseImageFilters(raw: unknown): ImageFilters | undefined {
+  if (!isRecord(raw)) return undefined;
+  const f: ImageFilters = {
+    exposure: asNumber(raw.exposure, 0),
+    contrast: asNumber(raw.contrast, 0),
+    saturation: asNumber(raw.saturation, 0),
+    temperature: asNumber(raw.temperature, 0),
+    tint: asNumber(raw.tint, 0),
+    highlights: asNumber(raw.highlights, 0),
+    shadows: asNumber(raw.shadows, 0),
+  };
+  // Drop the field entirely if every channel is zero, to keep the IR small.
+  const isZero = (Object.keys(f) as Array<keyof ImageFilters>).every(
+    (k) => f[k] === ZERO_FILTERS[k],
+  );
+  return isZero ? undefined : f;
+}
+
+function parseImageTransform(raw: unknown): AffineMatrix | undefined {
+  if (!Array.isArray(raw) || raw.length < 2) return undefined;
+  const r0 = Array.isArray(raw[0]) ? (raw[0] as unknown[]) : null;
+  const r1 = Array.isArray(raw[1]) ? (raw[1] as unknown[]) : null;
+  if (!r0 || !r1 || r0.length < 3 || r1.length < 3) return undefined;
+  const a = asNumber(r0[0], NaN);
+  const c = asNumber(r0[1], NaN);
+  const tx = asNumber(r0[2], NaN);
+  const b = asNumber(r1[0], NaN);
+  const d = asNumber(r1[1], NaN);
+  const ty = asNumber(r1[2], NaN);
+  if (![a, b, c, d, tx, ty].every((v) => Number.isFinite(v))) return undefined;
+  return { a, b, c, d, tx, ty };
+}
 
 export function parseFills(
   node: AnyRecord,
@@ -8,7 +57,9 @@ export function parseFills(
   imageHashes: Set<string>,
 ): NormalizedFill[] {
   const fills = Array.isArray(node.fills) ? (node.fills as unknown[]) : [];
-  const backgrounds = Array.isArray(node.backgrounds) ? (node.backgrounds as unknown[]) : [];
+  const backgrounds = Array.isArray(node.backgrounds)
+    ? (node.backgrounds as unknown[])
+    : [];
   const source = fills.length > 0 ? fills : backgrounds;
 
   const normalized: NormalizedFill[] = [];
@@ -18,35 +69,47 @@ export function parseFills(
     const type = asString(fill.type);
     if (!type) continue;
 
+    const visible = fill.visible !== false;
+    const opacity = asNumber(fill.opacity, 1);
+    const blendMode = asBlendMode(fill.blendMode, "NORMAL");
+
     if (type === "SOLID") {
       const color = isRecord(fill.color) ? (fill.color as AnyRecord) : {};
-      const opacity = asNumber(fill.opacity, 1);
+      // Solid CSS bakes per-fill opacity into the alpha channel for back-compat
+      // with the legacy renderer; the structured `opacity` field is also retained.
       normalized.push({
         kind: "solid",
+        visible,
+        opacity,
+        blendMode,
         css: rgbaCss({
           r: asNumber(color.r, 0),
           g: asNumber(color.g, 0),
           b: asNumber(color.b, 0),
-          a: opacity,
+          a: opacity * asNumber(color.a, 1),
         }),
       });
       continue;
     }
 
     if (type === "IMAGE") {
-      const imageHash = asString(fill.imageHash);
+      const imageHash = asString(fill.imageHash) ?? asString(fill.imageRef);
       if (imageHash) {
         imageHashes.add(imageHash);
         normalized.push({
           kind: "image",
+          visible,
+          opacity,
+          blendMode,
           imageHash,
-          scaleMode: asString(fill.scaleMode),
+          scaleMode: asScaleMode(fill.scaleMode),
+          imageTransform: parseImageTransform(fill.imageTransform),
+          scalingFactor: typeof fill.scalingFactor === "number"
+            ? fill.scalingFactor
+            : undefined,
+          rotation: typeof fill.rotation === "number" ? fill.rotation : undefined,
+          filters: parseImageFilters(fill.filters),
           cssFallback: "rgba(0,0,0,0.06)",
-        });
-        warnings.push({
-          code: "image_asset_missing",
-          message:
-            "Image fill references an imageHash, but the export JSON does not include the bitmap bytes. You must attach the image asset during import (next phase).",
         });
       }
       continue;
@@ -72,7 +135,7 @@ export function parseFills(
               r: asNumber(color.r, 0),
               g: asNumber(color.g, 0),
               b: asNumber(color.b, 0),
-              a: asNumber(color.a, 1) * asNumber(fill.opacity, 1),
+              a: asNumber(color.a, 1) * opacity,
             }),
           };
         })
@@ -99,15 +162,13 @@ export function parseFills(
 
       normalized.push({
         kind: "gradient",
+        visible,
+        opacity,
+        blendMode,
         gradientType,
         stops,
         handlePositions: handles.length ? handles : undefined,
-        opacity: asNumber(fill.opacity, 1),
         cssFallback: stops[0]?.colorCss ?? "rgba(0,0,0,0.08)",
-      });
-      warnings.push({
-        code: "gradient_unimplemented",
-        message: `Gradient fill type '${type}' detected; gradient data captured and will be rendered by the hybrid renderer/export pipeline.`,
       });
       continue;
     }
@@ -120,7 +181,9 @@ export function firstSolidPaint(
   node: AnyRecord,
 ): { r: number; g: number; b: number; a: number } | null {
   const fills = Array.isArray(node.fills) ? (node.fills as unknown[]) : [];
-  const backgrounds = Array.isArray(node.backgrounds) ? (node.backgrounds as unknown[]) : [];
+  const backgrounds = Array.isArray(node.backgrounds)
+    ? (node.backgrounds as unknown[])
+    : [];
   const source = fills.length > 0 ? fills : backgrounds;
   for (const fill of source) {
     if (!isRecord(fill)) continue;
@@ -142,3 +205,8 @@ export function firstSolidPaint(
   }
   return null;
 }
+
+// Re-export so call sites that previously imported `warnings.code === "image_asset_missing"`
+// can still detect the case if needed. Warning is now raised once per design (in nodes.ts),
+// not once per fill.
+export const IMAGE_ASSET_MISSING_CODE = "image_asset_missing";

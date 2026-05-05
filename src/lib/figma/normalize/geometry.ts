@@ -114,6 +114,10 @@ export function collectBounds(
   acc: { minX: number; minY: number; maxX: number; maxY: number },
 ): void {
   if (!isRecord(node)) return;
+  // Invisible nodes don't render, so they don't grow the canvas.
+  if (node.visible === false) return;
+
+  let contributed = false;
   const bb = isRecord(node.absoluteBoundingBox) ? (node.absoluteBoundingBox as AnyRecord) : null;
   if (bb) {
     const x = asNumber(bb.x, NaN);
@@ -125,7 +129,16 @@ export function collectBounds(
       acc.minY = Math.min(acc.minY, y);
       acc.maxX = Math.max(acc.maxX, x + w);
       acc.maxY = Math.max(acc.maxY, y + h);
+      contributed = true;
     }
   }
+
+  // If this node clips its content, anything sticking out of its AABB is
+  // cropped at render time — so descendants must not be allowed to grow the
+  // canvas beyond what we already contributed for this node. (We only honor
+  // the clip when we actually captured this node's own bounds; otherwise the
+  // entire subtree would silently disappear from the canvas calculation.)
+  if (contributed && node.clipsContent === true) return;
+
   for (const child of getChildNodes(node)) collectBounds(child, acc);
 }

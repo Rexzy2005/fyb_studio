@@ -39,6 +39,17 @@ function deriveCategoryLabel(name: string, explicit: string | null): string {
   return "FYB";
 }
 
+/**
+ * Standard export scale for every download. 2× hits the modern HD sweet spot:
+ *   - Sharp on retina/4K phones and laptops
+ *   - Within Instagram and WhatsApp's preserved-quality ceilings
+ *   - Crisp enough for small-format prints (~7×9 inches at 300 dpi)
+ *
+ * One quality preset = one consistent, professional output. No size pickers,
+ * no risk of users accidentally exporting a low-resolution file.
+ */
+const STANDARD_EXPORT_SCALE = 2;
+
 export default function UseTemplatePage({
   params,
 }: {
@@ -58,8 +69,6 @@ export default function UseTemplatePage({
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [exportStage, setExportStage] = useState<string>("");
-  const [exportModalOpen, setExportModalOpen] = useState(false);
-  const [exportScale, setExportScale] = useState<1 | 2 | 3 | null>(null);
   const [mobileDetailsOpen, setMobileDetailsOpen] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [autoFitNonce, setAutoFitNonce] = useState(0);
@@ -380,7 +389,11 @@ export default function UseTemplatePage({
       }
 
       setExportStage("Rendering design");
-      const { blob } = await exportTemplatePng({
+      const {
+        blob,
+        width: exportWidth,
+        height: exportHeight,
+      } = await exportTemplatePng({
         design: normalized,
         fieldConfig,
         previewTextByNodeId,
@@ -404,11 +417,19 @@ export default function UseTemplatePage({
           thumbnail = {
             blob,
             mime: blob.type || "image/png",
-            width: Math.round(normalized.canvas.width),
-            height: Math.round(normalized.canvas.height),
+            // Use the bitmap dimensions returned by the exporter — those are
+            // already the integer pixel size of the actual PNG. We never
+            // re-derive them from the design canvas (which carries fractional
+            // values that should not be rounded independently).
+            width: exportWidth,
+            height: exportHeight,
           };
         } else {
-          const { blob: thumbBlob } = await exportTemplatePng({
+          const {
+            blob: thumbBlob,
+            width: thumbWidth,
+            height: thumbHeight,
+          } = await exportTemplatePng({
             design: normalized,
             fieldConfig,
             previewTextByNodeId,
@@ -419,8 +440,8 @@ export default function UseTemplatePage({
           thumbnail = {
             blob: thumbBlob,
             mime: thumbBlob.type || "image/png",
-            width: Math.round(normalized.canvas.width),
-            height: Math.round(normalized.canvas.height),
+            width: thumbWidth,
+            height: thumbHeight,
           };
         }
       } catch (err) {
@@ -428,7 +449,6 @@ export default function UseTemplatePage({
       }
 
       await markDownloaded(userDesign.id, thumbnail);
-      setExportModalOpen(false);
       router.push("/dashboard");
     } finally {
       setExporting(false);
@@ -436,9 +456,11 @@ export default function UseTemplatePage({
     }
   }
 
-  function openExportModal() {
-    setExportScale(null);
-    setExportModalOpen(true);
+  // One-click HD export. No size picker — the standard scale is hardcoded so
+  // every user gets a consistent, high-quality download.
+  function startExport() {
+    if (exporting) return;
+    void doExportPng(STANDARD_EXPORT_SCALE);
   }
 
   function resetUserWorkspace() {
@@ -448,8 +470,6 @@ export default function UseTemplatePage({
     setPreviewTextByNodeId({});
     setPreviewColorByNodeId({});
     setPreviewImageByNodeId({});
-    setExportModalOpen(false);
-    setExportScale(null);
     resetView();
     setAutoFitNonce((n) => n + 1);
   }
@@ -678,7 +698,7 @@ export default function UseTemplatePage({
               <button
                 type="button"
                 disabled={exporting}
-                onClick={openExportModal}
+                onClick={startExport}
                 className="inline-flex h-9 flex-1 items-center justify-center rounded-xl bg-zinc-900 px-4 text-sm font-medium text-white hover:bg-zinc-800 disabled:opacity-60 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-white"
               >
                 {exporting ? "Exporting…" : "Download PNG"}
@@ -701,7 +721,7 @@ export default function UseTemplatePage({
           <button
             type="button"
             disabled={exporting}
-            onClick={openExportModal}
+            onClick={startExport}
             className="inline-flex h-11 flex-1 items-center justify-center rounded-2xl bg-zinc-900 px-4 text-sm font-semibold text-white hover:bg-zinc-800 disabled:opacity-60 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-white"
           >
             {exporting ? "Exporting…" : "Download PNG"}
@@ -915,63 +935,6 @@ export default function UseTemplatePage({
         </div>
       ) : null}
 
-      {exportModalOpen ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-          <div className="w-full max-w-md rounded-2xl bg-white p-4 shadow-xl dark:bg-zinc-900">
-            <div className="text-sm font-semibold text-zinc-950 dark:text-zinc-100">Export PNG</div>
-            <div className="mt-1 text-xs text-zinc-600 dark:text-zinc-300">
-              Choose an export quality preset. This prevents accidental low-quality downloads.
-            </div>
-
-            <div className="mt-4 space-y-2">
-              <ExportOption
-                label="WhatsApp"
-                detail={`${Math.round(normalized.canvas.width)}×${Math.round(normalized.canvas.height)} (1×)`}
-                active={exportScale === 1}
-                onClick={() => setExportScale(1)}
-              />
-              <ExportOption
-                label="Instagram / Facebook"
-                detail={`${Math.round(normalized.canvas.width * 2)}×${Math.round(normalized.canvas.height * 2)} (2×)`}
-                active={exportScale === 2}
-                onClick={() => setExportScale(2)}
-              />
-              <ExportOption
-                label="High-Quality / Print"
-                detail={`${Math.round(normalized.canvas.width * 3)}×${Math.round(normalized.canvas.height * 3)} (3×)`}
-                active={exportScale === 3}
-                onClick={() => setExportScale(3)}
-              />
-            </div>
-
-            <div className="mt-4 flex items-center justify-end gap-2">
-              <button
-                type="button"
-                onClick={() => {
-                  setExportModalOpen(false);
-                  setExportScale(null);
-                }}
-                className="inline-flex h-9 items-center justify-center rounded-xl border border-zinc-200 bg-white px-3 text-xs font-medium text-zinc-900 hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-100 dark:hover:bg-zinc-800"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                disabled={!exportScale || exporting}
-                onClick={async () => {
-                  if (!exportScale) return;
-                  setExportModalOpen(false);
-                  await doExportPng(exportScale);
-                }}
-                className="inline-flex h-9 items-center justify-center rounded-xl bg-zinc-900 px-3 text-xs font-medium text-white hover:bg-zinc-800 disabled:opacity-50 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-white"
-              >
-                {exporting ? "Exporting…" : "Export"}
-              </button>
-            </div>
-          </div>
-        </div>
-      ) : null}
-
       <ProgressModal
         open={exporting}
         title="Exporting"
@@ -983,40 +946,3 @@ export default function UseTemplatePage({
   );
 }
 
-function ExportOption({
-  label,
-  detail,
-  active,
-  onClick,
-}: {
-  label: string;
-  detail: string;
-  active: boolean;
-  onClick: () => void;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={
-        "flex w-full items-start justify-between gap-3 rounded-xl border px-3 py-2 text-left " +
-        (active
-          ? "border-zinc-900 bg-zinc-50 dark:border-zinc-200 dark:bg-zinc-800/60"
-          : "border-zinc-200 bg-white hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-900 dark:hover:bg-zinc-800/60")
-      }
-    >
-      <div>
-        <div className="text-sm font-medium text-zinc-950 dark:text-zinc-100">{label}</div>
-        <div className="text-xs text-zinc-600 dark:text-zinc-300">{detail}</div>
-      </div>
-      <div
-        className={
-          "mt-1 h-4 w-4 rounded-full border " +
-          (active
-            ? "border-zinc-900 bg-zinc-900 dark:border-zinc-100 dark:bg-zinc-100"
-            : "border-zinc-300 bg-white dark:border-zinc-700 dark:bg-zinc-900")
-        }
-      />
-    </button>
-  );
-}

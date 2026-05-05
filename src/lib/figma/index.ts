@@ -1,2 +1,23 @@
 export { normalizeFigmaExport } from "./normalize";
-export type { NormalizedDesignV1, NormalizedNode } from "./normalized";
+export type {
+  AffineMatrix,
+  BlendMode,
+  ConstraintMode,
+  ImageFilters,
+  NormalizedContainerNode,
+  NormalizedDesignV1,
+  NormalizedDesignV2,
+  NormalizedEffect,
+  NormalizedFill,
+  NormalizedFillBase,
+  NormalizedGradientFill,
+  NormalizedImageFill,
+  NormalizedNode,
+  NormalizedShapeNode,
+  NormalizedSolidFill,
+  NormalizedStroke,
+  NormalizedTextNode,
+  NormalizedVectorPath,
+  TextRun,
+  TextStyle,
+} from "./normalized";

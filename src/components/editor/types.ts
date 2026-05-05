@@ -6,16 +6,6 @@ export type RenderModel = {
   nodesById: Record<string, NormalizedNode>;
 };
 
-export function computeRenderOrder(design: NormalizedDesignV1): string[] {
-  const order: string[] = [];
-
-  function walk(id: string) {
-    order.push(id);
-    const children = design.childrenById[id] ?? [];
-    for (const childId of children) walk(childId);
-  }
-
-  for (const rootId of design.rootIds) walk(rootId);
-
-  return order;
-}
+// Re-export from the canonical engine location so the editor never drifts
+// from the renderer's idea of node order.
+export { computeRenderOrder } from "@/lib/render/engine/order";

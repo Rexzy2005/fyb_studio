@@ -1,10 +1,10 @@
 import { z } from "zod";
 
-import type { NormalizedDesignV1, NormalizedNode } from "../normalized";
+import type { NormalizedDesignV1, NormalizedFill, NormalizedNode } from "../normalized";
 import { collectBounds, getChildNodes } from "./geometry";
 import { adaptLegacyTreeToFigmaExport } from "./legacy";
 import { normalizeNode } from "./nodes";
-import { firstSolidPaint } from "./paints";
+import { firstSolidPaint, parseFills } from "./paints";
 import { rgbaCss } from "./shared/color";
 import { asNumber, asString, isRecord, type AnyRecord } from "./shared/coerce";
 
@@ -71,20 +71,32 @@ export function normalizeFigmaExport(input: unknown): NormalizedDesignV1 {
   const width = Number.isFinite(acc.maxX - acc.minX) ? Math.max(0, acc.maxX - acc.minX) : 0;
   const height = Number.isFinite(acc.maxY - acc.minY) ? Math.max(0, acc.maxY - acc.minY) : 0;
 
-  // Background from PAGE backgrounds (if present)
+  // Page background — capture all paints (any kind), and keep the first SOLID
+  // as the convenience `background.css` field for the legacy renderer.
   let backgroundCss: string | undefined;
+  let backgrounds: NormalizedFill[] = [];
   if (page && isRecord(page) && Array.isArray((page as AnyRecord).backgrounds)) {
-    const bgs = (page as AnyRecord).backgrounds as unknown[];
-    const solid = bgs.find(
-      (b) => isRecord(b) && asString((b as AnyRecord).type) === "SOLID",
-    ) as AnyRecord | undefined;
-    if (solid && isRecord(solid.color)) {
-      backgroundCss = rgbaCss({
-        r: asNumber((solid.color as AnyRecord).r, 0),
-        g: asNumber((solid.color as AnyRecord).g, 0),
-        b: asNumber((solid.color as AnyRecord).b, 0),
-        a: asNumber(solid.opacity, 1),
-      });
+    backgrounds = parseFills(
+      { fills: (page as AnyRecord).backgrounds } as AnyRecord,
+      warnings,
+      imageHashes,
+    );
+    const firstSolid = backgrounds.find((f) => f.kind === "solid");
+    if (firstSolid && firstSolid.kind === "solid") backgroundCss = firstSolid.css;
+    // Final fallback to legacy single-paint code path if parseFills produced nothing.
+    if (!backgroundCss) {
+      const bgs = (page as AnyRecord).backgrounds as unknown[];
+      const solid = bgs.find(
+        (b) => isRecord(b) && asString((b as AnyRecord).type) === "SOLID",
+      ) as AnyRecord | undefined;
+      if (solid && isRecord(solid.color)) {
+        backgroundCss = rgbaCss({
+          r: asNumber((solid.color as AnyRecord).r, 0),
+          g: asNumber((solid.color as AnyRecord).g, 0),
+          b: asNumber((solid.color as AnyRecord).b, 0),
+          a: asNumber(solid.opacity, 1),
+        });
+      }
     }
   }
 
@@ -167,8 +179,18 @@ export function normalizeFigmaExport(input: unknown): NormalizedDesignV1 {
     containerCount: allNodes.filter((n) => n.kind === "container").length,
   };
 
+  // Raise the image-asset-missing warning once per design (instead of once per
+  // image fill, which used to spam the warnings array).
+  if (imageHashes.size > 0) {
+    warnings.push({
+      code: "image_asset_missing",
+      message:
+        "Design references one or more image assets by hash; raw bytes are not part of the Figma JSON. Attach images via the upload step before exporting.",
+    });
+  }
+
   return {
-    version: 1,
+    version: 2,
     source: "figma",
     sourceName: typeof root.name === "string" ? root.name : undefined,
     rootIds,
@@ -176,6 +198,7 @@ export function normalizeFigmaExport(input: unknown): NormalizedDesignV1 {
       width,
       height,
       background: backgroundCss ? { css: backgroundCss } : undefined,
+      backgrounds: backgrounds.length ? backgrounds : undefined,
       offsetX,
       offsetY,
     },

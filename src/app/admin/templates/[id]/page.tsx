@@ -1,6 +1,6 @@
 "use client";
 
-import { use, useEffect, useMemo, useRef, useState } from "react";
+import { use, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 
@@ -11,8 +11,10 @@ import { createLocalTemplateRepository } from "@/lib/storage/templateRepo";
 import type { TemplateRecord } from "@/lib/storage/types";
 import { DesignWorkspace } from "@/components/editor/DesignWorkspace";
 import { FieldConfigPanel } from "@/components/editor/FieldConfigPanel";
-import { IconsFontsPanel } from "@/components/editor/IconsFontsPanel";
+import { PreviewFormModal } from "@/components/editor/PreviewFormModal";
+import { Eye } from "lucide-react";
 import { useTemplateEditorStore } from "@/lib/stores/templateEditorStore";
+import { useEditorDirty } from "@/lib/stores/editorDirtyStore";
 import { useGoogleFonts } from "@/components/editor/useGoogleFonts";
 import { ImageUpload } from "@/components/forms/ImageUpload";
 import { ProgressModal } from "@/components/ui/ProgressModal";
@@ -84,6 +86,7 @@ export default function TemplateEditorPage({
   const [unpublishing, setUnpublishing] = useState(false);
 
   const [warningsModalOpen, setWarningsModalOpen] = useState(false);
+  const [previewModalOpen, setPreviewModalOpen] = useState(false);
 
   const normalizeProgress = useSimulatedProgress(normalizing);
   const publishProgress = useSimulatedProgress(publishing);
@@ -181,6 +184,58 @@ export default function TemplateEditorPage({
       cancelled = true;
     };
   }, [id, repo]);
+
+  // Dirty-store wiring. Declared HERE (above the early returns below) because
+  // hooks must be invoked unconditionally on every render — relocating them
+  // past `if (error) return …` would change the hook order between renders.
+  const setDirty = useEditorDirty((s) => s.setDirty);
+  const setFlushSave = useEditorDirty((s) => s.setFlushSave);
+  const resetDirtyStore = useEditorDirty((s) => s.reset);
+
+  // Latest record snapshot — held in a ref so flushSave (registered once with
+  // the dirty store) always sees the freshest state when invoked from the shell.
+  const latestRecordRef = useRef<TemplateRecord | null>(null);
+  useEffect(() => {
+    latestRecordRef.current = record;
+  }, [record]);
+
+  /**
+   * Synchronously flush any pending debounced save. Returns once the write
+   * has landed in storage. Registered with the dirty store so the admin
+   * shell can call it when the user picks "Save & continue" on the
+   * unsaved-changes prompt — guarantees no edits get lost on navigation.
+   */
+  const flushPendingSave = useCallback(async () => {
+    const current = latestRecordRef.current;
+    if (!current || mode !== "draft") return;
+    if (saveTimerRef.current) {
+      window.clearTimeout(saveTimerRef.current);
+      saveTimerRef.current = null;
+    }
+    setSavingConfig(true);
+    try {
+      await repo.upsertDraft({
+        id: current.id,
+        name: current.name,
+        designJson: current.designJson,
+        normalized: current.normalized,
+        fieldConfig: current.fieldConfig,
+      });
+      setDirty(false);
+    } finally {
+      setSavingConfig(false);
+    }
+  }, [mode, repo, setDirty]);
+
+  // Register/unregister the flush callback with the dirty store. Cleared on
+  // unmount + when leaving draft mode so the prompt won't fire stale.
+  useEffect(() => {
+    setFlushSave(mode === "draft" ? flushPendingSave : null);
+    return () => {
+      // Only clear what we registered — the next mount will set its own.
+      resetDirtyStore();
+    };
+  }, [mode, flushPendingSave, setFlushSave, resetDirtyStore]);
 
   if (error) {
     return (
@@ -444,39 +499,92 @@ export default function TemplateEditorPage({
     }
   }
 
-  async function updateFieldConfig(nextConfig: TemplateRecord["fieldConfig"]) {
-    if (!record) return;
-    setRecord({ ...record, fieldConfig: nextConfig });
-
-    if (mode !== "draft") {
-      // Published: edits stay in-memory until admin clicks Update.
-      return;
-    }
-
-    const { id, name, designJson, normalized: normalizedAny } = record;
+  /**
+   * Persist a draft snapshot to local storage with a 350ms debounce.
+   * Trailing-edge: the most recent change wins, prior in-flight writes are
+   * cancelled. Triggered by any editable field (name, fieldConfig). Published
+   * templates skip the debounced save — their edits are committed via the
+   * explicit Update flow.
+   *
+   * Also flips the cross-cutting `dirty` flag so the admin shell can prompt
+   * before navigation if the debounce hasn't settled yet.
+   */
+  function scheduleDraftSave(next: TemplateRecord) {
+    if (mode !== "draft") return;
     setSavingConfig(true);
     setError(null);
-
+    setDirty(true);
     if (saveTimerRef.current) {
       window.clearTimeout(saveTimerRef.current);
     }
-
     saveTimerRef.current = window.setTimeout(async () => {
+      saveTimerRef.current = null;
       try {
         const updated = await repo.upsertDraft({
-          id,
-          name,
-          designJson,
-          normalized: normalizedAny,
-          fieldConfig: nextConfig,
+          id: next.id,
+          name: next.name,
+          designJson: next.designJson,
+          normalized: next.normalized,
+          fieldConfig: next.fieldConfig,
         });
         setRecord(updated);
+        setDirty(false);
       } catch (e) {
-        setError(e instanceof Error ? e.message : "Failed to save configuration");
+        setError(e instanceof Error ? e.message : "Failed to save draft");
       } finally {
         setSavingConfig(false);
       }
     }, 350);
+  }
+
+  async function updateFieldConfig(nextConfig: TemplateRecord["fieldConfig"]) {
+    if (!record) return;
+    const next = { ...record, fieldConfig: nextConfig };
+    setRecord(next);
+    scheduleDraftSave(next);
+  }
+
+  function updateName(nextName: string) {
+    if (!record) return;
+    const next = { ...record, name: nextName };
+    setRecord(next);
+    scheduleDraftSave(next);
+  }
+
+  /**
+   * Flush any pending debounced save and persist immediately, then navigate
+   * the admin to the templates list. Used by the explicit "Save to draft"
+   * button so admins always know their work is durably stored.
+   */
+  async function saveDraftAndExit() {
+    if (!record) return;
+    if (saveTimerRef.current) {
+      window.clearTimeout(saveTimerRef.current);
+      saveTimerRef.current = null;
+    }
+    setSavingConfig(true);
+    try {
+      await repo.upsertDraft({
+        id: record.id,
+        name: record.name,
+        designJson: record.designJson,
+        normalized: record.normalized,
+        fieldConfig: record.fieldConfig,
+      });
+      router.push("/admin/templates");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to save draft");
+    } finally {
+      setSavingConfig(false);
+    }
+  }
+
+  function cancelAndStartOver() {
+    if (saveTimerRef.current) {
+      window.clearTimeout(saveTimerRef.current);
+      saveTimerRef.current = null;
+    }
+    router.push("/admin/templates/new");
   }
 
   function onPreviewTextChange(nodeId: string, value: string) {
@@ -529,25 +637,30 @@ export default function TemplateEditorPage({
   return (
     <div className="flex h-full min-h-0 flex-col">
       <header className="flex flex-col gap-3 border-b border-zinc-200 bg-white px-4 py-3 sm:flex-row sm:items-center sm:justify-between dark:border-zinc-800 dark:bg-zinc-900">
-        <div className="min-w-0">
-          <div className="flex items-center gap-2">
-            <Link href="/admin/templates" className="text-sm font-medium text-zinc-600 hover:text-zinc-900 dark:text-zinc-300 dark:hover:text-zinc-50">
-              Templates
-            </Link>
-            <span className="text-sm text-zinc-400 dark:text-zinc-500">/</span>
-            <h1 className="truncate text-lg font-semibold tracking-tight text-zinc-950 dark:text-zinc-100">
-              {record.name}
-            </h1>
-            <span className="rounded-full bg-zinc-100 px-2 py-1 text-xs font-medium text-zinc-700 dark:bg-zinc-800 dark:text-zinc-200">
-              {record.status}
-            </span>
-          </div>
+        <div className="flex min-w-0 flex-1 items-center gap-2">
+          <Link
+            href="/admin/templates"
+            className="shrink-0 text-sm font-medium text-zinc-600 hover:text-zinc-900 dark:text-zinc-300 dark:hover:text-zinc-50"
+          >
+            Templates
+          </Link>
+          <span className="shrink-0 text-sm text-zinc-400 dark:text-zinc-500">/</span>
+          <input
+            type="text"
+            value={record.name}
+            onChange={(e) => updateName(e.target.value)}
+            disabled={mode !== "draft"}
+            placeholder="Untitled template"
+            aria-label="Template name"
+            className="min-w-0 flex-1 rounded-lg border border-transparent bg-transparent px-2 py-1 text-lg font-semibold tracking-tight text-zinc-950 outline-none transition focus:border-zinc-300 hover:border-zinc-200 disabled:cursor-not-allowed disabled:hover:border-transparent dark:text-zinc-100 dark:hover:border-zinc-700 dark:focus:border-zinc-600"
+          />
+          <span className="shrink-0 rounded-full bg-zinc-100 px-2 py-1 text-xs font-medium text-zinc-700 dark:bg-zinc-800 dark:text-zinc-200">
+            {record.status}
+          </span>
           {savingConfig ? (
-            <div className="mt-1 text-xs text-zinc-600 dark:text-zinc-300">
-              <span className="rounded-full bg-zinc-100 px-2 py-1 text-[11px] font-medium text-zinc-700 dark:bg-zinc-800 dark:text-zinc-200">
-                Saving…
-              </span>
-            </div>
+            <span className="shrink-0 rounded-full bg-zinc-100 px-2 py-1 text-[11px] font-medium text-zinc-700 dark:bg-zinc-800 dark:text-zinc-200">
+              Saving…
+            </span>
           ) : null}
         </div>
 
@@ -560,6 +673,19 @@ export default function TemplateEditorPage({
               title="View normalization warnings"
             >
               Warnings ({warnings.length})
+            </button>
+          ) : null}
+
+          {normalized ? (
+            <button
+              type="button"
+              onClick={() => setPreviewModalOpen(true)}
+              disabled={busy}
+              className="inline-flex h-9 items-center justify-center gap-1.5 rounded-xl border border-zinc-200 bg-white px-3 text-xs font-medium text-zinc-900 hover:bg-zinc-50 disabled:opacity-50 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-100 dark:hover:bg-zinc-800"
+              title="Open the preview form to test how users will fill it"
+            >
+              <Eye className="h-3.5 w-3.5" />
+              Preview
             </button>
           ) : null}
 
@@ -585,15 +711,35 @@ export default function TemplateEditorPage({
           )}
 
           {mode === "draft" ? (
-            <button
-              type="button"
-              onClick={openPublishModal}
-              disabled={busy || !normalized}
-              className="inline-flex h-9 items-center justify-center rounded-xl bg-emerald-600 px-3 text-xs font-medium text-white disabled:opacity-50"
-              title={!normalized ? "Normalize before publishing" : undefined}
-            >
-              Publish
-            </button>
+            <>
+              <button
+                type="button"
+                onClick={cancelAndStartOver}
+                disabled={busy}
+                className="inline-flex h-9 items-center justify-center rounded-xl border border-zinc-200 bg-white px-3 text-xs font-medium text-zinc-900 hover:bg-zinc-50 disabled:opacity-50 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-100 dark:hover:bg-zinc-800"
+                title="Discard this session and upload a new design"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={saveDraftAndExit}
+                disabled={busy || savingConfig}
+                className="inline-flex h-9 items-center justify-center rounded-xl border border-zinc-200 bg-white px-3 text-xs font-medium text-zinc-900 hover:bg-zinc-50 disabled:opacity-50 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-100 dark:hover:bg-zinc-800"
+                title="Save current state and return to the templates list"
+              >
+                Save to draft
+              </button>
+              <button
+                type="button"
+                onClick={openPublishModal}
+                disabled={busy || !normalized}
+                className="inline-flex h-9 items-center justify-center rounded-xl bg-emerald-600 px-3 text-xs font-medium text-white disabled:opacity-50"
+                title={!normalized ? "Normalize before publishing" : undefined}
+              >
+                Publish
+              </button>
+            </>
           ) : null}
 
           {mode === "published" ? (
@@ -644,11 +790,7 @@ export default function TemplateEditorPage({
         </div>
       ) : (
         <div className="flex min-h-0 flex-1 min-w-0">
-          <aside className="hidden h-full flex-col bg-white lg:flex lg:basis-1/4 lg:max-w-[25%] dark:bg-zinc-900">
-            <IconsFontsPanel design={normalized} />
-          </aside>
-
-          <div className="flex min-w-0 flex-1 flex-col overflow-hidden p-4 lg:basis-1/2 lg:max-w-[50%]">
+          <div className="flex min-w-0 flex-1 flex-col overflow-hidden p-2 lg:basis-3/4 lg:max-w-[75%]">
             <div className="h-full min-h-0 overflow-hidden rounded-2xl border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900">
               <DesignWorkspace
                 design={normalized}
@@ -829,6 +971,18 @@ export default function TemplateEditorPage({
           const node = normalized?.nodesById[nodeId];
           return node?.name || node?.figmaType;
         }}
+      />
+
+      <PreviewFormModal
+        open={previewModalOpen}
+        onClose={() => setPreviewModalOpen(false)}
+        config={record.fieldConfig}
+        previewTextByNodeId={previewTextByNodeId}
+        previewImageByNodeId={previewImageByNodeId}
+        previewColorByNodeId={previewColorByNodeId}
+        onPreviewTextChange={onPreviewTextChange}
+        onPreviewImageChange={onPreviewImageChange}
+        onPreviewColorChange={onPreviewColorChange}
       />
 
       {updateModalOpen ? (

@@ -12,6 +12,9 @@ import { exportTemplatePng } from "@/lib/render/exportPng";
 import { useRemoteDesignAssets } from "@/lib/render/useRemoteDesignAssets";
 import { useTemplateEditorStore } from "@/lib/stores/templateEditorStore";
 import type { FieldConfig, UserDesignRecord } from "@/lib/storage/types";
+import { groupFieldsBySection } from "@/lib/storage/fieldSections";
+import { sectionIcon } from "@/components/editor/SectionsManager";
+import { FormField } from "@/components/editor/FormField";
 import {
   createInProgressDesign,
   findInProgressByTemplate,
@@ -38,6 +41,7 @@ function deriveCategoryLabel(name: string, explicit: string | null): string {
   if (/(sign\s*-?\s*out|signed\s*out)/.test(n)) return "Sign-out";
   return "FYB";
 }
+
 
 /**
  * Standard export scale for every download. 2× hits the modern HD sweet spot:
@@ -239,19 +243,29 @@ export default function UseTemplatePage({
     Object.keys(previewImageByNodeId).length > 0 ||
     Object.keys(previewColorByNodeId).length > 0;
 
-  const mobileFields = useMemo(() => {
-    const fields = fieldConfig?.fields ?? [];
-    return fields.filter((f) => {
-      if (f.kind === "color") return (f.colorBehavior?.enabled ?? true) !== false;
-      if (f.kind === "image") return f.imageSource !== "design_asset";
-      return true;
-    });
+  // Build the user-form data once and reuse for both desktop sidebar (grouped
+  // accordion) and mobile bottom-sheet wizard (one section per screen).
+  // Filters out admin-only design-asset images and disabled colour fields so
+  // the user never sees slots they can't act on.
+  const userFormGroups = useMemo(() => {
+    if (!fieldConfig) return [];
+    const filtered: FieldConfig = {
+      ...fieldConfig,
+      fields: fieldConfig.fields.filter((f) => {
+        if (f.kind === "image" && f.imageSource === "design_asset") return false;
+        if (f.kind === "color" && (f.colorBehavior?.enabled ?? true) === false) return false;
+        return true;
+      }),
+    };
+    return groupFieldsBySection(filtered);
   }, [fieldConfig]);
 
-  const mobilePageSize = 6;
-  const mobilePageCount = Math.max(1, Math.ceil(mobileFields.length / mobilePageSize));
-  const mobilePageStart = mobileFormPage * mobilePageSize;
-  const mobilePageFields = mobileFields.slice(mobilePageStart, mobilePageStart + mobilePageSize);
+  const desktopGroups = userFormGroups;
+  const mobileSections = userFormGroups;
+  const mobileSectionCount = Math.max(1, mobileSections.length);
+  const currentMobileSection = mobileSections[
+    Math.min(mobileFormPage, mobileSections.length - 1)
+  ];
 
   useEffect(() => {
     if (!mobileDetailsOpen) return;
@@ -572,10 +586,10 @@ export default function UseTemplatePage({
         <main className="flex h-full min-w-0 flex-1 flex-col overflow-hidden">
           <div className="hidden items-center justify-between border-b border-zinc-200 bg-white px-4 py-3 lg:flex dark:border-zinc-800 dark:bg-zinc-900">
             <div className="text-sm font-semibold text-zinc-950 dark:text-zinc-100">Workspace</div>
-            <div className="text-xs text-zinc-600 dark:text-zinc-300">Read-only canvas</div>
+            {/* <div className="text-xs text-zinc-600 dark:text-zinc-300">Read-only canvas</div> */}
           </div>
 
-          <div className="flex-1 overflow-hidden p-0 sm:p-3 lg:p-3 xl:p-4">
+          <div className="flex-1 overflow-hidden p-0 sm:p-2 lg:p-2 xl:p-2">
             <div className="h-full min-h-0 w-full overflow-hidden bg-white sm:rounded-2xl sm:border sm:border-zinc-200 dark:bg-zinc-900 dark:sm:border-zinc-800">
               <DesignWorkspace
                 design={normalized}
@@ -603,85 +617,42 @@ export default function UseTemplatePage({
           </div>
 
           <div className="min-h-0 flex-1 overflow-y-auto p-3 xl:p-4">
-            <div className="space-y-2">
-              {fieldConfig.fields
-                .filter((f) => !(f.kind === "image" && f.imageSource === "design_asset"))
-                .map((f) => {
-                  if (f.kind === "text") {
-                    const value = previewTextByNodeId[f.nodeId] ?? "";
-                    return (
-                      <label key={f.id} className="grid gap-1">
-                        <span className="text-xs font-medium text-zinc-900 dark:text-zinc-100">{f.label}</span>
-                        <input
-                          value={value}
-                          maxLength={f.maxChars}
-                          onChange={(e) => onPreviewTextChange(f.nodeId, e.target.value)}
-                          className="h-9 rounded-xl border border-zinc-200 bg-white px-3 text-[13px] text-zinc-900 dark:border-zinc-800 dark:bg-zinc-950/30 dark:text-zinc-100"
+            <div className="space-y-3">
+              {desktopGroups.map(({ section, fields }) => {
+                const Icon = sectionIcon(section.icon);
+                return (
+                  <details
+                    key={section.id}
+                    open
+                    className="group rounded-2xl border border-zinc-200 bg-white open:shadow-sm dark:border-zinc-800 dark:bg-zinc-900"
+                  >
+                    <summary className="flex cursor-pointer items-center justify-between gap-2 px-3 py-2 text-xs font-semibold text-zinc-950 marker:hidden dark:text-zinc-100 [&::-webkit-details-marker]:hidden">
+                      <span className="flex min-w-0 items-center gap-2">
+                        <Icon className="h-4 w-4 shrink-0 text-zinc-700 dark:text-zinc-300" />
+                        <span className="truncate">{section.label}</span>
+                      </span>
+                      <span className="shrink-0 text-[11px] font-normal text-zinc-600 dark:text-zinc-400">
+                        {fields.length}
+                      </span>
+                    </summary>
+                    <div className="space-y-2 border-t border-zinc-200 p-3 dark:border-zinc-800">
+                      {fields.map((f) => (
+                        <FormField
+                          key={f.id}
+                          field={f}
+                          previewTextByNodeId={previewTextByNodeId}
+                          previewImageByNodeId={previewImageByNodeId}
+                          previewColorByNodeId={previewColorByNodeId}
+                          onPreviewTextChange={onPreviewTextChange}
+                          onPreviewImageChange={onPreviewImageChange}
+                          onPreviewColorChange={onPreviewColorChange}
+                          density="compact"
                         />
-                      </label>
-                    );
-                  }
-
-                  if (f.kind === "image") {
-                    const allowReplace = f.imageBehavior?.allowReplace ?? true;
-                    const current = previewImageByNodeId[f.nodeId];
-                    const meta = inferFileMeta(
-                      current?.blob ? new File([current.blob], "image") : undefined
-                    );
-                    return (
-                      <ImageUpload
-                        key={f.id}
-                        label={f.label}
-                        description={undefined}
-                        valueUrl={current?.url}
-                        valueName={meta}
-                        objectFit={
-                          current?.objectFit ??
-                          (f.imageBehavior?.fit ?? (f.cropRule === "contain" ? "contain" : "cover"))
-                        }
-                        disabled={!allowReplace}
-                        onPick={(file) => onPreviewImageChange(f.nodeId, file)}
-                        onClear={allowReplace ? () => onPreviewImageChange(f.nodeId, null) : undefined}
-                      />
-                    );
-                  }
-
-                  if (f.kind === "color") {
-                    const enabled = f.colorBehavior?.enabled ?? true;
-                    if (!enabled) return null;
-
-                    const palette = f.colorBehavior?.palette?.filter(Boolean) ?? [];
-                    const value = previewColorByNodeId[f.nodeId] ?? (palette[0] ?? "#000000");
-
-                    return (
-                      <label key={f.id} className="grid gap-1">
-                        <span className="text-xs font-medium text-zinc-900 dark:text-zinc-100">{f.label}</span>
-                        {palette.length ? (
-                          <select
-                            value={value}
-                            onChange={(e) => onPreviewColorChange(f.nodeId, e.target.value)}
-                            className="h-9 rounded-xl border border-zinc-200 bg-white px-3 text-[13px] text-zinc-900 dark:border-zinc-800 dark:bg-zinc-950/30 dark:text-zinc-100"
-                          >
-                            {palette.map((c) => (
-                              <option key={c} value={c}>
-                                {c}
-                              </option>
-                            ))}
-                          </select>
-                        ) : (
-                          <input
-                            type="color"
-                            value={value}
-                            onChange={(e) => onPreviewColorChange(f.nodeId, e.target.value)}
-                            className="h-9 w-16 rounded-xl border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900"
-                          />
-                        )}
-                      </label>
-                    );
-                  }
-
-                  return null;
-                })}
+                      ))}
+                    </div>
+                  </details>
+                );
+              })}
             </div>
           </div>
 
@@ -740,9 +711,19 @@ export default function UseTemplatePage({
           <div className="absolute inset-x-0 bottom-0 max-h-[82dvh] overflow-hidden rounded-t-3xl border border-zinc-200 bg-white shadow-2xl dark:border-zinc-800 dark:bg-zinc-900">
             <div className="flex items-center justify-between gap-3 border-b border-zinc-200 px-4 py-3 dark:border-zinc-800">
               <div className="min-w-0">
-                <div className="text-sm font-semibold text-zinc-950 dark:text-zinc-100">Your details</div>
+                <div className="flex items-center gap-2">
+                  {currentMobileSection
+                    ? (() => {
+                        const Icon = sectionIcon(currentMobileSection.section.icon);
+                        return <Icon className="h-4 w-4 shrink-0 text-zinc-700 dark:text-zinc-300" />;
+                      })()
+                    : null}
+                  <div className="truncate text-sm font-semibold text-zinc-950 dark:text-zinc-100">
+                    {currentMobileSection?.section.label ?? "Your details"}
+                  </div>
+                </div>
                 <div className="mt-0.5 text-xs text-zinc-600 dark:text-zinc-300">
-                  Step {Math.min(mobileFormPage + 1, mobilePageCount)} of {mobilePageCount}
+                  Section {Math.min(mobileFormPage + 1, mobileSectionCount)} of {mobileSectionCount}
                 </div>
               </div>
               <button
@@ -754,87 +735,52 @@ export default function UseTemplatePage({
               </button>
             </div>
 
+            {/* Section progress dots — tappable for direct jump. */}
+            {mobileSectionCount > 1 ? (
+              <div className="flex items-center justify-center gap-1.5 border-b border-zinc-200 px-4 py-2 dark:border-zinc-800">
+                {mobileSections.map((g, idx) => {
+                  const active = idx === mobileFormPage;
+                  return (
+                    <button
+                      key={g.section.id}
+                      type="button"
+                      onClick={() => {
+                        setMobileFormPage(idx);
+                        requestAnimationFrame(() =>
+                          mobileFormScrollRef.current?.scrollTo({ top: 0, behavior: "smooth" })
+                        );
+                      }}
+                      aria-label={`Go to section ${g.section.label}`}
+                      className={
+                        "h-1.5 rounded-full transition-all " +
+                        (active
+                          ? "w-6 bg-zinc-900 dark:bg-zinc-100"
+                          : "w-1.5 bg-zinc-300 dark:bg-zinc-700")
+                      }
+                    />
+                  );
+                })}
+              </div>
+            ) : null}
+
             <div
               ref={mobileFormScrollRef}
               className="max-h-[calc(82dvh-56px-56px)] overflow-y-auto px-4 py-4"
             >
               <div className="space-y-3">
-                {mobilePageFields.map((f) => {
-                  if (f.kind === "text") {
-                    const value = previewTextByNodeId[f.nodeId] ?? "";
-                    return (
-                      <label key={f.id} className="grid gap-1">
-                        <span className="text-xs font-medium text-zinc-900 dark:text-zinc-100">{f.label}</span>
-                        <input
-                          value={value}
-                          maxLength={f.maxChars}
-                          onChange={(e) => onPreviewTextChange(f.nodeId, e.target.value)}
-                          className="h-11 rounded-2xl border border-zinc-200 bg-white px-3 text-sm text-zinc-900 dark:border-zinc-800 dark:bg-zinc-950/30 dark:text-zinc-100"
-                        />
-                      </label>
-                    );
-                  }
-
-                  if (f.kind === "image") {
-                    const allowReplace = f.imageBehavior?.allowReplace ?? true;
-                    const current = previewImageByNodeId[f.nodeId];
-                    const meta = inferFileMeta(
-                      current?.blob ? new File([current.blob], "image") : undefined
-                    );
-                    return (
-                      <ImageUpload
-                        key={f.id}
-                        label={f.label}
-                        description={undefined}
-                        valueUrl={current?.url}
-                        valueName={meta}
-                        objectFit={
-                          current?.objectFit ??
-                          (f.imageBehavior?.fit ?? (f.cropRule === "contain" ? "contain" : "cover"))
-                        }
-                        disabled={!allowReplace}
-                        onPick={(file) => onPreviewImageChange(f.nodeId, file)}
-                        onClear={allowReplace ? () => onPreviewImageChange(f.nodeId, null) : undefined}
-                      />
-                    );
-                  }
-
-                  if (f.kind === "color") {
-                    const enabled = f.colorBehavior?.enabled ?? true;
-                    if (!enabled) return null;
-
-                    const palette = f.colorBehavior?.palette?.filter(Boolean) ?? [];
-                    const value = previewColorByNodeId[f.nodeId] ?? (palette[0] ?? "#000000");
-
-                    return (
-                      <label key={f.id} className="grid gap-1">
-                        <span className="text-xs font-medium text-zinc-900 dark:text-zinc-100">{f.label}</span>
-                        {palette.length ? (
-                          <select
-                            value={value}
-                            onChange={(e) => onPreviewColorChange(f.nodeId, e.target.value)}
-                            className="h-11 rounded-2xl border border-zinc-200 bg-white px-3 text-sm text-zinc-900 dark:border-zinc-800 dark:bg-zinc-950/30 dark:text-zinc-100"
-                          >
-                            {palette.map((c) => (
-                              <option key={c} value={c}>
-                                {c}
-                              </option>
-                            ))}
-                          </select>
-                        ) : (
-                          <input
-                            type="color"
-                            value={value}
-                            onChange={(e) => onPreviewColorChange(f.nodeId, e.target.value)}
-                            className="h-11 w-24 rounded-2xl border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900"
-                          />
-                        )}
-                      </label>
-                    );
-                  }
-
-                  return null;
-                })}
+                {(currentMobileSection?.fields ?? []).map((f) => (
+                  <FormField
+                    key={f.id}
+                    field={f}
+                    previewTextByNodeId={previewTextByNodeId}
+                    previewImageByNodeId={previewImageByNodeId}
+                    previewColorByNodeId={previewColorByNodeId}
+                    onPreviewTextChange={onPreviewTextChange}
+                    onPreviewImageChange={onPreviewImageChange}
+                    onPreviewColorChange={onPreviewColorChange}
+                    density="comfortable"
+                  />
+                ))}
               </div>
             </div>
 
@@ -854,23 +800,32 @@ export default function UseTemplatePage({
                   <ChevronLeft className="h-4 w-4" />
                   Back
                 </button>
-                <button
-                  type="button"
-                  disabled={mobileFormPage >= mobilePageCount - 1}
-                  onClick={() => {
-                    setMobileFormPage((p) => Math.min(mobilePageCount - 1, p + 1));
-                    requestAnimationFrame(() =>
-                      mobileFormScrollRef.current?.scrollTo({ top: 0, behavior: "smooth" })
-                    );
-                  }}
-                  className="inline-flex h-11 flex-1 items-center justify-center gap-2 rounded-2xl bg-zinc-900 px-4 text-sm font-semibold text-white hover:bg-zinc-800 disabled:opacity-50 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-white"
-                >
-                  Next
-                  <ChevronRight className="h-4 w-4" />
-                </button>
+                {mobileFormPage >= mobileSectionCount - 1 ? (
+                  <button
+                    type="button"
+                    onClick={() => setMobileDetailsOpen(false)}
+                    className="inline-flex h-11 flex-1 items-center justify-center gap-2 rounded-2xl bg-zinc-900 px-4 text-sm font-semibold text-white hover:bg-zinc-800 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-white"
+                  >
+                    Done
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setMobileFormPage((p) => Math.min(mobileSectionCount - 1, p + 1));
+                      requestAnimationFrame(() =>
+                        mobileFormScrollRef.current?.scrollTo({ top: 0, behavior: "smooth" })
+                      );
+                    }}
+                    className="inline-flex h-11 flex-1 items-center justify-center gap-2 rounded-2xl bg-zinc-900 px-4 text-sm font-semibold text-white hover:bg-zinc-800 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-white"
+                  >
+                    Next
+                    <ChevronRight className="h-4 w-4" />
+                  </button>
+                )}
               </div>
               <div className="mt-2 text-center text-[11px] text-zinc-600 dark:text-zinc-300">
-                You can still scroll within a step if needed.
+                Tap dots above to jump between sections.
               </div>
             </div>
           </div>

@@ -12,7 +12,7 @@ import { drawImageCoverContain, drawImagePlaceholder } from "@/lib/render/drawIm
 import { applyDropShadow } from "@/lib/render/features/effects/dropShadow";
 import { applyInnerShadow } from "@/lib/render/features/effects/innerShadow";
 import { applyImageFill } from "@/lib/render/features/paints/imageFill";
-import { createGradient } from "@/lib/render/features/canvasGradient";
+import { paintGradientFill } from "@/lib/render/features/canvasGradient";
 import { clipNode, fillNode, strokeNode } from "@/lib/render/features/canvasNode";
 import {
   buildCompoundVectorPath,
@@ -248,14 +248,19 @@ export class CanvasBackend implements RenderBackend {
           ctx.fillStyle = fill.css;
           this.fillWithPath(ctx, node, fillPath, baseTransform, nodeSpaceTransform, canUseMatrix, localW, localH);
         } else if (fill.kind === "gradient") {
-          const g = createGradient(
-            ctx,
-            node,
-            fill,
-            canUseMatrix ? { x: 0, y: 0, width: localW, height: localH } : undefined,
-          );
-          ctx.fillStyle = g ?? fill.cssFallback;
-          this.fillWithPath(ctx, node, fillPath, baseTransform, nodeSpaceTransform, canUseMatrix, localW, localH);
+          // paintGradientFill handles all 4 gradient types and paints into
+          // the path itself (native CanvasGradient for linear/radial,
+          // pixel-exact offscreen blit for angular/diamond). On failure
+          // (e.g. cross-origin tainted offscreen) it returns false and we
+          // fall back to the gradient's cssFallback solid colour.
+          const frame = canUseMatrix
+            ? { x: 0, y: 0, width: localW, height: localH }
+            : { x: node.frame.x, y: node.frame.y, width: node.frame.width, height: node.frame.height };
+          const ok = paintGradientFill(ctx, fillPath, fill, frame);
+          if (!ok) {
+            ctx.fillStyle = fill.cssFallback;
+            this.fillWithPath(ctx, node, fillPath, baseTransform, nodeSpaceTransform, canUseMatrix, localW, localH);
+          }
         } else if (fill.kind === "image") {
           ctx.save();
           ctx.clip(fillPath);

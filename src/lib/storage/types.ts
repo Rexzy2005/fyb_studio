@@ -18,8 +18,29 @@ export type TemplateMeta = {
   bytesPreview?: number;
 };
 
+/**
+ * A logical grouping of fields shown to the end user as a section in the
+ * template form (e.g. "Personal Details", "Photos", "Socials"). Sections
+ * give admins control over how the form is broken up so users aren't
+ * overwhelmed by a long flat list.
+ *
+ * `icon` is a Lucide icon name resolved at render time. When undefined the
+ * UI falls back to a generic folder icon.
+ *
+ * Old configs without `sections` render as a single virtual "Details"
+ * section — no migration required.
+ */
+export type FieldSection = {
+  id: string;
+  label: string;
+  icon?: string;
+  order: number;
+};
+
 export type FieldConfig = {
   version: 1;
+  /** Optional grouping of fields. Backward-compatible — undefined → single default section. */
+  sections?: FieldSection[];
   fields: Array<
     | {
         id: string;
@@ -31,6 +52,8 @@ export type FieldConfig = {
         lockTypography?: boolean;
         lockColor?: boolean;
         lockAlignment?: boolean;
+        /** ID of the FieldSection this field belongs to. Undefined → default section. */
+        sectionId?: string;
 
         // Phase 3.5: behavior constraints (optional; defaults applied at render-time)
         textBehavior?: {
@@ -52,6 +75,7 @@ export type FieldConfig = {
         required?: boolean;
         aspectRatio?: number;
         cropRule?: "contain" | "cover";
+        sectionId?: string;
 
         /**
          * Phase 3.5+: classifies the image slot.
@@ -75,6 +99,7 @@ export type FieldConfig = {
         label: string;
         editable: boolean;
         role: "background" | "accent";
+        sectionId?: string;
 
         // Phase 3.5: behavior constraints (optional; defaults applied at render-time)
         colorBehavior?: {

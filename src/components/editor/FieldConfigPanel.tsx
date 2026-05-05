@@ -1,13 +1,27 @@
 "use client";
 
 import { nanoid } from "nanoid";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import {
+  ArrowLeft,
+  Check,
+  ChevronDown,
+  Image as ImageIcon,
+  Layers,
+  Palette,
+  Search,
+  Type,
+  X,
+} from "lucide-react";
 
 import type { NormalizedDesignV1, NormalizedNode } from "@/lib/figma";
 import type { FieldConfig } from "@/lib/storage/types";
 import { ImageUpload } from "@/components/forms/ImageUpload";
 
 import { ImageSourceSection } from "@/components/editor/ImageSourceSection";
+import { FieldSectionPicker, SectionsManager } from "@/components/editor/SectionsManager";
+
+const SECTIONS_PANEL_KEY = "fyb:admin:sections-panel-open";
 
 type Props = {
   design: NormalizedDesignV1;
@@ -27,6 +41,24 @@ type Props = {
 };
 
 type CandidateKind = "text" | "image" | "color";
+
+const KIND_META: Record<CandidateKind, { Icon: typeof Type; label: string; chipClass: string }> = {
+  text: {
+    Icon: Type,
+    label: "Text",
+    chipClass: "bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300",
+  },
+  image: {
+    Icon: ImageIcon,
+    label: "Image",
+    chipClass: "bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300",
+  },
+  color: {
+    Icon: Palette,
+    label: "Color",
+    chipClass: "bg-violet-50 text-violet-700 dark:bg-violet-950/40 dark:text-violet-300",
+  },
+};
 
 type Candidate = {
   id: string;
@@ -69,8 +101,24 @@ export function FieldConfigPanel({
 
   const [query, setQuery] = useState("");
 
+  // Form-sections panel collapse: defaults closed so the node list gets full
+  // vertical real-estate. Choice persists across navigations.
+  const [sectionsPanelOpen, setSectionsPanelOpen] = useState(false);
+  useEffect(() => {
+    const v = window.localStorage.getItem(SECTIONS_PANEL_KEY);
+    if (v === "true") setSectionsPanelOpen(true);
+  }, []);
+  function toggleSectionsPanel() {
+    setSectionsPanelOpen((v) => {
+      const next = !v;
+      window.localStorage.setItem(SECTIONS_PANEL_KEY, String(next));
+      return next;
+    });
+  }
+
   const selectedNode = selectedNodeId ? design.nodesById[selectedNodeId] : undefined;
   const selectedField = selectedNodeId ? config.fields.find((f) => f.nodeId === selectedNodeId) : undefined;
+  const sectionCount = config.sections?.length ?? 0;
 
   const selectedNodeKinds = selectedNode ? getCandidateKinds(selectedNode) : [];
   const canAddText = Boolean(selectedNodeId && selectedNodeKinds.includes("text"));
@@ -182,70 +230,163 @@ export function FieldConfigPanel({
 
   return (
     <div className="flex h-full flex-col overflow-hidden rounded-2xl border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900">
-      <div className="border-b border-zinc-200 p-4 dark:border-zinc-800">
-        <div className="text-sm font-semibold text-zinc-950 dark:text-zinc-100">Configuration</div>
-        <div className="mt-1 text-xs text-zinc-600 dark:text-zinc-300">
-          Select nodes and mark them as editable fields.
+      {/* Compact header — only one line, leaves more room for content. */}
+      <div className="flex items-center justify-between gap-2 border-b border-zinc-200 px-3 py-2.5 dark:border-zinc-800">
+        <div className="flex min-w-0 items-center gap-2">
+          <Layers className="h-4 w-4 shrink-0 text-zinc-500 dark:text-zinc-400" />
+          <div className="truncate text-sm font-semibold text-zinc-950 dark:text-zinc-100">
+            Fields
+          </div>
         </div>
+        <span
+          className="shrink-0 rounded-full bg-zinc-100 px-2 py-0.5 text-[11px] font-medium text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300"
+          title={`${config.fields.length} configured field${config.fields.length === 1 ? "" : "s"}`}
+        >
+          {config.fields.length}
+        </span>
       </div>
 
       {selectedNodeId === null ? (
         <>
+          {/* Form-sections panel — collapsible header + body. State persists. */}
+          <div className="border-b border-zinc-200 dark:border-zinc-800">
+            <button
+              type="button"
+              onClick={toggleSectionsPanel}
+              className="flex w-full items-center justify-between gap-2 px-3 py-2 text-left text-xs font-semibold text-zinc-950 hover:bg-zinc-50 dark:text-zinc-100 dark:hover:bg-zinc-800/60"
+              aria-expanded={sectionsPanelOpen}
+              aria-controls="sections-panel-body"
+            >
+              <span className="flex items-center gap-2">
+                <ChevronDown
+                  className={
+                    "h-3.5 w-3.5 text-zinc-500 transition-transform duration-150 " +
+                    (sectionsPanelOpen ? "" : "-rotate-90")
+                  }
+                />
+                Form sections
+              </span>
+              <span className="text-[11px] font-normal text-zinc-600 dark:text-zinc-400">
+                {sectionCount === 0
+                  ? "Default group"
+                  : `${sectionCount} configured`}
+              </span>
+            </button>
+            {sectionsPanelOpen ? (
+              <div
+                id="sections-panel-body"
+                className="border-t border-zinc-200 bg-zinc-50/60 p-3 dark:border-zinc-800 dark:bg-zinc-800/20"
+              >
+                <SectionsManager config={config} onChange={onChange} />
+              </div>
+            ) : null}
+          </div>
+
+          {/* Search with leading icon + clear button. */}
           <div className="border-b border-zinc-200 p-3 dark:border-zinc-800">
-            <input
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder="Search nodes…"
-              className="h-9 w-full rounded-xl border border-zinc-200 bg-white px-3 text-sm text-zinc-900 placeholder:text-zinc-400 dark:border-zinc-800 dark:bg-zinc-950/30 dark:text-zinc-100"
-            />
+            <div className="relative">
+              <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-zinc-400" />
+              <input
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder="Search nodes…"
+                className="h-9 w-full rounded-xl border border-zinc-200 bg-white pl-8 pr-8 text-sm text-zinc-900 placeholder:text-zinc-400 focus:border-zinc-400 focus:outline-none dark:border-zinc-800 dark:bg-zinc-950/30 dark:text-zinc-100 dark:focus:border-zinc-600"
+              />
+              {query ? (
+                <button
+                  type="button"
+                  onClick={() => setQuery("")}
+                  aria-label="Clear search"
+                  className="absolute right-1.5 top-1/2 inline-flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded-md text-zinc-400 hover:bg-zinc-100 hover:text-zinc-700 dark:hover:bg-zinc-800 dark:hover:text-zinc-200"
+                >
+                  <X className="h-3.5 w-3.5" />
+                </button>
+              ) : null}
+            </div>
           </div>
 
           <div className="min-h-0 flex-1 overflow-y-auto">
-            <div className="divide-y divide-zinc-200 dark:divide-zinc-800">
-              {candidates.map((c) => {
-                const configured = configuredNodeIds.has(c.id);
-                return (
-                  <button
-                    key={c.id}
-                    type="button"
-                    onClick={() => onSelectNodeId(c.id)}
-                    className="flex w-full items-center justify-between gap-3 px-3 py-2 text-left hover:bg-zinc-50 dark:hover:bg-zinc-800/60"
-                  >
-                    <div className="min-w-0">
-                      <div className="truncate text-sm font-medium text-zinc-950 dark:text-zinc-100">{c.name}</div>
-                      <div className="truncate text-xs text-zinc-600 dark:text-zinc-300">
-                        {c.kinds.join("/")} • {c.id}
-                      </div>
-                    </div>
-                    {configured ? (
-                      <span className="shrink-0 rounded-full bg-emerald-50 px-2 py-1 text-[11px] font-medium text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300">
-                        configured
-                      </span>
-                    ) : null}
-                  </button>
-                );
-              })}
-            </div>
+            {candidates.length === 0 ? (
+              <div className="p-6 text-center text-xs text-zinc-600 dark:text-zinc-400">
+                {query
+                  ? "No nodes match your search."
+                  : "No editable nodes detected in this design."}
+              </div>
+            ) : (
+              <ul className="divide-y divide-zinc-100 dark:divide-zinc-800">
+                {candidates.map((c) => {
+                  const configured = configuredNodeIds.has(c.id);
+                  return (
+                    <li key={c.id}>
+                      <button
+                        type="button"
+                        onClick={() => onSelectNodeId(c.id)}
+                        className="flex w-full items-center gap-2 px-3 py-2 text-left transition-colors hover:bg-zinc-50 dark:hover:bg-zinc-800/60"
+                      >
+                        {/* Stack of kind badges (one per editable kind). */}
+                        <div className="flex shrink-0 items-center gap-1">
+                          {c.kinds.map((k) => {
+                            const meta = KIND_META[k];
+                            const Icon = meta.Icon;
+                            return (
+                              <span
+                                key={k}
+                                title={meta.label}
+                                className={
+                                  "inline-flex h-6 w-6 items-center justify-center rounded-md " +
+                                  meta.chipClass
+                                }
+                              >
+                                <Icon className="h-3.5 w-3.5" />
+                              </span>
+                            );
+                          })}
+                        </div>
+
+                        <div className="min-w-0 flex-1">
+                          <div className="truncate text-sm font-medium text-zinc-950 dark:text-zinc-100">
+                            {c.name}
+                          </div>
+                          <div className="truncate text-[11px] text-zinc-500 dark:text-zinc-400">
+                            {c.kinds.map((k) => KIND_META[k].label).join(" · ")}
+                          </div>
+                        </div>
+
+                        {configured ? (
+                          <span
+                            title="Configured as a field"
+                            className="inline-flex shrink-0 items-center gap-1 rounded-full bg-emerald-50 px-1.5 py-0.5 text-[10px] font-medium text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300"
+                          >
+                            <Check className="h-2.5 w-2.5" />
+                            Set
+                          </span>
+                        ) : null}
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
           </div>
         </>
       ) : (
         <div className="min-h-0 flex-1 overflow-y-auto p-3">
-          <div className="flex items-center justify-between gap-3">
+          {/* Refined breadcrumb: single back action with the node name as the title. */}
+          <div className="flex items-center justify-between gap-2">
             <button
               type="button"
               onClick={() => onSelectNodeId(null)}
-              className="text-xs font-medium text-zinc-700 hover:text-zinc-900 dark:text-zinc-200 dark:hover:text-zinc-50"
+              className="inline-flex h-8 items-center gap-1.5 rounded-lg px-2 text-xs font-medium text-zinc-700 hover:bg-zinc-100 dark:text-zinc-200 dark:hover:bg-zinc-800"
             >
-              ← Nodes
+              <ArrowLeft className="h-3.5 w-3.5" />
+              Back
             </button>
-            <div className="min-w-0 truncate text-xs text-zinc-600 dark:text-zinc-300">{selectedNode?.name ?? selectedNodeId}</div>
-            <button
-              type="button"
-              onClick={() => onSelectNodeId(null)}
-              className="text-xs font-medium text-zinc-700 hover:text-zinc-900 dark:text-zinc-200 dark:hover:text-zinc-50"
+            <div
+              className="min-w-0 flex-1 truncate text-right text-xs font-medium text-zinc-700 dark:text-zinc-300"
+              title={selectedNode?.name ?? selectedNodeId}
             >
-              Clear
-            </button>
+              {selectedNode?.name ?? selectedNodeId}
+            </div>
           </div>
 
           <div className="mt-3 space-y-4">
@@ -310,6 +451,19 @@ export function FieldConfigPanel({
                       if (selectedField.kind === "color") updateColorField(selectedField.id, { label: e.target.value });
                     }}
                     className="h-9 rounded-xl border border-zinc-200 bg-white px-3 text-sm text-zinc-900 dark:border-zinc-800 dark:bg-zinc-950/30 dark:text-zinc-100"
+                  />
+                </label>
+
+                <label className="grid gap-1">
+                  <span className="text-xs font-medium text-zinc-900 dark:text-zinc-100">Section</span>
+                  <FieldSectionPicker
+                    config={config}
+                    field={selectedField}
+                    onChange={(sectionId) => {
+                      if (selectedField.kind === "text") updateTextField(selectedField.id, { sectionId });
+                      if (selectedField.kind === "image") updateImageField(selectedField.id, { sectionId });
+                      if (selectedField.kind === "color") updateColorField(selectedField.id, { sectionId });
+                    }}
                   />
                 </label>
 
@@ -590,77 +744,10 @@ export function FieldConfigPanel({
             ) : null}
 
             {config.fields.length ? (
-              <div className="rounded-2xl border border-zinc-200 bg-zinc-50 p-3 dark:border-zinc-800 dark:bg-zinc-800/30">
-                <div className="text-xs font-semibold text-zinc-950 dark:text-zinc-100">Live Preview</div>
-                <div className="mt-3 space-y-3">
-                  {config.fields.map((f) => {
-                    if (f.kind === "text") {
-                      const value = previewTextByNodeId[f.nodeId] ?? "";
-                      return (
-                        <label key={f.id} className="grid gap-1">
-                          <span className="text-xs font-medium text-zinc-900 dark:text-zinc-100">{f.label}</span>
-                          <input
-                            value={value}
-                            maxLength={f.maxChars}
-                            onChange={(e) => onPreviewTextChange(f.nodeId, e.target.value)}
-                            className="h-9 rounded-xl border border-zinc-200 bg-white px-3 text-sm text-zinc-900 dark:border-zinc-800 dark:bg-zinc-950/30 dark:text-zinc-100"
-                          />
-                        </label>
-                      );
-                    }
-
-                    if (f.kind === "image") {
-                      const allowReplace = f.imageBehavior?.allowReplace ?? true;
-                      return (
-                        <ImageUpload
-                          key={f.id}
-                          label={f.label}
-                          description={
-                            !allowReplace
-                              ? "Locked by template"
-                              : `Fit: ${f.imageBehavior?.fit ?? (f.cropRule === "contain" ? "contain" : "cover")}`
-                          }
-                          disabled={!allowReplace}
-                          onPick={(file) => onPreviewImageChange(f.nodeId, file)}
-                          onClear={allowReplace ? () => onPreviewImageChange(f.nodeId, null) : undefined}
-                        />
-                      );
-                    }
-
-                    if (f.kind === "color") {
-                      if ((f.colorBehavior?.enabled ?? true) === false) return null;
-                      const palette = f.colorBehavior?.palette?.filter(Boolean) ?? [];
-                      const value = previewColorByNodeId[f.nodeId] ?? (palette[0] ?? "#000000");
-                      return (
-                        <label key={f.id} className="grid gap-1">
-                          <span className="text-xs font-medium text-zinc-900 dark:text-zinc-100">{f.label}</span>
-                          {palette.length ? (
-                            <select
-                              value={value}
-                              onChange={(e) => onPreviewColorChange(f.nodeId, e.target.value)}
-                              className="h-9 rounded-xl border border-zinc-200 bg-white px-3 text-sm text-zinc-900 dark:border-zinc-800 dark:bg-zinc-950/30 dark:text-zinc-100"
-                            >
-                              {palette.map((c) => (
-                                <option key={c} value={c}>
-                                  {c}
-                                </option>
-                              ))}
-                            </select>
-                          ) : (
-                            <input
-                              type="color"
-                              value={value}
-                              onChange={(e) => onPreviewColorChange(f.nodeId, e.target.value)}
-                              className="h-9 w-16 rounded-xl border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900"
-                            />
-                          )}
-                        </label>
-                      );
-                    }
-
-                    return null;
-                  })}
-                </div>
+              <div className="rounded-2xl border border-dashed border-zinc-300 bg-zinc-50 p-3 text-xs text-zinc-700 dark:border-zinc-700 dark:bg-zinc-800/40 dark:text-zinc-300">
+                Use the <span className="font-medium">Preview</span> button at
+                the top of the workspace to fill the form as a user would and
+                watch the design update live.
               </div>
             ) : null}
           </div>

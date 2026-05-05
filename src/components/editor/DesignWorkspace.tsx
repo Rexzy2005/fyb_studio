@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Maximize2, Minus, Plus } from "lucide-react";
 
 import type { NormalizedDesignV1, NormalizedNode } from "@/lib/figma";
 import { CanvasBackend } from "@/lib/render/engine/backends/canvasBackend";
@@ -50,8 +51,12 @@ export function DesignWorkspace({
   const panY = useTemplateEditorStore((s) => s.panY);
   const setZoom = useTemplateEditorStore((s) => s.setZoom);
   const setPan = useTemplateEditorStore((s) => s.setPan);
-  const resetView = useTemplateEditorStore((s) => s.resetView);
+  const setView = useTemplateEditorStore((s) => s.setView);
   const setSelectedNodeId = useTemplateEditorStore((s) => s.setSelectedNodeId);
+
+  // Zoom limits. Mirrors the store clamp so handlers can guard before commits.
+  const ZOOM_MIN = 0.05;
+  const ZOOM_MAX = 8;
 
   const wrapperRef = useRef<HTMLDivElement | null>(null);
   const designRef = useRef<HTMLDivElement | null>(null);
@@ -66,6 +71,8 @@ export function DesignWorkspace({
     startPanY: number;
     pivotX: number;
     pivotY: number;
+    startMidX: number;
+    startMidY: number;
   } | null>(null);
   const [spaceDown, setSpaceDown] = useState(false);
   const [dragging, setDragging] = useState(false);
@@ -81,7 +88,6 @@ export function DesignWorkspace({
   // comes from the device-pixel-ratio scaling applied to the bitmap canvas.
   const canvasW = useMemo(() => Math.max(1, design.canvas.width), [design.canvas.width]);
   const canvasH = useMemo(() => Math.max(1, design.canvas.height), [design.canvas.height]);
-  const devicePixelRatio = typeof window !== "undefined" ? window.devicePixelRatio || 1 : 1;
 
   const colorOverrideByNodeId = useMemo(() => {
     const next: Record<string, string> = {};
@@ -95,35 +101,70 @@ export function DesignWorkspace({
     return next;
   }, [fieldConfig.fields, previewColorByNodeId]);
 
+  /**
+   * Convert a screen-pixel cursor position to design-space coordinates given
+   * the current view. Accepts the design element's bounding rect (post-CSS-
+   * transform). Used by both wheel zoom and pinch zoom so they stay anchored
+   * to the cursor / pinch midpoint exactly.
+   */
+  const cursorToDesignSpace = useCallback(
+    (rect: DOMRect, clientX: number, clientY: number, currentZoom: number) => ({
+      x: (clientX - rect.left) / currentZoom,
+      y: (clientY - rect.top) / currentZoom,
+    }),
+    [],
+  );
+
+  /**
+   * Apply a new zoom level anchored to a fixed design-space pivot point
+   * (so the pixel under the cursor / pinch midpoint stays put). Returns the
+   * actual clamped zoom that was applied so callers can snapshot it.
+   *
+   * Single setView call → one render → no shimmy between zoom and pan.
+   */
+  const applyZoomAroundPivot = useCallback(
+    (nextZoomRaw: number, pivot: { x: number; y: number }) => {
+      const nextZoom = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, nextZoomRaw));
+      const nextPanX = panX + (zoom - nextZoom) * pivot.x;
+      const nextPanY = panY + (zoom - nextZoom) * pivot.y;
+      setView({ zoom: nextZoom, panX: nextPanX, panY: nextPanY });
+      return nextZoom;
+    },
+    [panX, panY, setView, zoom],
+  );
+
+  /**
+   * Compute the pan that centers the scaled design inside the viewport.
+   *
+   * Layout context:
+   *   - The "centering wrapper" applies `translate(-50%, -50%)` to its own
+   *     `canvasW × canvasH` box, parking the design's CSS top-left at
+   *     `(viewport_center − canvasW/2, viewport_center − canvasH/2)`.
+   *   - The design's `transform: translate(pan) scale(zoom)` uses
+   *     `transformOrigin: 0 0`, so scaling expands from that top-left
+   *     corner — at zoom < 1 the visual bounds shrink toward the upper-left.
+   *
+   * To re-center, we add a forward translation of `canvasW × (1 − zoom) / 2`
+   * to nudge the scaled design back to the viewport center. At zoom = 1 the
+   * formula yields pan = 0 (the centering wrapper already does the work).
+   */
+  const centeringPanFor = useCallback(
+    (z: number) => ({
+      panX: (canvasW * (1 - z)) / 2,
+      panY: (canvasH * (1 - z)) / 2,
+    }),
+    [canvasH, canvasW],
+  );
+
+  // Default zoom for both initial mount and the "Fit" button. Constant across
+  // surfaces (admin editor + end-user view) and viewport sizes so users get a
+  // predictable starting view every time. They can zoom further in/out at
+  // will via wheel / pinch / +- buttons / keyboard.
+  const DEFAULT_FIT_ZOOM = 0.58;
+
   const fitToViewport = useCallback(() => {
-    const el = wrapperRef.current;
-    if (!el) return;
-
-    // Fit-to-view with padding; center design within the viewport.
-    // This matches a “Figma-ish” initial view and prevents the design from starting off-screen.
-    // User workspace goal: start at 100% with the design centered (no auto “scale down”).
-    // Editor workspace goal: fit-to-view (never upscale above 100%).
-    if (!enableSelection) {
-      const nextZoom = 1;
-      setZoom(nextZoom);
-      setPan(-(canvasW * nextZoom) / 2, -(canvasH * nextZoom) / 2);
-      return;
-    }
-
-    const padding = 32;
-    const rect = el.getBoundingClientRect();
-    const availW = Math.max(1, rect.width - padding * 2);
-    const availH = Math.max(1, rect.height - padding * 2);
-    const scale = Math.min(
-      availW / Math.max(1, canvasW),
-      availH / Math.max(1, canvasH),
-    );
-
-    // Never upscale above 100% on initial fit.
-    const nextZoom = Math.max(0.1, Math.min(scale, 1));
-    setZoom(nextZoom);
-    setPan(-(canvasW * nextZoom) / 2, -(canvasH * nextZoom) / 2);
-  }, [canvasH, canvasW, enableSelection, setPan, setZoom]);
+    setView({ zoom: DEFAULT_FIT_ZOOM, ...centeringPanFor(DEFAULT_FIT_ZOOM) });
+  }, [centeringPanFor, setView]);
 
   useEffect(() => {
     if (!autoFitOnMount) return;
@@ -155,38 +196,42 @@ export function DesignWorkspace({
     };
   }, [autoFitOnResize, canvasH, canvasW, fitToViewport]);
 
-  // Space+drag to pan.
+  // Wheel zoom — Ctrl/Cmd + wheel (or pinch on trackpads, which browsers
+  // synthesize with ctrlKey: true). Trackpad-aware: each event applies an
+  // exponential factor proportional to deltaY magnitude, so a fast trackpad
+  // pinch zooms quickly while a tiny scroll-wheel notch zooms gently.
+  // Ctrl-less wheel falls through to native scrolling (no-op here since we
+  // overflow-hidden, but lets future callers wire scroll panning).
   useEffect(() => {
     const el = wrapperRef.current;
     if (!el) return;
 
     function onWheel(e: WheelEvent) {
-      // Ctrl+wheel zoom like design tools.
-      if (!e.ctrlKey) return;
+      // ctrlKey OR metaKey: macOS Safari uses metaKey for explicit zoom.
+      // Browsers synthesize ctrlKey for trackpad pinch, so this catches both
+      // intentional zoom and pinch-on-trackpad.
+      if (!e.ctrlKey && !e.metaKey) return;
       e.preventDefault();
       userAdjustedViewRef.current = true;
-      const delta = -e.deltaY;
-      const factor = delta > 0 ? 1.08 : 1 / 1.08;
 
-      const nextZoom = zoom * factor;
+      // Smooth exponential factor — `Math.exp(deltaY * 0.005)` gives a gentle
+      // ramp where small deltas (trackpad) produce small factors (~1.005)
+      // and big deltas (mouse wheel notch ≈ 100) give noticeable ones (~1.65).
+      // Inverted because positive deltaY means "zoom out" (scroll away).
+      const factor = Math.exp(-e.deltaY * 0.005);
+
       const rect = designRef.current?.getBoundingClientRect();
       if (!rect) {
-        setZoom(nextZoom);
+        setZoom(zoom * factor);
         return;
       }
-
-      // Zoom to cursor: keep the design point under the cursor fixed.
-      const px = (e.clientX - rect.left) / zoom;
-      const py = (e.clientY - rect.top) / zoom;
-      const nextPanX = panX + (zoom - nextZoom) * px;
-      const nextPanY = panY + (zoom - nextZoom) * py;
-      setPan(nextPanX, nextPanY);
-      setZoom(nextZoom);
+      const pivot = cursorToDesignSpace(rect, e.clientX, e.clientY, zoom);
+      applyZoomAroundPivot(zoom * factor, pivot);
     }
 
     el.addEventListener("wheel", onWheel, { passive: false });
     return () => el.removeEventListener("wheel", onWheel);
-  }, [panX, panY, setPan, setZoom, zoom]);
+  }, [applyZoomAroundPivot, cursorToDesignSpace, setZoom, zoom]);
 
   useEffect(() => {
     function onKeyDown(e: KeyboardEvent) {
@@ -194,9 +239,30 @@ export function DesignWorkspace({
         isPanningRef.current = true;
         setSpaceDown(true);
       }
-      if ((e.ctrlKey || e.metaKey) && e.key === "0") {
-        e.preventDefault();
-        resetView();
+      // Ctrl/Cmd + 0 → fit view. Ctrl/Cmd + +/= → zoom in. Ctrl/Cmd + - → zoom out.
+      // All zoom shortcuts anchor around the design's center (no cursor
+      // available for keyboard input), keeping the artboard stable.
+      if (e.ctrlKey || e.metaKey) {
+        if (e.key === "0") {
+          e.preventDefault();
+          userAdjustedViewRef.current = false;
+          fitToViewport();
+          return;
+        }
+        if (e.key === "=" || e.key === "+") {
+          e.preventDefault();
+          userAdjustedViewRef.current = true;
+          const center = { x: canvasW / 2, y: canvasH / 2 };
+          applyZoomAroundPivot(zoom * 1.2, center);
+          return;
+        }
+        if (e.key === "-" || e.key === "_") {
+          e.preventDefault();
+          userAdjustedViewRef.current = true;
+          const center = { x: canvasW / 2, y: canvasH / 2 };
+          applyZoomAroundPivot(zoom / 1.2, center);
+          return;
+        }
       }
     }
 
@@ -222,7 +288,7 @@ export function DesignWorkspace({
       window.removeEventListener("keyup", onKeyUp);
       window.removeEventListener("contextmenu", onContextMenu);
     };
-  }, [resetView]);
+  }, [applyZoomAroundPivot, canvasH, canvasW, fitToViewport, zoom]);
 
   const handToolEnabled = !enableSelection;
   const showGrabCursor = handToolEnabled || spaceDown || rightPanActive;
@@ -236,27 +302,31 @@ export function DesignWorkspace({
     const pts = Array.from(pointersRef.current.values());
     if (pts.length !== 2) return;
     const [a, b] = pts;
-    const dx = b.x - a.x;
-    const dy = b.y - a.y;
-    const dist = Math.hypot(dx, dy);
-    if (!Number.isFinite(dist) || dist <= 0.001) return;
+    const dist = Math.hypot(b.x - a.x, b.y - a.y);
+    // Floor on the start distance — fingers very close together would produce
+    // wild factors on first move. 12 px is a comfortable minimum.
+    if (!Number.isFinite(dist) || dist < 12) return;
 
     const midX = (a.x + b.x) / 2;
     const midY = (a.y + b.y) / 2;
     const rect = designRef.current?.getBoundingClientRect();
     if (!rect) return;
 
-    // Pivot in design-space (unscaled) so zoom keeps content under fingers fixed.
-    const pivotX = (midX - rect.left) / zoom;
-    const pivotY = (midY - rect.top) / zoom;
+    // Pivot in design-space (unscaled) — keeps content under fingers fixed
+    // for the zoom component. Translation drift is handled separately via
+    // startMidX/Y deltas in onPointerMove so the user can also "drag" while
+    // pinching, like Maps and Figma.
+    const pivot = cursorToDesignSpace(rect, midX, midY, zoom);
 
     pinchRef.current = {
       startDistance: dist,
       startZoom: zoom,
       startPanX: panX,
       startPanY: panY,
-      pivotX,
-      pivotY,
+      pivotX: pivot.x,
+      pivotY: pivot.y,
+      startMidX: midX,
+      startMidY: midY,
     };
   }
 
@@ -314,24 +384,37 @@ export function DesignWorkspace({
   function onPointerMove(e: React.PointerEvent<HTMLDivElement>) {
     updatePointer(e);
 
-    // Pinch zoom (two pointers active).
+    // Pinch zoom (two pointers active). All zoom + pan goes through one
+    // `setView` call so React commits the new view in a single render —
+    // eliminates the visible "shimmy" the user sees from separate commits.
     if (pinchRef.current && pointersRef.current.size === 2) {
       const pts = Array.from(pointersRef.current.values());
       const [a, b] = pts;
-      const dx = b.x - a.x;
-      const dy = b.y - a.y;
-      const dist = Math.hypot(dx, dy);
+      const dist = Math.hypot(b.x - a.x, b.y - a.y);
+      // Also track the pinch midpoint so the pivot drifts with the user's
+      // fingers — a more natural feeling than locking the pivot at gesture start.
+      const midX = (a.x + b.x) / 2;
+      const midY = (a.y + b.y) / 2;
       const start = pinchRef.current;
       const factor = dist / Math.max(1, start.startDistance);
-      const nextZoom = start.startZoom * factor;
-      const nextPanX = start.startPanX + (start.startZoom - nextZoom) * start.pivotX;
-      const nextPanY = start.startPanY + (start.startZoom - nextZoom) * start.pivotY;
-      setPan(nextPanX, nextPanY);
-      setZoom(nextZoom);
+      const nextZoomRaw = start.startZoom * factor;
+      const nextZoom = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, nextZoomRaw));
+
+      // Pan is composed of (a) the cursor-anchored zoom term, plus (b) any
+      // translation the pinch midpoint has done since the gesture began.
+      const rect = designRef.current?.getBoundingClientRect();
+      if (!rect) return;
+      // Shift in screen pixels of the pinch midpoint since gesture start,
+      // converted into the pre-gesture pan delta we need to apply.
+      const midShiftX = midX - start.startMidX;
+      const midShiftY = midY - start.startMidY;
+      const nextPanX = start.startPanX + (start.startZoom - nextZoom) * start.pivotX + midShiftX;
+      const nextPanY = start.startPanY + (start.startZoom - nextZoom) * start.pivotY + midShiftY;
+      setView({ zoom: nextZoom, panX: nextPanX, panY: nextPanY });
       return;
     }
 
-    // Drag pan.
+    // Drag pan — one finger or one mouse button.
     if (!panStartRef.current) return;
     const dx = e.clientX - panStartRef.current.x;
     const dy = e.clientY - panStartRef.current.y;
@@ -369,54 +452,77 @@ export function DesignWorkspace({
     setSelectedNodeId(hitId);
   }
 
-  const snappedPanX = Math.round(panX * devicePixelRatio) / devicePixelRatio;
-  const snappedPanY = Math.round(panY * devicePixelRatio) / devicePixelRatio;
-  const snappedZoom = Math.round(zoom * 1000) / 1000;
-
+  // We pass raw view values straight to the CSS transform — no rounding /
+  // pixel-snap. Snapping caused visible jitter during interactive zoom
+  // because every gesture frame would round to a slightly different value.
+  // The bitmap canvas is already DPR-scaled by `CanvasShapesLayer`, so
+  // crispness is preserved without snapping the outer transform.
   const canvasStyle: React.CSSProperties = {
     width: `${canvasW}px`,
     height: `${canvasH}px`,
-    transform: `translate(${snappedPanX}px, ${snappedPanY}px) scale(${snappedZoom})`,
+    transform: `translate(${panX}px, ${panY}px) scale(${zoom})`,
     transformOrigin: "0 0",
+    willChange: "transform",
   };
 
   return (
     <div className="flex h-full flex-col overflow-hidden rounded-2xl border border-zinc-200 bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-950">
-      <div className="flex items-center justify-between border-b border-zinc-200 bg-white px-3 py-2 dark:border-zinc-800 dark:bg-zinc-900">
-        <div className="text-xs text-zinc-600 dark:text-zinc-300">
-          Zoom: <span className="font-medium text-zinc-900 dark:text-zinc-100">{Math.round(zoom * 100)}%</span>
-        </div>
-        <div className="flex items-center gap-2">
+      {/* Toolbar — segmented control style with icon buttons. Single pill on the
+          right keeps the row clean; the zoom level click-target doubles as a
+          quick "click to fit" affordance. */}
+      <div className="flex items-center justify-between gap-3 border-b border-zinc-200/80 bg-white/95 px-3 py-2 backdrop-blur dark:border-zinc-800/80 dark:bg-zinc-900/80">
+        <button
+          type="button"
+          onClick={() => {
+            userAdjustedViewRef.current = false;
+            fitToViewport();
+          }}
+          title="Click to fit (Ctrl/Cmd+0)"
+          className="rounded-md px-1.5 py-0.5 text-[11px] font-medium tabular-nums text-zinc-600 transition-colors hover:bg-zinc-100 hover:text-zinc-900 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-zinc-100"
+        >
+          {Math.round(zoom * 100)}%
+        </button>
+
+        <div className="inline-flex items-center overflow-hidden rounded-lg border border-zinc-200 bg-white shadow-xs dark:border-zinc-800 dark:bg-zinc-900">
           <button
             type="button"
             onClick={() => {
               userAdjustedViewRef.current = true;
-              setZoom(zoom / 1.1);
+              applyZoomAroundPivot(zoom / 1.2, { x: canvasW / 2, y: canvasH / 2 });
             }}
-            className="inline-flex h-8 items-center justify-center rounded-lg border border-zinc-200 bg-white px-2 text-xs font-medium text-zinc-900 hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-100 dark:hover:bg-zinc-800"
+            title="Zoom out (Ctrl/Cmd+−)"
+            aria-label="Zoom out"
+            className="inline-flex h-8 w-8 items-center justify-center text-zinc-700 transition-colors hover:bg-zinc-50 active:bg-zinc-100 disabled:cursor-not-allowed disabled:opacity-40 dark:text-zinc-200 dark:hover:bg-zinc-800 dark:active:bg-zinc-700"
+            disabled={zoom <= ZOOM_MIN + 1e-6}
           >
-            −
+            <Minus className="h-3.5 w-3.5" />
           </button>
+          <div className="h-5 w-px bg-zinc-200 dark:bg-zinc-800" aria-hidden />
           <button
             type="button"
             onClick={() => {
               userAdjustedViewRef.current = true;
-              setZoom(zoom * 1.1);
+              applyZoomAroundPivot(zoom * 1.2, { x: canvasW / 2, y: canvasH / 2 });
             }}
-            className="inline-flex h-8 items-center justify-center rounded-lg border border-zinc-200 bg-white px-2 text-xs font-medium text-zinc-900 hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-100 dark:hover:bg-zinc-800"
+            title="Zoom in (Ctrl/Cmd+=)"
+            aria-label="Zoom in"
+            className="inline-flex h-8 w-8 items-center justify-center text-zinc-700 transition-colors hover:bg-zinc-50 active:bg-zinc-100 disabled:cursor-not-allowed disabled:opacity-40 dark:text-zinc-200 dark:hover:bg-zinc-800 dark:active:bg-zinc-700"
+            disabled={zoom >= ZOOM_MAX - 1e-6}
           >
-            +
+            <Plus className="h-3.5 w-3.5" />
           </button>
+          <div className="h-5 w-px bg-zinc-200 dark:bg-zinc-800" aria-hidden />
           <button
             type="button"
             onClick={() => {
-              userAdjustedViewRef.current = true;
-              resetView();
+              userAdjustedViewRef.current = false;
+              fitToViewport();
             }}
-            className="inline-flex h-8 items-center justify-center rounded-lg border border-zinc-200 bg-white px-2 text-xs font-medium text-zinc-900 hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-100 dark:hover:bg-zinc-800"
-            title="Reset view (Ctrl/Cmd+0)"
+            title="Fit to view (Ctrl/Cmd+0, double-click)"
+            aria-label="Fit to view"
+            className="inline-flex h-8 w-8 items-center justify-center text-zinc-700 transition-colors hover:bg-zinc-50 active:bg-zinc-100 dark:text-zinc-200 dark:hover:bg-zinc-800 dark:active:bg-zinc-700"
           >
-            Reset
+            <Maximize2 className="h-3.5 w-3.5" />
           </button>
         </div>
       </div>
@@ -427,14 +533,37 @@ export function DesignWorkspace({
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
         onPointerUp={onPointerUp}
+        onPointerCancel={onPointerUp}
+        onPointerLeave={onPointerUp}
         onContextMenu={(e) => e.preventDefault()}
         onClick={onClickSelect}
+        onDoubleClick={() => {
+          // Double-click anywhere in the workspace fits the design back into
+          // view — fastest "get me back" gesture when the user pans/zooms
+          // somewhere unhelpful. Reset the user-adjusted flag so subsequent
+          // resize events resume their auto-fit behaviour.
+          userAdjustedViewRef.current = false;
+          fitToViewport();
+        }}
       >
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_1px_1px,rgba(0,0,0,0.08)_1px,transparent_0)] bg-size-[16px_16px] dark:hidden" />
-        <div className="absolute inset-0 hidden bg-[radial-gradient(circle_at_1px_1px,rgba(255,255,255,0.10)_1px,transparent_0)] bg-size-[16px_16px] dark:block" />
+        {/* Subtle dotted backdrop. Lower opacity than before so it reads as
+            texture rather than pattern — the artboard remains the focal point.
+            Two layers (light/dark) so the contrast tracks the theme. */}
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_1px_1px,rgba(0,0,0,0.05)_1px,transparent_0)] bg-size-[18px_18px] dark:hidden" />
+        <div className="absolute inset-0 hidden bg-[radial-gradient(circle_at_1px_1px,rgba(255,255,255,0.06)_1px,transparent_0)] bg-size-[18px_18px] dark:block" />
+        {/* Soft inner-shadow vignette to draw the eye toward the centre and
+            give the workspace edges a finished feel. Pure CSS, no DOM cost. */}
+        <div className="pointer-events-none absolute inset-0 [box-shadow:inset_0_0_60px_rgba(0,0,0,0.04)] dark:[box-shadow:inset_0_0_80px_rgba(0,0,0,0.35)]" />
 
         <div className="absolute left-1/2 top-1/2" style={{ transform: "translate(-50%, -50%)" }}>
-          <div ref={designRef} style={canvasStyle} className="relative shadow-[0_20px_60px_rgba(0,0,0,0.12)]">
+          {/* Layered shadow: tight contact shadow (1px) + ambient shadow (40px)
+              gives the artboard depth without heaviness. The 1px ring picks
+              up on light bgs where shadow alone is invisible. */}
+          <div
+            ref={designRef}
+            style={canvasStyle}
+            className="relative shadow-[0_1px_2px_rgba(0,0,0,0.08),0_24px_48px_-12px_rgba(0,0,0,0.18)] ring-1 ring-black/5 dark:ring-white/5"
+          >
             <CanvasShapesLayer
               design={design}
               orderedNodeIds={ordered}
@@ -451,16 +580,27 @@ export function DesignWorkspace({
           </div>
         </div>
 
-        <div className="pointer-events-none absolute bottom-3 left-3 rounded-xl border border-zinc-200 bg-white/90 px-3 py-2 text-xs text-zinc-700 dark:border-zinc-800 dark:bg-zinc-900/70 dark:text-zinc-200">
+        {/* Keyboard/mouse hint — desktop-only. On touch the gestures are
+            self-evident and the chip would just take up screen real estate.
+            Uses real <kbd> elements for semantic + visual key-cap feel. */}
+        <div className="pointer-events-none absolute bottom-3 left-3 hidden items-center gap-1.5 rounded-full border border-zinc-200/80 bg-white/85 px-2.5 py-1 text-[11px] text-zinc-600 shadow-xs backdrop-blur md:inline-flex dark:border-zinc-800/80 dark:bg-zinc-900/75 dark:text-zinc-300">
+          <span>Pan</span>
           {enableSelection ? (
-            <>
-              Pan: hold <span className="font-medium">Space</span> and drag • Zoom: <span className="font-medium">Ctrl+Wheel</span>
-            </>
+            <kbd className="rounded border border-zinc-300 bg-white px-1 font-mono text-[10px] font-medium text-zinc-700 shadow-xs dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-200">
+              Space
+            </kbd>
           ) : (
-            <>
-              Pan: <span className="font-medium">drag</span> • Zoom: <span className="font-medium">pinch</span> (mobile) / <span className="font-medium">Ctrl+Wheel</span>
-            </>
+            <kbd className="rounded border border-zinc-300 bg-white px-1 font-mono text-[10px] font-medium text-zinc-700 shadow-xs dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-200">
+              drag
+            </kbd>
           )}
+          <span className="text-zinc-300 dark:text-zinc-600" aria-hidden>
+            ·
+          </span>
+          <span>Zoom</span>
+          <kbd className="rounded border border-zinc-300 bg-white px-1 font-mono text-[10px] font-medium text-zinc-700 shadow-xs dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-200">
+            ⌘ Wheel
+          </kbd>
         </div>
       </div>
     </div>

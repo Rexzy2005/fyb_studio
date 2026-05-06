@@ -64,10 +64,28 @@ export function RecentDownloads() {
 
   if (loading) {
     return (
-      <div className="rounded-2xl border border-dashed border-zinc-200 bg-zinc-50 p-4 text-zinc-500 dark:border-zinc-800 dark:bg-zinc-900/50 dark:text-zinc-400">
-        <div className="text-xs font-semibold tracking-wide">Recent downloads</div>
-        <div className="mt-1 text-[11px]">Loading…</div>
-      </div>
+      <section className="rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+        <div className="text-xs font-semibold tracking-wide text-zinc-900 dark:text-zinc-100">
+          Recent downloads
+        </div>
+        <div className="mt-1 text-[11px] text-zinc-500 dark:text-zinc-400">
+          Loading your recent designs…
+        </div>
+        <ul className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <li
+              key={i}
+              className="flex items-center gap-3 rounded-2xl border border-zinc-200 p-3 dark:border-zinc-800"
+            >
+              <div className="fyb-skeleton h-16 w-16 shrink-0 rounded-xl" />
+              <div className="min-w-0 flex-1 space-y-2">
+                <div className="fyb-skeleton h-3 w-3/4 rounded-full" />
+                <div className="fyb-skeleton h-2.5 w-1/2 rounded-full" />
+              </div>
+            </li>
+          ))}
+        </ul>
+      </section>
     );
   }
 

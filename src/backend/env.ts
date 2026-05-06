@@ -21,6 +21,21 @@ const schema = z.object({
   CLOUDINARY_API_SECRET: z.string().optional(),
 
   ADMIN_EMAILS: z.string().optional(),
+
+  // Paystack (server-side; required to enable paid downloads)
+  PAYSTACK_SECRET_KEY: z.string().min(1, "PAYSTACK_SECRET_KEY is required").optional(),
+  // Public key is shipped to the browser via NEXT_PUBLIC_*; we mirror it
+  // server-side so payment-init responses can return it without the client
+  // needing to read process.env directly.
+  NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY: z.string().optional(),
+  PAYSTACK_WEBHOOK_SECRET: z.string().optional(),
+  // Override the flat per-download price (in NGN, not kobo) when needed.
+  // Defaults to 1000 NGN per the product spec.
+  PAYMENT_DOWNLOAD_PRICE_NGN: z.coerce.number().int().positive().default(1000),
+  // Hours after payment within which the user MUST come back and finish
+  // their download. Grants are single-use — this is a safety net for
+  // unredeemed grants, NOT a re-download window. Default 7 days.
+  PAYMENT_GRANT_EXPIRY_HOURS: z.coerce.number().int().positive().default(168),
 });
 
 const parsed = schema.safeParse(process.env);

@@ -3,6 +3,7 @@ import { CanvasBackend } from "@/lib/render/engine/backends/canvasBackend";
 import { renderTree } from "@/lib/render/engine/renderTree";
 import { buildTextSvg } from "@/lib/render/engine/svgTextLayer";
 import { ensureCustomFontsLoaded } from "@/lib/render/features/canvasFont";
+import { buildEmbeddedFontFacesStyle } from "@/lib/render/features/embedFonts";
 import { ensureGoogleFontsLoaded } from "@/lib/fonts/googleFonts";
 import type { FieldConfig } from "@/lib/storage/types";
 
@@ -172,18 +173,14 @@ function drawBrandSignature(
  *
  * Strategy:
  *   1. Build the SVG string via `buildTextSvg` (same builder the editor uses).
- *   2. Wrap it in a Blob URL.
- *   3. Decode it as an `<img>` — this triggers the browser's full SVG parser.
- *   4. `drawImage` it onto the canvas at full bitmap dimensions; the SVG's
+ *   2. Inline `@font-face` rules with base64-encoded font files so the SVG's
+ *      isolated document context (it loads via `<img src="blob:..."`) can
+ *      resolve the same typefaces the editor used. Without this, edited text
+ *      drops to the system font.
+ *   3. Wrap it in a Blob URL.
+ *   4. Decode it as an `<img>` — this triggers the browser's full SVG parser.
+ *   5. `drawImage` it onto the canvas at full bitmap dimensions; the SVG's
  *      viewBox handles the design→pixel scaling.
- *
- * Caveats:
- *   - Fonts loaded into `document.fonts` aren't accessible from inside an
- *     `<img>`-loaded SVG (it's a separate document context). For this design
- *     family, almost all text uses pre-baked outline paths from Figma — no
- *     font lookup needed. Live edited text falls back to the system font.
- *     If we ever need exact font fidelity for edited text, we can inline the
- *     fonts as data-URLs inside the SVG via `@font-face`.
  */
 async function drawSvgOntoCanvas(
   ctx: CanvasRenderingContext2D,
@@ -194,6 +191,10 @@ async function drawSvgOntoCanvas(
 ): Promise<void> {
   const svg = buildTextSvg({ design, fieldConfig, previewTextByNodeId, includeGuides: false });
 
+  // Inline `@font-face` data-URLs so the SVG document carries its own font
+  // payload. Done in parallel with the (small) HD-dimension rewrite below.
+  const fontFacesStyle = await buildEmbeddedFontFacesStyle(design.assets?.fonts ?? []);
+
   // HD trick: override the SVG's declared width/height with the BITMAP pixel
   // size while keeping its `viewBox` at design coordinates. The browser will
   // then rasterize the SVG natively at full target resolution — no bilinear
@@ -202,9 +203,20 @@ async function drawSvgOntoCanvas(
   // Without this override the SVG defaults to design dimensions (e.g. 1024 ×
   // 1280); `drawImage` would scale that 2× to fit the 2048 × 2560 canvas,
   // producing the soft, low-resolution look the user reported.
-  const hdSvg = svg
+  let hdSvg = svg
     .replace(/(<svg [^>]*?\bwidth=)"[^"]*"/, `$1"${canvas.width}"`)
     .replace(/(<svg [^>]*?\bheight=)"[^"]*"/, `$1"${canvas.height}"`);
+
+  // Inject the @font-face styles into the SVG's <defs>. If <defs> doesn't
+  // exist (no clip paths in the design), insert one right after the <svg>
+  // opening tag.
+  if (fontFacesStyle) {
+    if (/<defs>/.test(hdSvg)) {
+      hdSvg = hdSvg.replace(/<defs>/, `<defs>${fontFacesStyle}`);
+    } else {
+      hdSvg = hdSvg.replace(/(<svg [^>]*>)/, `$1<defs>${fontFacesStyle}</defs>`);
+    }
+  }
 
   const blob = new Blob([hdSvg], { type: "image/svg+xml;charset=utf-8" });
   const url = URL.createObjectURL(blob);

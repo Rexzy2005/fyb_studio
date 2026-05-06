@@ -555,13 +555,10 @@ function SkeletonTile({ index }: { index: number }) {
   const ratio = ratios[index % ratios.length] ?? 4 / 5;
   return (
     <div className="overflow-hidden border border-[var(--rule)] bg-[var(--night-2)]">
-      <div className="relative w-full overflow-hidden bg-[var(--night-3)]">
-        <div className="w-full" style={{ aspectRatio: ratio }} />
-        <div className="fyb-skeleton-shine absolute inset-0" />
-      </div>
+      <div className="fyb-skeleton-shine relative w-full overflow-hidden" style={{ aspectRatio: ratio }} />
       <div className="space-y-2 p-3 sm:p-4">
-        <div className="h-3 w-3/4 bg-[var(--rule-strong)]" />
-        <div className="h-2.5 w-1/2 bg-[var(--rule)]" />
+        <div className="fyb-skeleton h-3 w-3/4 rounded-full" />
+        <div className="fyb-skeleton h-2.5 w-1/2 rounded-full" />
       </div>
     </div>
   );

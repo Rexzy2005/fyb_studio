@@ -4,6 +4,31 @@ import { isLikelyLocalSvgPath } from "@/lib/render/features/path2d";
 import { applyTextCase, resolveEffectiveTextCase } from "@/lib/render/textCase";
 import type { FieldConfig } from "@/lib/storage/types";
 
+/**
+ * Build a font-family stack from the resolved family + the original Figma
+ * family. Quoted because Figma family names often contain spaces ("Helvetica
+ * Neue") which CSS requires to be quoted. Both names are emitted so the
+ * browser walks them in order — useful when font-loading normalisation aliased
+ * the family to a Google Fonts equivalent but the original name is what's
+ * actually installed on the user's system.
+ */
+function buildFontFamilyStack(
+  primary: string | undefined,
+  fallback: string | undefined,
+): string | null {
+  const seen = new Set<string>();
+  const parts: string[] = [];
+  for (const name of [primary, fallback]) {
+    if (!name) continue;
+    const trimmed = name.trim();
+    if (!trimmed || seen.has(trimmed)) continue;
+    seen.add(trimmed);
+    parts.push(`"${trimmed.replace(/"/g, '\\"')}"`);
+  }
+  if (parts.length === 0) return null;
+  return parts.join(", ");
+}
+
 export type BuildTextSvgInput = {
   design: NormalizedDesignV1;
   fieldConfig: FieldConfig;
@@ -154,6 +179,71 @@ export function buildTextSvg(input: BuildTextSvgInput): string {
   }
 
   /**
+   * Build an SVG <filter> equivalent of Figma's drop-shadow + inner-shadow
+   * effects on a text node, returns the `filter="url(#...)"` attribute (or
+   * empty string when the node has no visible shadows).
+   *
+   * Why this lives here: shape/container shadows are painted by the canvas
+   * backend, but text glyphs render in the SVG layer — so the SVG layer needs
+   * its own shadow path. SVG's <feDropShadow> is GPU-accelerated and matches
+   * the Figma sigma → radius mapping at radius/2.
+   */
+  function ensureTextShadowFilter(node: NormalizedTextNode): string {
+    const dropShadows = node.effects.filter(
+      (e): e is Extract<NormalizedNode["effects"][number], { kind: "drop-shadow" }> =>
+        e.kind === "drop-shadow" && e.visible,
+    );
+    const innerShadows = node.effects.filter(
+      (e): e is Extract<NormalizedNode["effects"][number], { kind: "inner-shadow" }> =>
+        e.kind === "inner-shadow" && e.visible,
+    );
+    if (dropShadows.length === 0 && innerShadows.length === 0) return "";
+
+    const filterId = `text-shadow-${node.id}`;
+    // Each shadow is its own <feGaussianBlur>+<feOffset>+<feFlood>+<feComposite>
+    // chain; we merge them all back together with the source on top so the text
+    // glyphs themselves stay sharp.
+    const dropParts = dropShadows.map((eff, idx) => {
+      // Figma's "radius" maps to SVG's stdDeviation = radius/2.
+      const sigma = Math.max(0, eff.radius / 2);
+      const dx = eff.offset.x;
+      const dy = eff.offset.y;
+      const flood = `<feFlood flood-color="${escapeAttr(eff.color)}" result="dropFlood${idx}" />`;
+      const offset = `<feOffset dx="${dx}" dy="${dy}" in="SourceAlpha" result="dropOffset${idx}" />`;
+      const blur = `<feGaussianBlur stdDeviation="${sigma}" in="dropOffset${idx}" result="dropBlur${idx}" />`;
+      const composite = `<feComposite in="dropFlood${idx}" in2="dropBlur${idx}" operator="in" result="dropShadow${idx}" />`;
+      return `${flood}${offset}${blur}${composite}`;
+    });
+    const innerParts = innerShadows.map((eff, idx) => {
+      const sigma = Math.max(0, eff.radius / 2);
+      const dx = eff.offset.x;
+      const dy = eff.offset.y;
+      // Inner shadow = invert the source alpha (so the "outside" becomes
+      // opaque), offset+blur it, then composite back inside the original
+      // shape using `in` so it only shows within the glyph.
+      return [
+        `<feFlood flood-color="${escapeAttr(eff.color)}" result="innerFlood${idx}" />`,
+        `<feComposite in="innerFlood${idx}" in2="SourceAlpha" operator="out" result="innerColored${idx}" />`,
+        `<feOffset in="innerColored${idx}" dx="${dx}" dy="${dy}" result="innerOffset${idx}" />`,
+        `<feGaussianBlur in="innerOffset${idx}" stdDeviation="${sigma}" result="innerBlur${idx}" />`,
+        `<feComposite in="innerBlur${idx}" in2="SourceAlpha" operator="in" result="innerShadow${idx}" />`,
+      ].join("");
+    });
+
+    // Stack drop shadows behind the source, then the source, then inner shadows on top.
+    const mergeChildren = [
+      ...dropShadows.map((_, i) => `<feMergeNode in="dropShadow${i}" />`),
+      `<feMergeNode in="SourceGraphic" />`,
+      ...innerShadows.map((_, i) => `<feMergeNode in="innerShadow${i}" />`),
+    ].join("");
+
+    defs.push(
+      `<filter id="${escapeAttr(filterId)}" x="-50%" y="-50%" width="200%" height="200%" filterUnits="objectBoundingBox" primitiveUnits="userSpaceOnUse">${dropParts.join("")}${innerParts.join("")}<feMerge>${mergeChildren}</feMerge></filter>`,
+    );
+    return ` filter="url(#${escapeAttr(filterId)})"`;
+  }
+
+  /**
    * Emit per-character runs as separate <tspan>s when the node has runs[]
    * AND the user has not overridden the text. Runs with no fill / size / weight
    * inherit from the base style.
@@ -189,14 +279,26 @@ export function buildTextSvg(input: BuildTextSvgInput): string {
         const r = seg.run;
         const fontSize = r?.fontSize ?? baseStyle.fontSize;
         const fontWeight = r?.fontWeight ?? baseStyle.fontWeight;
-        const fontFamily = r?.fontFamily ?? baseStyle.fontFamily;
+        const fontFamily = buildFontFamilyStack(r?.fontFamily, undefined) ?? baseStyle.fontFamily;
         const fontStyle = r?.fontStyle ?? baseStyle.fontStyle;
         const fillCss =
           r?.fills && r.fills[0]?.kind === "solid" ? r.fills[0].css : baseStyle.fillCss;
         const decoration = r?.textDecoration ?? "none";
+        // Per-run letter-spacing/line-height: when present, they override
+        // the parent <text>'s inherited values for this run only. Without
+        // these explicit overrides, mixed-letter-spacing text (very common
+        // in headlines like "BOLDtitle SUBTITLE") collapses to one spacing.
+        const runLetterSpacingPx =
+          r?.letterSpacing?.unit === "PERCENT"
+            ? (r.letterSpacing.value / 100) * fontSize
+            : r?.letterSpacing?.value;
+        const letterSpacingStyle =
+          typeof runLetterSpacingPx === "number"
+            ? `letter-spacing:${runLetterSpacingPx}px;`
+            : "";
         const dyAttr = idx === 0 ? `dy="${dy}"` : "";
         const xAttr = idx === 0 ? `x="${x}"` : "";
-        return `<tspan ${xAttr} ${dyAttr} font-size="${fontSize}" font-weight="${fontWeight}" font-style="${fontStyle}" fill="${escapeAttr(fillCss)}" text-decoration="${decoration}" style="font-family:${escapeAttr(fontFamily)};">${escapeText(slice)}</tspan>`;
+        return `<tspan ${xAttr} ${dyAttr} font-size="${fontSize}" font-weight="${fontWeight}" font-style="${fontStyle}" fill="${escapeAttr(fillCss)}" text-decoration="${decoration}" style="font-family:${escapeAttr(fontFamily)};${letterSpacingStyle}">${escapeText(slice)}</tspan>`;
       })
       .join("");
   }
@@ -208,8 +310,19 @@ export function buildTextSvg(input: BuildTextSvgInput): string {
   }
 
   function renderTextNode(node: NormalizedTextNode) {
+    // Resolve the dominant solid fill: prefer node.fills, fall back to the
+    // first run's solid fill (covers the case where the plugin reports a
+    // mixed node-level fill but per-run fills are uniform), and finally to
+    // black. Done this way so outline-path rendering picks the most faithful
+    // color even when adapter heuristics couldn't.
     const fill = node.fills[0];
-    const fillCss = fill?.kind === "solid" ? fill.css : "#000";
+    const runFill = node.text.runs?.[0]?.fills?.[0];
+    const fillCss =
+      fill?.kind === "solid"
+        ? fill.css
+        : runFill?.kind === "solid"
+          ? runFill.css
+          : "#000";
 
     const field = configured.get(node.id);
     const override = previewTextByNodeId[node.id];
@@ -249,18 +362,28 @@ export function buildTextSvg(input: BuildTextSvgInput): string {
         )
         .join("");
 
+      const shadowFilterAttr = ensureTextShadowFilter(node);
+
       if (local && m) {
         const matrix = `matrix(${m.a} ${m.b} ${m.c} ${m.d} ${m.tx} ${m.ty})`;
-        return `<g transform="${escapeAttr(matrix)}">${paths}</g>`;
+        return `<g transform="${escapeAttr(matrix)}"${shadowFilterAttr}>${paths}</g>`;
       }
       const translate = local ? ` transform="translate(${node.frame.x} ${node.frame.y})"` : "";
-      return `<g${translate}>${paths}</g>`;
+      return `<g${translate}${shadowFilterAttr}>${paths}</g>`;
     }
 
     const resolvedText = {
       fontSize: node.text.fontSize ?? 12,
       fontWeight: node.text.fontWeight ?? 400,
-      fontFamily: node.text.fontFamily ?? "system-ui, -apple-system, Segoe UI, Roboto, Arial",
+      // The font-family stack: prefer the resolved family, then the original
+      // family Figma reported (matters when normalisation simplified the
+      // name), and finally a generic fallback. Browsers walk the stack in
+      // order, picking the first installed face — exactly what we want for
+      // an edited text node so the design retains its typeface even when
+      // the family alias has been refined.
+      fontFamily:
+        buildFontFamilyStack(node.text.fontFamily, node.text.originalFontName?.family) ??
+        "system-ui, -apple-system, Segoe UI, Roboto, Arial",
       fontStyle: node.text.fontStyle ?? "normal",
       lineHeight: node.text.lineHeight,
       letterSpacing: node.text.letterSpacing,
@@ -268,6 +391,13 @@ export function buildTextSvg(input: BuildTextSvgInput): string {
       textAlignVertical: node.text.textAlignVertical ?? "TOP",
       textCase: node.text.textCase,
       textDecoration: node.text.textDecoration ?? "none",
+      paragraphSpacing: node.text.paragraphSpacing ?? 0,
+      paragraphIndent: node.text.paragraphIndent ?? 0,
+      // `leadingTrim: "CAP_HEIGHT"` (Figma's "Vertical trim" toggle) means
+      // the bbox top sits flush with the cap-top of the first line — no
+      // leading above. Renderer must skip the half-leading offset for this
+      // case, otherwise the text drops below where Figma painted it.
+      leadingTrim: node.text.leadingTrim ?? "NONE",
     };
 
     const effectiveTextCase = resolveEffectiveTextCase(
@@ -369,7 +499,24 @@ export function buildTextSvg(input: BuildTextSvgInput): string {
           ? node.frame.x + node.frame.width
           : node.frame.x;
 
-    const y = baseY;
+    // Vertical alignment — match Figma's box-top → em-box-top math precisely.
+    // Two cases:
+    //
+    //   leadingTrim: "NONE" (default)
+    //     The bbox includes leading distributed above the cap. With
+    //     `dominant-baseline="text-before-edge"` (em-box top at y), we must
+    //     add half the leading so the em-box sits where Figma placed it.
+    //
+    //   leadingTrim: "CAP_HEIGHT"
+    //     The bbox top IS the cap-top — no leading above. Adding the half-
+    //     leading would push text DOWN. Skip the offset so the em-box top
+    //     lands as close as possible to the cap-top (still slightly off by
+    //     ~10% of fontSize, the em-top-to-cap-top gap, but visually right).
+    const leadingOffsetPx =
+      resolvedText.leadingTrim === "CAP_HEIGHT"
+        ? 0
+        : Math.max(0, (layout.lineHeightPx - layout.fontSize) / 2);
+    const y = baseY + leadingOffsetPx;
 
     const rotated = !useMatrixForOverriddenText && node.rotation && Math.abs(node.rotation) > 0.001;
     const cx = node.frame.x + node.frame.width / 2;
@@ -378,12 +525,51 @@ export function buildTextSvg(input: BuildTextSvgInput): string {
 
     const useRuns = !isOverridden && Array.isArray(node.text.runs) && node.text.runs.length > 0;
 
+    // Paragraph layout: every `\n` in the source starts a new paragraph.
+    // Paragraphs add `paragraphSpacing` between them (extra px of vertical
+    // gap) and apply `paragraphIndent` to the first line of each paragraph
+    // (horizontal x offset). Lines INSIDE a paragraph (from word-wrap) get
+    // neither — they're continuation lines.
+    //
+    // We track which `displayed` line is a paragraph-start via the source
+    // characters. Without an explicit `\n` count, every line is its own
+    // paragraph (so paragraphSpacing applies between every line).
+    const paragraphCharCounts = displayed.split("\n").map((p) => p.length);
     let lineCharCursor = 0;
+    let paragraphIndex = 0;
+    let paragraphCharsConsumed = 0;
+    const indentPx = resolvedText.paragraphIndent || 0;
+    const paragraphGapPx = resolvedText.paragraphSpacing || 0;
     const tspans = layout.lines
       .map((line, idx) => {
-        const dy = idx === 0 ? 0 : layout.lineHeightPx;
         const lineStart = lineCharCursor;
         lineCharCursor += line.length + 1; // +1 for the implicit newline between split lines
+
+        // Did this line start a new paragraph? Only true for the first wrap
+        // line of each paragraph. We track via cumulative chars vs the
+        // paragraph's char count.
+        const isFirstLineOfParagraph =
+          idx === 0 ||
+          paragraphCharsConsumed >=
+            (paragraphCharCounts[paragraphIndex] ?? Number.POSITIVE_INFINITY);
+        if (isFirstLineOfParagraph && idx !== 0) {
+          paragraphIndex++;
+          paragraphCharsConsumed = 0;
+        }
+        paragraphCharsConsumed += line.length;
+
+        // Vertical advance: lineHeight per line, plus paragraphSpacing when
+        // crossing a paragraph boundary (anything but the first line and
+        // anything but a continuation wrap-line).
+        const dy =
+          idx === 0
+            ? 0
+            : layout.lineHeightPx + (isFirstLineOfParagraph ? paragraphGapPx : 0);
+
+        // Horizontal: indent the FIRST line of each paragraph. Continuation
+        // wrap lines stay flush with the bbox edge.
+        const xForLine = isFirstLineOfParagraph && indentPx > 0 ? x + indentPx : x;
+
         if (useRuns && node.text.runs) {
           return tspansForRuns(
             line,
@@ -396,11 +582,11 @@ export function buildTextSvg(input: BuildTextSvgInput): string {
               fontStyle,
               fillCss,
             },
-            x,
+            xForLine,
             dy,
           );
         }
-        return `<tspan x="${x}" dy="${dy}">${escapeText(line)}</tspan>`;
+        return `<tspan x="${xForLine}" dy="${dy}">${escapeText(line)}</tspan>`;
       })
       .join("");
 
@@ -444,7 +630,9 @@ export function buildTextSvg(input: BuildTextSvgInput): string {
         })()
       : "";
 
-    const textEl = `<text xml:space="preserve" x="${x}" y="${y}" fill="${escapeAttr(fillCss)}" font-size="${layout.fontSize}" font-weight="${resolvedText.fontWeight}" font-style="${fontStyle}" text-decoration="${textDecoration}" text-anchor="${anchor}" dominant-baseline="hanging"${strokeAttrs} ${transform ? `transform="${escapeAttr(transform)}"` : ""} style="white-space:pre;font-family:${escapeAttr(fontFamily)};letter-spacing:${escapeAttr(letterSpacingCss)};">${tspans}</text>`;
+    const shadowFilterAttr = ensureTextShadowFilter(node);
+
+    const textEl = `<text xml:space="preserve" x="${x}" y="${y}" fill="${escapeAttr(fillCss)}" font-size="${layout.fontSize}" font-weight="${resolvedText.fontWeight}" font-style="${fontStyle}" text-decoration="${textDecoration}" text-anchor="${anchor}" dominant-baseline="text-before-edge"${strokeAttrs}${shadowFilterAttr} ${transform ? `transform="${escapeAttr(transform)}"` : ""} style="white-space:pre;font-family:${escapeAttr(fontFamily)};letter-spacing:${escapeAttr(letterSpacingCss)};">${tspans}</text>`;
 
     const matrix =
       useMatrixForOverriddenText && m

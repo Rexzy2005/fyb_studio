@@ -133,18 +133,126 @@ body {
     }
   }
 
-  @keyframes fyb-shimmer {
+  /* ============================================================
+   * Skeleton loading effects
+   *
+   * Two utilities, both with the same shimmer language so the page reads as
+   * one coherent loading state:
+   *
+   *   .fyb-skeleton        — drop-in for any skeletal element (bar, circle,
+   *                          panel). Provides BOTH the animated base
+   *                          background AND the moving highlight band.
+   *                          Replace `animate-pulse + bg-zinc-200` with this.
+   *
+   *   .fyb-skeleton-shine  — overlay-only shimmer for elements that already
+   *                          have their own background (image placeholders,
+   *                          card cover regions). Mounted as an absolutely-
+   *                          positioned child element.
+   *
+   * Both honour `prefers-reduced-motion` further down in this file.
+   * ============================================================ */
+
+  /* Base background sweep — a 3-stop gradient slid across the element so the
+   * surface itself appears to breathe, not just an overlay highlight. */
+  @keyframes fyb-skeleton-base {
     0% {
-      transform: translateX(-120%);
+      background-position: 200% 0;
     }
     100% {
-      transform: translateX(120%);
+      background-position: -200% 0;
     }
   }
 
+  /* Reflective highlight band — narrower, brighter, slid across faster than
+   * the base. The diagonal angle reads as a real glint of light. */
+  @keyframes fyb-skeleton-glint {
+    0% {
+      background-position: 200% 0;
+    }
+    100% {
+      background-position: -100% 0;
+    }
+  }
+
+  .fyb-skeleton {
+    position: relative;
+    overflow: hidden;
+    background-color: rgb(228, 228, 231); /* zinc-200 — visible base under the gradient */
+    background-image: linear-gradient(
+      100deg,
+      rgba(228, 228, 231, 0) 30%,
+      rgba(244, 244, 245, 0.95) 50%,
+      rgba(228, 228, 231, 0) 70%
+    );
+    background-size: 220% 100%;
+    background-repeat: no-repeat;
+    animation: fyb-skeleton-base 1.6s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+  }
+
+  html.dark .fyb-skeleton {
+    background-color: rgb(39, 39, 42); /* zinc-800 */
+    background-image: linear-gradient(
+      100deg,
+      rgba(39, 39, 42, 0) 30%,
+      rgba(82, 82, 91, 0.85) 50%,
+      rgba(39, 39, 42, 0) 70%
+    );
+  }
+
+  .fyb-skeleton::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background-image: linear-gradient(
+      105deg,
+      transparent 35%,
+      rgba(255, 255, 255, 0.7) 50%,
+      transparent 65%
+    );
+    background-size: 250% 100%;
+    background-position: 200% 0;
+    background-repeat: no-repeat;
+    animation: fyb-skeleton-glint 1.6s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+    animation-delay: 200ms;
+    pointer-events: none;
+    mix-blend-mode: overlay;
+  }
+
+  html.dark .fyb-skeleton::after {
+    background-image: linear-gradient(
+      105deg,
+      transparent 35%,
+      rgba(255, 255, 255, 0.16) 50%,
+      transparent 65%
+    );
+    mix-blend-mode: screen;
+  }
+
+  /* Overlay variant — for elements that already have their own background
+   * (e.g. an <img>'s placeholder slot). Mount as `<div className="fyb-skeleton-shine
+   * absolute inset-0" />`. Same visual language as `.fyb-skeleton`. */
   .fyb-skeleton-shine {
     position: relative;
     overflow: hidden;
+    background-image: linear-gradient(
+      100deg,
+      transparent 30%,
+      rgba(244, 244, 245, 0.7) 50%,
+      transparent 70%
+    );
+    background-size: 220% 100%;
+    background-position: 200% 0;
+    background-repeat: no-repeat;
+    animation: fyb-skeleton-base 1.6s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+  }
+
+  html.dark .fyb-skeleton-shine {
+    background-image: linear-gradient(
+      100deg,
+      transparent 30%,
+      rgba(244, 244, 245, 0.18) 50%,
+      transparent 70%
+    );
   }
 
   .fyb-skeleton-shine::before {
@@ -152,43 +260,40 @@ body {
     position: absolute;
     inset: -30%;
     background:
-      radial-gradient(
-        circle at 30% 30%,
-        rgba(16, 185, 129, 0.14),
-        transparent 55%
-      ),
-      radial-gradient(
-        circle at 70% 70%,
-        rgba(168, 85, 247, 0.12),
-        transparent 55%
-      );
-    filter: blur(18px);
+      radial-gradient(circle at 30% 30%, rgba(16, 185, 129, 0.16), transparent 55%),
+      radial-gradient(circle at 70% 70%, rgba(168, 85, 247, 0.14), transparent 55%);
+    filter: blur(20px);
     opacity: 0.55;
     pointer-events: none;
+    animation: fyb-skeleton-base 3.2s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+    background-size: 220% 220%;
   }
 
   .fyb-skeleton-shine::after {
     content: "";
     position: absolute;
     inset: 0;
-    background: linear-gradient(
-      90deg,
-      transparent 0%,
-      rgba(255, 255, 255, 0.55) 35%,
-      transparent 70%
+    background-image: linear-gradient(
+      105deg,
+      transparent 35%,
+      rgba(255, 255, 255, 0.85) 50%,
+      transparent 65%
     );
-    transform: translateX(-120%);
-    animation: fyb-shimmer 1.35s ease-in-out infinite;
+    background-size: 250% 100%;
+    background-position: 200% 0;
+    background-repeat: no-repeat;
+    animation: fyb-skeleton-glint 1.6s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+    animation-delay: 200ms;
     pointer-events: none;
     mix-blend-mode: overlay;
   }
 
   html.dark .fyb-skeleton-shine::after {
-    background: linear-gradient(
-      90deg,
-      transparent 0%,
-      rgba(255, 255, 255, 0.14) 35%,
-      transparent 70%
+    background-image: linear-gradient(
+      105deg,
+      transparent 35%,
+      rgba(255, 255, 255, 0.22) 50%,
+      transparent 65%
     );
     mix-blend-mode: screen;
   }
@@ -198,7 +303,12 @@ body {
   .fyb-modal-overlay-in,
   .fyb-modal-overlay-out,
   .fyb-modal-card-in,
-  .fyb-modal-card-out {
+  .fyb-modal-card-out,
+  .fyb-skeleton,
+  .fyb-skeleton::after,
+  .fyb-skeleton-shine,
+  .fyb-skeleton-shine::before,
+  .fyb-skeleton-shine::after {
     animation: none !important;
   }
 }

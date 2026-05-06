@@ -5,6 +5,8 @@ import { useEffect, useState } from "react";
 import { createLocalTemplateRepository } from "@/lib/storage/templateRepo";
 import type { StorageStats, TemplateMeta } from "@/lib/storage/types";
 import type { UserStats } from "@/backend/services/user.service";
+import { RevenuePanel } from "@/components/admin/RevenuePanel";
+import { FeedbackSummaryCard } from "@/components/admin/FeedbackSummaryCard";
 
 export default function AdminDashboardPage() {
   const [loading, setLoading] = useState(true);
@@ -68,6 +70,15 @@ export default function AdminDashboardPage() {
         <StatCard label="Published" value={stats?.published ?? (loading ? "…" : 0)} />
         <StatCard label="Drafts" value={stats?.drafts ?? (loading ? "…" : 0)} />
       </div>
+
+      {/* Revenue & downloads — its own self-contained panel that fetches
+          /api/admin/revenue. Keeps the dashboard's other cards independent
+          so a temporary payments outage doesn't block the rest of the page. */}
+      <RevenuePanel />
+
+      {/* User feedback summary — at-a-glance metrics with a deep link to the
+          dedicated /admin/feedback page for triage. */}
+      <FeedbackSummaryCard />
 
       <div className="grid gap-4 sm:grid-cols-2">
         <StatCard

@@ -481,7 +481,7 @@ export default function Home() {
                 ) : (
                   <div
                     key={`s-${idx}`}
-                    className="aspect-[4/5] w-full animate-pulse border border-[var(--rule)] bg-white/5"
+                    className="fyb-skeleton-shine aspect-[4/5] w-full border border-[var(--rule)]"
                   />
                 )
             )}

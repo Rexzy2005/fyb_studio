@@ -4,6 +4,8 @@ import { getUserProfile } from "@/backend/services/user.service";
 import { SignOutButton } from "@/components/auth/SignOutButton";
 import { RecentDownloads } from "@/components/dashboard/RecentDownloads";
 import { DepartmentLocks } from "@/components/dashboard/DepartmentLocks";
+import { PendingDownloads } from "@/components/dashboard/PendingDownloads";
+import { FeedbackLauncher } from "@/components/feedback/FeedbackLauncher";
 
 export const metadata = {
   title: "Dashboard — FYB Studio",
@@ -162,6 +164,13 @@ export default async function DashboardPage() {
           </a>
         </div>
 
+        {/* Pending paid-but-undownloaded designs — surfaced first because
+            it's the most actionable item on the page (the user has already
+            spent money and just needs to finish the export). */}
+        <div className="mt-4 sm:mt-6">
+          <PendingDownloads />
+        </div>
+
         {profile.isDepartmentHead && profile.department ? (
           <div className="mt-4 sm:mt-6">
             <DepartmentLocks departmentName={profile.department.name} />
@@ -170,6 +179,14 @@ export default async function DashboardPage() {
 
         <div id="recent-downloads" className="mt-4 scroll-mt-24 sm:mt-6">
           <RecentDownloads />
+        </div>
+
+        {/* Feedback CTA card + floating "Feedback" button. Both surfaces
+            are dismissible — the card via X, the floating button is always
+            available but tiny and stays out of the way of the rest of the
+            UI. Recently-submitted users (60-day window) see neither. */}
+        <div className="mt-4 sm:mt-6">
+          <FeedbackLauncher />
         </div>
       </main>
     </div>

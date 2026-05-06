@@ -1,6 +1,8 @@
 import { z } from "zod";
 
 import type { NormalizedDesignV1, NormalizedFill, NormalizedNode } from "../normalized";
+import { adaptFigmaDesignV1 } from "../plugin/adapter";
+import { isFigmaDesignV1 } from "../plugin/schema";
 import { collectBounds, getChildNodes } from "./geometry";
 import { adaptLegacyTreeToFigmaExport } from "./legacy";
 import { normalizeNode } from "./nodes";
@@ -16,6 +18,12 @@ const FigmaExportSchema = z
   .passthrough();
 
 export function normalizeFigmaExport(input: unknown): NormalizedDesignV1 {
+  // FYB Extractor plugin output — detect and route through the dedicated
+  // adapter. Output is the same `NormalizedDesignV1` shape with richer data
+  // (real fonts, mixed text runs, embedded image bytes, full effects).
+  if (isFigmaDesignV1(input)) {
+    return adaptFigmaDesignV1(input).design;
+  }
   const adapted = adaptLegacyTreeToFigmaExport(input);
   const parsed = FigmaExportSchema.safeParse(adapted ?? input);
   const root = parsed.success ? parsed.data : isRecord(input) ? (input as AnyRecord) : {};

@@ -42,7 +42,7 @@ export function HeaderAuthSlot() {
     return (
       <div
         aria-hidden
-        className="h-10 w-10 animate-pulse rounded-full border border-zinc-200 bg-zinc-100 dark:border-zinc-800 dark:bg-zinc-800/60"
+        className="fyb-skeleton h-10 w-10 rounded-full border border-zinc-200 dark:border-zinc-800"
       />
     );
   }

@@ -88,9 +88,7 @@ function Header({ departmentName }: { departmentName: string }) {
 }
 
 function SkeletonCard() {
-  return (
-    <div className="h-44 animate-pulse rounded-2xl bg-zinc-100 dark:bg-zinc-800/60" />
-  );
+  return <div className="fyb-skeleton h-44 rounded-2xl" />;
 }
 
 function LockCard({

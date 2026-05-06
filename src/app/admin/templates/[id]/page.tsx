@@ -7,6 +7,7 @@ import { useRouter } from "next/navigation";
 import { normalizeFigmaExport, type NormalizedDesignV1 } from "@/lib/figma";
 import { composeImageMap } from "@/lib/render/composeImageMap";
 import { useDesignAssets } from "@/lib/render/useDesignAssets";
+import { usePluginImages } from "@/lib/render/usePluginImages";
 import { createLocalTemplateRepository } from "@/lib/storage/templateRepo";
 import type { TemplateRecord } from "@/lib/storage/types";
 import { DesignWorkspace } from "@/components/editor/DesignWorkspace";
@@ -118,12 +119,19 @@ export default function TemplateEditorPage({
   const designAssetImageByNodeId =
     mode === "published" ? remoteDesignAssetMap : localDesignAssets;
 
-  const renderImageByNodeId = useMemo(
-    () => composeImageMap(previewImageByNodeId, designAssetImageByNodeId, record?.fieldConfig),
-    [previewImageByNodeId, designAssetImageByNodeId, record?.fieldConfig],
-  );
-
   const normalizedForFonts = (record?.normalized as NormalizedDesignV1 | undefined) ?? undefined;
+  const pluginImageByNodeId = usePluginImages(normalizedForFonts);
+
+  const renderImageByNodeId = useMemo(
+    () =>
+      composeImageMap(
+        previewImageByNodeId,
+        designAssetImageByNodeId,
+        record?.fieldConfig,
+        pluginImageByNodeId,
+      ),
+    [previewImageByNodeId, designAssetImageByNodeId, record?.fieldConfig, pluginImageByNodeId],
+  );
   useGoogleFonts(["Ms Madi", ...(normalizedForFonts?.assets.fonts ?? [])]);
 
   useEffect(() => {

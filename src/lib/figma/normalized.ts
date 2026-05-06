@@ -190,7 +190,12 @@ export type TextRun = {
   fontWeight?: number;
   fontStyle?: "normal" | "italic";
   fontSize?: number;
+  // The original Figma style label ("Bold", "SemiBold", "ExtraLight"). Carried
+  // alongside the resolved CSS `fontStyle` so the editor can re-apply the
+  // exact named font face when the user starts editing.
+  fontStyleName?: string;
   letterSpacing?: { unit: "PIXELS" | "PERCENT"; value: number };
+  lineHeight?: { unit: string; value?: number };
   fills?: NormalizedFill[];
   textDecoration?: "none" | "underline" | "line-through";
   textCase?: string;
@@ -210,6 +215,9 @@ export type NormalizedTextNode = NormalizedNodeBase & {
     fontWeight?: number;
     fontFamily?: string;
     fontStyle?: "normal" | "italic";
+    // Original Figma style name ("Bold", "Medium", "ExtraLight"). Lets the
+    // editor reapply the precise font face after the user starts editing.
+    fontStyleName?: string;
     lineHeight?: { unit: string; value?: number };
     letterSpacing?: { unit: string; value: number };
     textAlignHorizontal?: string;
@@ -218,7 +226,20 @@ export type NormalizedTextNode = NormalizedNodeBase & {
     textDecoration?: "none" | "underline" | "line-through";
     paragraphSpacing?: number;
     paragraphIndent?: number;
+    listSpacing?: number;
+    hangingPunctuation?: boolean;
+    hangingList?: boolean;
+    leadingTrim?: "NONE" | "CAP_HEIGHT";
+    textTruncation?: "DISABLED" | "ENDING";
+    maxLines?: number;
     autoResize?: "NONE" | "WIDTH_AND_HEIGHT" | "HEIGHT" | "TRUNCATE";
+    // Original font family/style as Figma reported them — used by the editor
+    // when re-rendering after user edits, so the wrong font isn't substituted.
+    originalFontName?: { family: string; style: string };
+    // Whether the export marked this font as missing in the editor session;
+    // when true the renderer prefers the bundled outline paths over font
+    // rendering since the substituted font would be visually wrong.
+    hasMissingFont?: boolean;
     runs?: TextRun[];
   };
   fills: NormalizedFill[];

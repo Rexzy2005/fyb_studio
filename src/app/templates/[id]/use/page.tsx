@@ -8,6 +8,7 @@ import { ArrowLeft, ChevronLeft, ChevronRight, Menu, X } from "lucide-react";
 
 import type { NormalizedDesignV1 } from "@/lib/figma";
 import { composeImageMap } from "@/lib/render/composeImageMap";
+import { usePluginImages } from "@/lib/render/usePluginImages";
 import { exportTemplatePng } from "@/lib/render/exportPng";
 import { useRemoteDesignAssets } from "@/lib/render/useRemoteDesignAssets";
 import { useTemplateEditorStore } from "@/lib/stores/templateEditorStore";
@@ -31,8 +32,14 @@ import { LockedAccessModal } from "@/components/templates/LockedAccessModal";
 import { DesignWorkspace } from "@/components/editor/DesignWorkspace";
 import { useGoogleFonts } from "@/components/editor/useGoogleFonts";
 import { ImageUpload, inferFileMeta } from "@/components/forms/ImageUpload";
+import { PaymentModal } from "@/components/payment/PaymentModal";
 import { ProgressModal } from "@/components/ui/ProgressModal";
 import { useSimulatedProgress } from "@/components/ui/useSimulatedProgress";
+import { fetchActiveGrant, recordDownload } from "@/lib/api/payments";
+import {
+  clearPendingDownload,
+  listPendingDownloads,
+} from "@/lib/payment/pendingDownloads";
 
 function deriveCategoryLabel(name: string, explicit: string | null): string {
   const e = explicit?.trim();
@@ -79,6 +86,7 @@ export default function UseTemplatePage({
   const [mobileFormPage, setMobileFormPage] = useState(0);
   const mobileFormScrollRef = useRef<HTMLDivElement | null>(null);
 
+  const [paymentModalOpen, setPaymentModalOpen] = useState(false);
   const [previewTextByNodeId, setPreviewTextByNodeId] = useState<Record<string, string>>({});
   const [previewImageByNodeId, setPreviewImageByNodeId] = useState<Record<
     string,
@@ -99,9 +107,17 @@ export default function UseTemplatePage({
   );
   const { designAssetImageByNodeId } = useRemoteDesignAssets(remoteAssetUrls);
 
+  const pluginImageByNodeId = usePluginImages(normalized);
+
   const renderImageByNodeId = useMemo(
-    () => composeImageMap(previewImageByNodeId, designAssetImageByNodeId, fieldConfig),
-    [previewImageByNodeId, designAssetImageByNodeId, fieldConfig]
+    () =>
+      composeImageMap(
+        previewImageByNodeId,
+        designAssetImageByNodeId,
+        fieldConfig,
+        pluginImageByNodeId,
+      ),
+    [previewImageByNodeId, designAssetImageByNodeId, fieldConfig, pluginImageByNodeId]
   );
 
   const pageLoading = !userDesign && !loadError;
@@ -463,18 +479,74 @@ export default function UseTemplatePage({
       }
 
       await markDownloaded(userDesign.id, thumbnail);
-      router.push("/dashboard");
+
+      // Server-side log + grant consumption. Done AFTER the user has the
+      // file so a transient API hiccup doesn't block the download itself;
+      // failures are logged but non-fatal. The local pending marker is
+      // ALSO cleared on success so the dashboard hides the "Resume" tile.
+      try {
+        await recordDownload({
+          templateId: userDesign.templateId,
+          userDesignId: userDesign.id,
+          scale,
+        });
+        // Best effort: drop every local marker for this design (we may not
+        // know the exact paystackReference at this layer).
+        const markers = listPendingDownloads().filter(
+          (p) =>
+            p.templateId === userDesign.templateId &&
+            (p.userDesignId ?? null) === (userDesign.id ?? null),
+        );
+        for (const m of markers) clearPendingDownload(m.reference);
+      } catch (err) {
+        console.warn("[use] recordDownload failed", err);
+      }
+
+      // ?justDownloaded=1 nudges the dashboard's FeedbackLauncher to open
+      // the survey modal automatically — peak honesty moment. The launcher
+      // respects the same "recently submitted" cooldown so heavy users
+      // don't get badgered every download.
+      router.push("/dashboard?justDownloaded=1");
+    } catch (err) {
+      console.error("[use] export failed after payment", err);
+      // The grant is still active server-side because recordDownload
+      // didn't run, AND the local marker is still set. Send the user to
+      // the dashboard so they can resume — and never throw the file away.
+      router.push("/dashboard?resumePayment=1");
     } finally {
       setExporting(false);
       setExportStage("");
     }
   }
 
-  // One-click HD export. No size picker — the standard scale is hardcoded so
-  // every user gets a consistent, high-quality download.
-  function startExport() {
+  // One-click HD export, gated by a per-design payment.
+  // Flow:
+  //   1. Silently check the server for an unconsumed grant (no progress
+  //      modal flash — that was creating a confusing "modal twice" UX).
+  //   2. If grant exists → start export.
+  //   3. Otherwise → open the payment modal; on success its `onPaid`
+  //      callback runs the export.
+  async function startExport() {
     if (exporting) return;
-    void doExportPng(STANDARD_EXPORT_SCALE);
+    if (!userDesign) return;
+    let hasGrant = false;
+    try {
+      const info = await fetchActiveGrant({
+        templateId: userDesign.templateId,
+        userDesignId: userDesign.id,
+      });
+      hasGrant = Boolean(info.grant);
+    } catch (err) {
+      // Transient grant-check failures fall through to the payment modal.
+      // The verify endpoint will detect the existing grant if there is one
+      // and refund/short-circuit there — better UX than blocking the click.
+      console.error("[use] grant check failed", err);
+    }
+    if (hasGrant) {
+      void doExportPng(STANDARD_EXPORT_SCALE);
+      return;
+    }
+    setPaymentModalOpen(true);
   }
 
   function resetUserWorkspace() {
@@ -896,6 +968,20 @@ export default function UseTemplatePage({
         subtitle={exportStage || (exportProgress < 0.6 ? "Rendering PNG" : "Finalizing")}
         percent={Math.round(exportProgress * 100)}
         hint="Larger designs and custom fonts can take a moment."
+      />
+
+      <PaymentModal
+        open={paymentModalOpen}
+        templateId={userDesign.templateId}
+        templateName={recordName}
+        userDesignId={userDesign.id}
+        customerEmail={session?.user?.email ?? null}
+        onClose={() => setPaymentModalOpen(false)}
+        onPaid={async () => {
+          setPaymentModalOpen(false);
+          // Run the actual export now that the user has an active grant.
+          await doExportPng(STANDARD_EXPORT_SCALE);
+        }}
       />
     </div>
   );

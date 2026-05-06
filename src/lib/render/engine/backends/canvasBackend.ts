@@ -72,6 +72,12 @@ export class CanvasBackend implements RenderBackend {
     this.opts = deps.opts;
     this.colorOverride = deps.colorOverrideByNodeId;
     this.resolvePreviewImage = deps.resolvePreviewImage;
+    // High-quality image scaling: matters for design-fidelity rendering of
+    // user-uploaded photos and the plugin's embedded base64 images. Without
+    // this, browsers may use the lower-quality default which produces
+    // softer/jaggier results on downscale.
+    this.ctx.imageSmoothingEnabled = true;
+    (this.ctx as unknown as { imageSmoothingQuality?: ImageSmoothingQuality }).imageSmoothingQuality = "high";
   }
 
   pushAlpha(alpha: number): void {
@@ -195,31 +201,61 @@ export class CanvasBackend implements RenderBackend {
     const boundsPathAt = (x: number, y: number, width: number, height: number): Path2D =>
       makeBoundsPath(x, y, width, height, node.cornerRadius);
 
+    // For SHAPE nodes, geometry preference is:
+    //   1. fillGeometry — Figma's resolved silhouette. Already accounts for
+    //      corner radius, boolean ops, vertex-level corner smoothing, etc.
+    //      A "Rectangle 1" VECTOR with 10px rounded corners has square
+    //      vectorPaths but a rounded fillGeometry — so fillGeometry wins.
+    //   2. vectorPaths — the editable source path. Used only when fillGeometry
+    //      is absent (some legacy exporters skip it).
+    //   3. boundsPathAt — a corner-radius-aware rectangle covering the bbox.
+    //
+    // strokeGeometry is the closed path Figma renders FOR the stroke. For
+    // zero-area shapes (LINE) it's the only thing visible — see strokeFillPath
+    // below.
+    const fillGeomPaths =
+      node.kind === "shape" && node.fillGeometry?.length
+        ? node.fillGeometry.map((g) => g.data)
+        : null;
+
     const shapePath = (): Path2D => {
-      // Prefer explicit fillGeometry when available (and local).
-      if (node.kind === "shape" && node.vectorPaths?.length) {
+      const tryBuild = (paths: string[]): Path2D | null => {
         try {
-          const p = buildCompoundVectorPath(node.vectorPaths);
-          if (p) {
-            const isLocal = node.vectorPaths.every((path) =>
-              isLikelyLocalSvgPath(path, { x: 0, y: 0, width: localW, height: localH }),
-            );
-            if (isLocal) return p;
-            if (baseTransform && nodeSpaceTransform) {
-              // Path is absolute — bake the inverse of node-space transform into it.
-              // Simpler: caller restores transform around fill (handled below).
-              return p;
-            }
-            return p;
-          }
+          const p = buildCompoundVectorPath(paths);
+          if (!p) return null;
+          // Local-vs-absolute check kept as a sanity guard — both paths get
+          // returned the same way today, but the heuristic stays here so a
+          // future transform-baking branch can hook in without re-walking.
+          void paths.every((path) =>
+            isLikelyLocalSvgPath(path, { x: 0, y: 0, width: localW, height: localH }),
+          );
+          return p;
         } catch {
-          // fall through
+          return null;
         }
+      };
+
+      if (fillGeomPaths) {
+        const p = tryBuild(fillGeomPaths);
+        if (p) return p;
+      }
+      if (node.kind === "shape" && node.vectorPaths?.length) {
+        const p = tryBuild(node.vectorPaths);
+        if (p) return p;
       }
       return boundsPathAt(0, 0, localW, localH);
     };
 
     const fillPath = shapePath();
+
+    // strokeGeometry is Figma's closed silhouette of the stroke itself —
+    // useful when the bbox is degenerate (LINE has height=0, so stroking
+    // around the bbox path produces nothing). When present, paint it as a
+    // FILL of the stroke's color rather than stroking around fillPath.
+    const strokeFillPath: Path2D | null =
+      node.kind === "shape" && node.strokeGeometry?.length
+        ? buildCompoundVectorPath(node.strokeGeometry.map((g) => g.data))
+        : null;
 
     const dropShadows = (node.effects ?? []).filter(
       (e): e is Extract<NormalizedNode["effects"][number], { kind: "drop-shadow" }> =>
@@ -297,11 +333,25 @@ export class CanvasBackend implements RenderBackend {
       }
     }
 
-    // Strokes
+    // Strokes. Two paths exist:
+    //   - strokeFillPath: Figma already resolved the stroke into a closed
+    //     silhouette (e.g. LINE nodes, or any node whose stroke alignment
+    //     and dash pattern Figma serialised pre-baked). Paint it as a fill
+    //     of the stroke colour — pixel-exact with no canvas-side miter/cap
+    //     differences.
+    //   - else: stroke around fillPath using canvas line-rendering with
+    //     INSIDE/CENTER/OUTSIDE alignment.
     for (const stroke of node.strokes) {
       if (stroke.weight <= 0) continue;
       if (!stroke.paint.visible) continue;
-      this.strokeWithAlignment(ctx, node, stroke, fillPath, canUseMatrix, localW, localH);
+      if (strokeFillPath) {
+        ctx.save();
+        ctx.fillStyle = stroke.css;
+        ctx.fill(strokeFillPath);
+        ctx.restore();
+      } else {
+        this.strokeWithAlignment(ctx, node, stroke, fillPath, canUseMatrix, localW, localH);
+      }
     }
 
     // Inner shadows are painted on top of fills (clipped to the shape).

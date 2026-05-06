@@ -7,6 +7,7 @@ import { usePathname, useRouter } from "next/navigation";
 import {
   LayoutDashboard,
   LayoutGrid,
+  MessageSquareText,
   PanelLeftClose,
   PanelLeftOpen,
   PlusSquare,
@@ -32,6 +33,7 @@ const NAV: NavItem[] = [
   { href: "/admin/templates", label: "Templates", icon: LayoutGrid, prefix: true },
   { href: "/admin/templates/new", label: "Create Template", icon: PlusSquare },
   { href: "/admin/users", label: "Users", icon: Users, prefix: true },
+  { href: "/admin/feedback", label: "Feedback", icon: MessageSquareText, prefix: true },
 ];
 
 export default function AdminShell({ children }: { children: ReactNode }) {

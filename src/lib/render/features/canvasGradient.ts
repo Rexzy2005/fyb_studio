@@ -8,17 +8,17 @@ type Frame = { x: number; y: number; width: number; height: number };
 /**
  * Paint a gradient fill into a path on the supplied canvas context.
  *
- * For linear and radial we use the native CanvasGradient API (hardware-
- * accelerated, perfectly smooth). For angular (conic) we use the native
- * `createConicGradient` API where supported, otherwise we render the sweep
- * into an offscreen canvas at the destination's exact pixel resolution and
- * blit it through a path clip — no CanvasPattern transform tricks, no
- * subpixel drift. Diamond is always rendered the same offscreen way (no
- * native equivalent exists in canvas APIs).
+ * Routing per gradient kind:
+ *   - linear    → native createLinearGradient (handles arbitrary direction).
+ *   - radial    → native createRadialGradient when the gradient is a true
+ *                 circle aligned with bbox axes; otherwise procedural raster
+ *                 with elliptical, rotated axes (the common Figma case).
+ *   - angular   → native createConicGradient when supported, else procedural.
+ *   - diamond   → procedural raster (no native equivalent), respecting the
+ *                 handle vectors so a rotated diamond renders rotated.
  *
- * Per-pixel renderers use:
- *   - 1024-entry color LUT with linear interpolation between adjacent entries
- *     for smooth color blending across stops.
+ * Procedural rasters use:
+ *   - 1024-entry color LUT with linear interpolation between adjacent entries.
  *   - 4×4 ordered (Bayer) dithering on the output to break up the visible
  *     banding common to long, low-contrast gradients on 8-bit displays.
  *
@@ -40,9 +40,11 @@ export function paintGradientFill(
     return true;
   }
   if (fill.gradientType === "radial") {
-    ctx.fillStyle = buildRadialGradient(ctx, frame, fill);
-    ctx.fill(path);
-    return true;
+    // Native createRadialGradient is always circular. Use it only when the
+    // ellipse degenerates into a circle (radii equal AND axes orthogonal).
+    // Otherwise paint procedurally so an oval / rotated radial renders right.
+    if (tryNativeRadial(ctx, path, frame, fill)) return true;
+    return blitProceduralGradient(ctx, path, frame, fill, "radial");
   }
   if (fill.gradientType === "angular") {
     if (tryNativeConicGradient(ctx, path, frame, fill)) return true;
@@ -75,23 +77,49 @@ function buildLinearGradient(
   return g;
 }
 
-function buildRadialGradient(
+/**
+ * Try to paint a Figma radial gradient using native createRadialGradient.
+ *
+ * Native canvas radials are always perfectly circular. Figma radials are
+ * elliptical: handle[1] defines the X-axis endpoint, handle[2] the Y-axis
+ * endpoint, and the two axes can have different lengths and arbitrary rotation.
+ * We only take the native path when the ellipse degenerates to a circle —
+ * i.e. the two semi-axis vectors are perpendicular AND equal length. Anything
+ * else is routed through the procedural raster, which paints the true ellipse.
+ */
+function tryNativeRadial(
   ctx: CanvasRenderingContext2D,
+  path: Path2D,
   frame: Frame,
   fill: GradientFill,
-): CanvasGradient {
-  // Figma's three handles: [0]=center, [1]=edge along X axis, [2]=edge along Y axis.
-  // Without handles, default to a centered radial covering the bounds.
+): boolean {
   const h0 = fill.handlePositions?.[0] ?? { x: 0.5, y: 0.5 };
   const h1 = fill.handlePositions?.[1] ?? { x: 1.0, y: 0.5 };
+  const h2 = fill.handlePositions?.[2] ?? { x: 0.5, y: 1.0 };
+
   const cx = frame.x + h0.x * frame.width;
   const cy = frame.y + h0.y * frame.height;
-  const ex = frame.x + h1.x * frame.width;
-  const ey = frame.y + h1.y * frame.height;
-  const r = Math.max(1, Math.hypot(ex - cx, ey - cy));
-  const g = ctx.createRadialGradient(cx, cy, 0, cx, cy, r);
+  const v1x = (h1.x - h0.x) * frame.width;
+  const v1y = (h1.y - h0.y) * frame.height;
+  const v2x = (h2.x - h0.x) * frame.width;
+  const v2y = (h2.y - h0.y) * frame.height;
+  const r1 = Math.hypot(v1x, v1y);
+  const r2 = Math.hypot(v2x, v2y);
+  if (r1 < 1 || r2 < 1) return false;
+
+  // Orthogonality check (cross product near zero relative to magnitudes) and
+  // equal-radius check (within 0.5% — sub-pixel difference for any sane size).
+  const cross = Math.abs(v1x * v2y - v1y * v2x);
+  const dotMagnitude = r1 * r2;
+  const orthogonal = dotMagnitude > 0 && cross / dotMagnitude > 0.999;
+  const equalRadii = Math.abs(r1 - r2) / Math.max(r1, r2) < 0.005;
+  if (!orthogonal || !equalRadii) return false;
+
+  const g = ctx.createRadialGradient(cx, cy, 0, cx, cy, r1);
   for (const s of fill.stops) g.addColorStop(s.offset, s.colorCss);
-  return g;
+  ctx.fillStyle = g;
+  ctx.fill(path);
+  return true;
 }
 
 /* ============================================================
@@ -147,7 +175,7 @@ function blitProceduralGradient(
   path: Path2D,
   frame: Frame,
   fill: GradientFill,
-  kind: "angular" | "diamond",
+  kind: "angular" | "diamond" | "radial",
 ): boolean {
   const t = ctx.getTransform();
   // Use the linear scale from each axis; for rotated nodes this is the
@@ -166,18 +194,27 @@ function blitProceduralGradient(
   if (kind === "angular") {
     const h0 = fill.handlePositions?.[0] ?? { x: 0.5, y: 0.5 };
     const h1 = fill.handlePositions?.[1] ?? { x: 0.5, y: 0 };
+    // Center the angular sweep at the actual handle position (not just the
+    // bbox center) — rotates correctly whether or not h0 is at (0.5, 0.5).
+    const cxOff = h0.x * targetW;
+    const cyOff = h0.y * targetH;
     const dx = (h1.x - h0.x) * frame.width;
     const dy = (h1.y - h0.y) * frame.height;
     const startAngle = Math.atan2(dy, dx);
-    rasterAngularInto(off.ctx, targetW, targetH, lut, startAngle);
+    rasterAngularInto(off.ctx, targetW, targetH, lut, cxOff, cyOff, startAngle);
   } else {
-    const h1 = fill.handlePositions?.[1];
-    const h2 = fill.handlePositions?.[2];
-    const halfX =
-      (h1 ? Math.abs(h1.x - 0.5) * 2 : 1) * targetW * 0.5 || targetW * 0.5;
-    const halfY =
-      (h2 ? Math.abs(h2.y - 0.5) * 2 : 1) * targetH * 0.5 || targetH * 0.5;
-    rasterDiamondInto(off.ctx, targetW, targetH, lut, halfX, halfY);
+    // Radial + diamond share the same axis-aware setup. The two semi-axis
+    // vectors come straight from Figma's handlePositions in offscreen-pixel
+    // coords, so a rotated/elliptical/skewed gradient stays faithful to the
+    // source. The L2-vs-L1 distinction is what makes one a circle and the
+    // other a square rotated 45°.
+    const axes = computeAxisVectors(fill, targetW, targetH);
+    if (!axes) return false;
+    if (kind === "radial") {
+      rasterRadialInto(off.ctx, targetW, targetH, lut, axes);
+    } else {
+      rasterDiamondInto(off.ctx, targetW, targetH, lut, axes);
+    }
   }
 
   // Direct blit through path clip — pixel-exact, no pattern transform.
@@ -192,6 +229,56 @@ function blitProceduralGradient(
   ctx.imageSmoothingEnabled = prevSmoothing;
   ctx.restore();
   return true;
+}
+
+/**
+ * Build the inverse of the basis matrix [vx | vy] in offscreen-pixel coords,
+ * where vx = handle1 - handle0 and vy = handle2 - handle0.
+ *
+ * For each pixel P the rasterizer computes (u, v) = invBasis * (P - center).
+ * (u, v) is the gradient-space coordinate where u=1 lands on handle1 and v=1
+ * lands on handle2. From there:
+ *   - radial:  t = sqrt(u² + v²)   (1 on the ellipse boundary)
+ *   - diamond: t = |u| + |v|       (1 on the diamond boundary)
+ *
+ * Returns null when the two axes are colinear (degenerate basis — the source
+ * gradient has zero area, so we can't paint anything meaningful).
+ */
+function computeAxisVectors(
+  fill: GradientFill,
+  targetW: number,
+  targetH: number,
+): {
+  cx: number;
+  cy: number;
+  invA: number;
+  invB: number;
+  invC: number;
+  invD: number;
+} | null {
+  const h0 = fill.handlePositions?.[0] ?? { x: 0.5, y: 0.5 };
+  const h1 = fill.handlePositions?.[1] ?? { x: 1.0, y: 0.5 };
+  const h2 = fill.handlePositions?.[2] ?? { x: 0.5, y: 1.0 };
+
+  const cx = h0.x * targetW;
+  const cy = h0.y * targetH;
+  const ax = (h1.x - h0.x) * targetW;
+  const ay = (h1.y - h0.y) * targetH;
+  const bx = (h2.x - h0.x) * targetW;
+  const by = (h2.y - h0.y) * targetH;
+
+  // 2×2 inverse of [[ax, bx], [ay, by]] (column-major: vx and vy as columns).
+  const det = ax * by - bx * ay;
+  if (Math.abs(det) < 1e-6) return null;
+  const invDet = 1 / det;
+  return {
+    cx,
+    cy,
+    invA: by * invDet,   // u from dx
+    invB: -bx * invDet,  // u from dy
+    invC: -ay * invDet,  // v from dx
+    invD: ax * invDet,   // v from dy
+  };
 }
 
 /* ============================================================
@@ -223,12 +310,12 @@ function rasterAngularInto(
   w: number,
   h: number,
   lut: Uint8ClampedArray,
+  cx: number,
+  cy: number,
   startAngle: number,
 ): void {
   const img = ctx.createImageData(w, h);
   const buf = img.data;
-  const cx = w / 2;
-  const cy = h / 2;
   const TWO_PI = Math.PI * 2;
   const INV_TWO_PI = 1 / TWO_PI;
   const last = lut.length / 4 - 1;
@@ -247,30 +334,70 @@ function rasterAngularInto(
   ctx.putImageData(img, 0, 0);
 }
 
+type GradientAxes = {
+  cx: number;
+  cy: number;
+  invA: number;
+  invB: number;
+  invC: number;
+  invD: number;
+};
+
+function rasterRadialInto(
+  ctx: CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D,
+  w: number,
+  h: number,
+  lut: Uint8ClampedArray,
+  axes: GradientAxes,
+): void {
+  const img = ctx.createImageData(w, h);
+  const buf = img.data;
+  const last = lut.length / 4 - 1;
+  const { cx, cy, invA, invB, invC, invD } = axes;
+
+  for (let y = 0; y < h; y++) {
+    const dy = y - cy;
+    const rowOffset = y * w * 4;
+    for (let x = 0; x < w; x++) {
+      const dx = x - cx;
+      // (u, v) is the gradient-space coordinate. u=v=0 at center; u²+v²=1 on
+      // the ellipse boundary. L2 (Euclidean) distance gives a true ellipse
+      // even when the two semi-axis vectors have different lengths or
+      // arbitrary orientation.
+      const u = invA * dx + invB * dy;
+      const v = invC * dx + invD * dy;
+      const t = Math.sqrt(u * u + v * v);
+      sampleLutDithered(lut, last, t > 1 ? 1 : t, buf, rowOffset + x * 4, x, y);
+    }
+  }
+  ctx.putImageData(img, 0, 0);
+}
+
 function rasterDiamondInto(
   ctx: CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D,
   w: number,
   h: number,
   lut: Uint8ClampedArray,
-  halfX: number,
-  halfY: number,
+  axes: GradientAxes,
 ): void {
   const img = ctx.createImageData(w, h);
   const buf = img.data;
-  const cx = w / 2;
-  const cy = h / 2;
-  const invHalfX = 1 / halfX;
-  const invHalfY = 1 / halfY;
   const last = lut.length / 4 - 1;
+  const { cx, cy, invA, invB, invC, invD } = axes;
 
   for (let y = 0; y < h; y++) {
-    const ay = Math.abs(y - cy) * invHalfY;
+    const dy = y - cy;
     const rowOffset = y * w * 4;
     for (let x = 0; x < w; x++) {
-      const ax = Math.abs(x - cx) * invHalfX;
-      // L1 (Manhattan) distance produces diamond iso-contours.
-      const t = Math.min(1, ax + ay);
-      sampleLutDithered(lut, last, t, buf, rowOffset + x * 4, x, y);
+      const dx = x - cx;
+      const u = invA * dx + invB * dy;
+      const v = invC * dx + invD * dy;
+      // L1 (Manhattan) distance in gradient-space → diamond iso-contours that
+      // rotate with the handle axes. With axis-aligned handles this matches
+      // the previous |x|+|y| formulation; with rotated handles it actually
+      // rotates instead of staying stuck axis-aligned.
+      const t = Math.abs(u) + Math.abs(v);
+      sampleLutDithered(lut, last, t > 1 ? 1 : t, buf, rowOffset + x * 4, x, y);
     }
   }
   ctx.putImageData(img, 0, 0);
@@ -413,22 +540,3 @@ function clamp255(v: number): number {
   return Math.max(0, Math.min(255, Number.isFinite(v) ? v : 0));
 }
 
-/* ============================================================
- * Legacy export kept for back-compat with the existing canvasBackend call.
- * Returns a CanvasGradient for native paths or null for procedural — the
- * backend should prefer paintGradientFill when possible.
- * ============================================================ */
-
-export function createGradient(
-  ctx: CanvasRenderingContext2D,
-  node: NonTextNode,
-  fill: GradientFill,
-  frameOverride?: Frame,
-): CanvasGradient | null {
-  const frame = frameOverride ?? node.frame;
-  if (frame.width <= 0 || frame.height <= 0) return null;
-  if (fill.stops.length === 0) return null;
-  if (fill.gradientType === "linear") return buildLinearGradient(ctx, frame, fill);
-  if (fill.gradientType === "radial") return buildRadialGradient(ctx, frame, fill);
-  return null; // procedural — caller should use paintGradientFill instead.
-}

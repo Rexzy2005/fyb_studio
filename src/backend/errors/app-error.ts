@@ -9,7 +9,15 @@ export type AppErrorCode =
   | "TEMPLATE_LOCKED"
   | "WRONG_DEPARTMENT"
   | "INVALID_PASSCODE"
-  | "INTERNAL_ERROR";
+  | "INTERNAL_ERROR"
+  // Payment + download flow
+  | "PAYMENT_NOT_CONFIGURED"
+  | "PAYMENT_NOT_FOUND"
+  | "PAYMENT_NOT_SUCCESSFUL"
+  | "PAYMENT_AMOUNT_MISMATCH"
+  | "PAYMENT_VERIFY_FAILED"
+  | "PAYMENT_REQUIRED"
+  | "BAD_SIGNATURE";
 
 export class AppError extends Error {
   readonly code: AppErrorCode;

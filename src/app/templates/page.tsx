@@ -364,11 +364,18 @@ export default function UserTemplatesPage() {
         </div>
       </section>
 
-      {/* GRID */}
+      {/* GRID
+          Breakpoint ladder:
+            mobile  (default) → 2 cols, tight gap so cards stay readable on
+                                small phones
+            sm   (>= 640px)   → 2 cols with a slightly larger gap
+            md   (>= 768px)   → 3 cols (tablets / smaller laptops)
+            xl   (>= 1280px)  → 4 cols (standard desktops)
+            2xl  (>= 1536px)  → 5 cols (large monitors) */}
       <section className="relative z-10">
-        <div className="mx-auto max-w-[92rem] px-5 pb-24 pt-10 sm:px-10 sm:pt-14">
+        <div className="mx-auto max-w-[92rem] px-3 pb-24 pt-8 sm:px-10 sm:pt-14">
           {initialLoad ? (
-            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+            <div className="grid grid-cols-2 gap-3 sm:gap-4 md:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
               {Array.from({ length: 8 }).map((_, i) => (
                 <SkeletonTile key={i} index={i} />
               ))}
@@ -382,7 +389,7 @@ export default function UserTemplatesPage() {
               }}
             />
           ) : (
-            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+            <div className="grid grid-cols-2 gap-3 sm:gap-4 md:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
               {filtered.map((t, idx) => (
                 <div
                   key={t.id}
@@ -477,46 +484,59 @@ function CinemaCard({
       href={`/templates/${t.id}/use`}
       onClick={(e) => onClick(e, t)}
       onPointerMove={(e) => {
+        // 3D tilt on pointer-capable devices only. Touch screens skip this
+        // entirely so a tap doesn't leave the card stuck in a tilted state.
         const el = ref.current;
         if (!el) return;
         if (!window.matchMedia("(hover: hover)").matches) return;
         const r = el.getBoundingClientRect();
         const x = (e.clientX - r.left) / r.width - 0.5;
         const y = (e.clientY - r.top) / r.height - 0.5;
-        el.style.transform = `perspective(1000px) rotateX(${-y * 6}deg) rotateY(${x * 8}deg) translateY(-3px)`;
+        el.style.transform = `perspective(1000px) rotateX(${-y * 5}deg) rotateY(${x * 7}deg) translateY(-3px)`;
       }}
       onPointerLeave={() => {
         if (ref.current) ref.current.style.transform = "";
       }}
-      className="group relative block overflow-hidden border border-[var(--rule)] bg-[var(--night-2)] transition-transform duration-300 will-change-transform"
+      className="group relative block overflow-hidden border border-[var(--rule)] bg-[var(--night-2)] shadow-[0_1px_0_rgba(255,255,255,0.04)_inset,0_8px_30px_-12px_rgba(0,0,0,0.6)] transition-all duration-300 will-change-transform hover:border-[var(--accent)]/40 hover:shadow-[0_1px_0_rgba(255,255,255,0.06)_inset,0_18px_40px_-12px_rgba(0,0,0,0.7)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]/60"
       aria-label={`Use template ${t.name}`}
     >
-      <div className="relative aspect-[4/5] w-full overflow-hidden">
+      {/* Cover area — fixed 4/5 portrait so every card lines up vertically
+          regardless of how the source PNG was cropped. Inner padding scales
+          with breakpoint so the design actually shows through on small
+          phones (where p-3 was eating ~25% of the cover area). */}
+      <div className="relative aspect-[4/5] w-full overflow-hidden bg-linear-to-br from-[var(--night-2)] to-[var(--night-3)]">
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
           src={t.coverUrl}
           alt={`${t.name} preview`}
-          className="absolute inset-0 h-full w-full object-contain p-3 transition-transform duration-700 ease-out group-hover:scale-[1.04]"
+          loading="lazy"
+          decoding="async"
+          className="absolute inset-0 h-full w-full object-contain p-1.5 transition-transform duration-700 ease-out group-hover:scale-[1.04] sm:p-3"
         />
         <div
-          className="pointer-events-none absolute inset-0 ring-1 ring-inset ring-white/5"
+          className="pointer-events-none absolute inset-0 ring-1 ring-inset ring-white/[0.06]"
           aria-hidden
         />
+
+        {/* Index chip — desktop-only. On mobile the card is too small to
+            justify dedicating corner real-estate to a numeral; the category
+            badge carries enough information by itself. */}
         <div
-          className="absolute left-2.5 top-2.5 bg-[var(--accent)] px-1.5 py-0.5 text-[9px] uppercase tracking-[0.32em] text-[var(--night)]"
+          className="absolute left-2 top-2 hidden bg-[var(--accent)] px-1.5 py-0.5 text-[9px] uppercase tracking-[0.32em] text-[var(--night)] sm:block"
           style={mono}
         >
           {String(index + 1).padStart(2, "0")}
         </div>
         <div
-          className="absolute right-2.5 top-2.5 border border-[var(--paper)]/30 bg-[var(--night)]/80 px-2 py-0.5 text-[9px] uppercase tracking-[0.32em] text-[var(--paper)] backdrop-blur"
+          className="absolute right-1.5 top-1.5 border border-[var(--paper)]/30 bg-[var(--night)]/80 px-1.5 py-0.5 text-[8.5px] uppercase tracking-[0.28em] text-[var(--paper)] backdrop-blur sm:right-2.5 sm:top-2.5 sm:px-2 sm:text-[9px] sm:tracking-[0.32em]"
           style={mono}
         >
           {deriveCategoryLabel(t)}
         </div>
 
-        {/* hover overlay */}
-        <div className="pointer-events-none absolute inset-0 flex items-end bg-linear-to-t from-[var(--night)]/95 via-[var(--night)]/40 to-transparent opacity-0 transition-opacity duration-300 group-hover:opacity-100">
+        {/* Hover overlay — desktop reveal. On touch devices the card is the
+            tap target; the always-visible footer carries the CTA copy. */}
+        <div className="pointer-events-none absolute inset-0 hidden items-end bg-linear-to-t from-[var(--night)]/95 via-[var(--night)]/45 to-transparent opacity-0 transition-opacity duration-300 group-hover:opacity-100 sm:flex">
           <div className="w-full p-4">
             <div
               className="text-[10px] uppercase tracking-[0.36em] text-[var(--accent)]"
@@ -532,33 +552,46 @@ function CinemaCard({
         </div>
       </div>
 
-      <div className="border-t border-[var(--rule)] p-3 sm:p-4">
+      {/* Footer — name + status line. Tighter on mobile, taller on desktop. */}
+      <div className="border-t border-[var(--rule)] p-2.5 sm:p-4">
         <div
-          className="truncate text-[15px] leading-[1.1]"
+          className="truncate text-[12.5px] leading-[1.15] sm:text-[15px] sm:leading-[1.1]"
           style={{ ...displayWide, fontWeight: 700 }}
+          title={t.name}
         >
           {t.name}
         </div>
-        <div
-          className="mt-1 text-[10px] uppercase tracking-[0.32em] text-[var(--paper-faint)]"
-          style={mono}
-        >
-          Ready to personalize
+        <div className="mt-1 flex items-center justify-between gap-2">
+          <span
+            className="truncate text-[8.5px] uppercase tracking-[0.28em] text-[var(--paper-faint)] sm:text-[10px] sm:tracking-[0.32em]"
+            style={mono}
+          >
+            Tap to open
+          </span>
+          <span
+            className="hidden text-[10px] uppercase tracking-[0.32em] text-[var(--accent)]/80 sm:inline-block"
+            style={mono}
+          >
+            ↗
+          </span>
         </div>
       </div>
     </Link>
   );
 }
 
-function SkeletonTile({ index }: { index: number }) {
-  const ratios = [4 / 5, 3 / 4, 5 / 7, 4 / 5];
-  const ratio = ratios[index % ratios.length] ?? 4 / 5;
+function SkeletonTile({ index: _index }: { index: number }) {
+  // Aspect + footer height match the real card so cards don't jump when the
+  // skeleton swaps out for content.
   return (
-    <div className="overflow-hidden border border-[var(--rule)] bg-[var(--night-2)]">
-      <div className="fyb-skeleton-shine relative w-full overflow-hidden" style={{ aspectRatio: ratio }} />
-      <div className="space-y-2 p-3 sm:p-4">
-        <div className="fyb-skeleton h-3 w-3/4 rounded-full" />
-        <div className="fyb-skeleton h-2.5 w-1/2 rounded-full" />
+    <div className="overflow-hidden border border-[var(--rule)] bg-[var(--night-2)] shadow-[0_8px_30px_-12px_rgba(0,0,0,0.6)]">
+      <div
+        className="fyb-skeleton-shine relative w-full overflow-hidden"
+        style={{ aspectRatio: 4 / 5 }}
+      />
+      <div className="border-t border-[var(--rule)] p-2.5 sm:p-4">
+        <div className="fyb-skeleton h-3 w-3/4 rounded-full sm:h-3.5" />
+        <div className="fyb-skeleton mt-1.5 h-2 w-1/2 rounded-full sm:mt-2 sm:h-2.5" />
       </div>
     </div>
   );

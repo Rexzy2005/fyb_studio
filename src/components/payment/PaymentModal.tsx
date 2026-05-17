@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { GraduationCap, ShieldCheck, Zap, X } from "lucide-react";
+import { X } from "lucide-react";
 
 import {
   initializePayment,
@@ -211,123 +211,42 @@ export function PaymentModal({
             paddingBottom: "calc(env(safe-area-inset-bottom) + 16px)",
           }}
         >
-          {/* Eyebrow + header */}
-          <div className="px-5 pt-5 pb-3 sm:px-6 sm:pt-6">
-            <div style={{ display: "inline-flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
-              <span
-                style={{
-                  display: "inline-flex", alignItems: "center", justifyContent: "center",
-                  width: 22, height: 22,
-                  borderRadius: 7,
-                  background: "rgba(255,215,0,0.12)",
-                  color: "#FFD700",
-                  border: "1px solid rgba(255,215,0,0.28)",
-                }}
-              >
-                <GraduationCap size={13} strokeWidth={2} />
-              </span>
-              <span
-                style={{
-                  fontFamily: FONT_MONO, fontSize: 9, letterSpacing: "0.26em",
-                  color: "rgba(255,215,0,0.8)", textTransform: "uppercase", fontWeight: 700,
-                }}
-              >
-                Unlock download
-              </span>
-            </div>
-
-            <h2
-              style={{
-                fontFamily: FONT_JKT, fontWeight: 800,
-                fontSize: "clamp(22px, 4.8vw, 28px)",
-                color: "#fff", letterSpacing: "-0.025em",
-                lineHeight: 1.15, margin: 0,
-              }}
-            >
-              Download your design
-            </h2>
-            <p
-              style={{
-                fontFamily: FONT_SANS, fontSize: 13.5, lineHeight: 1.55,
-                color: "rgba(255,255,255,0.5)",
-                marginTop: 6,
-              }}
-            >
-              <span style={{ color: "rgba(255,255,255,0.85)", fontWeight: 500 }}>{templateName}</span>
-              {" "}· one-time unlock · re-download free for 24 hours
-            </p>
-          </div>
-
-          {/* Price card */}
-          <div className="mx-5 mb-5 sm:mx-6">
+          {/* Compact header — template name + big price, nothing else. */}
+          <div className="px-5 pt-5 pb-5 sm:px-6 sm:pt-6 text-center">
             <div
               style={{
-                position: "relative",
-                borderRadius: 18,
-                padding: "20px 22px",
-                background:
-                  "linear-gradient(140deg, rgba(255,215,0,0.16), rgba(255,140,66,0.06))",
-                border: "1px solid rgba(255,215,0,0.32)",
-                boxShadow: "inset 0 1px 0 rgba(255,255,255,0.06), 0 8px 22px rgba(255,180,0,0.12)",
-                overflow: "hidden",
+                fontFamily: FONT_MONO, fontSize: 9, letterSpacing: "0.28em",
+                color: "rgba(255,215,0,0.7)", textTransform: "uppercase",
+                fontWeight: 700, marginBottom: 12,
               }}
             >
-              <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", gap: 16 }}>
-                <div style={{ minWidth: 0 }}>
-                  <div
-                    style={{
-                      fontFamily: FONT_MONO, fontSize: 9, letterSpacing: "0.22em",
-                      color: "rgba(255,215,0,0.7)", textTransform: "uppercase",
-                      fontWeight: 700,
-                    }}
-                  >
-                    One-off payment
-                  </div>
-                  <div
-                    style={{
-                      fontFamily: FONT_JKT,
-                      fontSize: "clamp(36px, 8vw, 44px)",
-                      fontWeight: 900,
-                      letterSpacing: "-0.04em",
-                      lineHeight: 1,
-                      marginTop: 6,
-                      color: "#fff",
-                      fontVariantNumeric: "tabular-nums",
-                    }}
-                  >
-                    ₦{(priceNgn ?? 1000).toLocaleString()}
-                  </div>
-                  <div
-                    style={{
-                      fontFamily: FONT_SANS, fontSize: 11.5,
-                      color: "rgba(255,255,255,0.5)", marginTop: 8,
-                    }}
-                  >
-                    Print-ready PNG · personal use
-                  </div>
-                </div>
-                <div
-                  aria-hidden
-                  style={{
-                    flexShrink: 0,
-                    display: "grid", placeItems: "center",
-                    width: 56, height: 56,
-                    borderRadius: "50%",
-                    background: "radial-gradient(circle at 30% 30%, #FFD700, #FFB400)",
-                    color: "#0a0a0a",
-                    boxShadow: "0 8px 22px rgba(255,180,0,0.45), inset 0 1px 0 rgba(255,255,255,0.35)",
-                  }}
-                >
-                  <GraduationCap size={26} strokeWidth={1.8} />
-                </div>
-              </div>
+              Unlock download
             </div>
-          </div>
-
-          {/* Trust strip */}
-          <div className="mx-5 mb-4 grid grid-cols-2 gap-2 sm:mx-6">
-            <TrustChip icon={<Zap size={11} />} label="Re-downloads" sub="Free for 24 h" />
-            <TrustChip icon={<ShieldCheck size={11} />} label="Secure" sub="Paystack" />
+            <h2
+              className="truncate"
+              style={{
+                fontFamily: FONT_JKT, fontWeight: 800,
+                fontSize: "clamp(18px, 4.4vw, 22px)",
+                color: "#fff", letterSpacing: "-0.02em",
+                lineHeight: 1.2, margin: 0,
+              }}
+            >
+              {templateName}
+            </h2>
+            <div
+              style={{
+                fontFamily: FONT_JKT,
+                fontSize: "clamp(44px, 11vw, 56px)",
+                fontWeight: 900,
+                letterSpacing: "-0.04em",
+                lineHeight: 1,
+                marginTop: 16,
+                color: "#fff",
+                fontVariantNumeric: "tabular-nums",
+              }}
+            >
+              ₦{(priceNgn ?? 1000).toLocaleString()}
+            </div>
           </div>
 
           {/* Status / error banners */}
@@ -430,15 +349,6 @@ export function PaymentModal({
               }
             `}</style>
 
-            <p
-              style={{
-                marginTop: 14, textAlign: "center",
-                fontFamily: FONT_MONO, fontSize: 9, letterSpacing: "0.18em",
-                color: "rgba(255,255,255,0.32)", textTransform: "uppercase",
-              }}
-            >
-              Receipt emailed · Card details never shared
-            </p>
           </div>
         </div>
       </div>
@@ -446,53 +356,3 @@ export function PaymentModal({
   );
 }
 
-function TrustChip({
-  icon, label, sub,
-}: {
-  icon: React.ReactNode;
-  label: string;
-  sub: string;
-}) {
-  return (
-    <div
-      style={{
-        display: "flex", alignItems: "center", gap: 8,
-        padding: "10px 12px",
-        borderRadius: 12,
-        background: "rgba(255,255,255,0.025)",
-        border: "1px solid rgba(255,215,0,0.14)",
-      }}
-    >
-      <span
-        style={{
-          display: "inline-flex", alignItems: "center", justifyContent: "center",
-          width: 22, height: 22, borderRadius: 6,
-          background: "rgba(255,215,0,0.12)",
-          color: "#FFD700",
-          flexShrink: 0,
-        }}
-      >
-        {icon}
-      </span>
-      <div style={{ display: "flex", flexDirection: "column", minWidth: 0 }}>
-        <span
-          style={{
-            fontFamily: FONT_MONO, fontSize: 8.5, letterSpacing: "0.18em",
-            color: "rgba(255,215,0,0.65)", textTransform: "uppercase", fontWeight: 700,
-          }}
-        >
-          {label}
-        </span>
-        <span
-          style={{
-            fontFamily: FONT_SANS, fontSize: 11.5,
-            color: "rgba(255,255,255,0.7)", marginTop: 1,
-            whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
-          }}
-        >
-          {sub}
-        </span>
-      </div>
-    </div>
-  );
-}

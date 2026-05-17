@@ -5,6 +5,7 @@ import { auth } from "@/backend/auth/config";
 import { getTemplateById } from "@/backend/services/template.service";
 import { getLockViewForTemplate } from "@/backend/services/templateLock.service";
 import { PreviewLockPanel } from "@/components/templates/PreviewLockPanel";
+import { ShareButton } from "@/components/templates/ShareButton";
 import { TopNav } from "@/components/ui/TopNav";
 import { Card } from "@/components/ui/Card";
 import { ButtonLink } from "@/components/ui/Button";
@@ -45,7 +46,7 @@ export default async function TemplatePreviewPage({
     <div className="min-h-dvh" style={{ background: "var(--canvas)", color: "var(--ink)" }}>
       <TopNav cta={undefined} />
 
-      <header className="mx-auto flex w-full max-w-[1200px] items-center justify-between gap-4 px-5 sm:px-8 pt-8">
+      <header className="mx-auto flex w-full max-w-[1200px] items-center justify-between gap-3 px-5 sm:px-8 pt-8">
         <Link
           href="/templates"
           className="inline-flex items-center gap-2"
@@ -53,9 +54,17 @@ export default async function TemplatePreviewPage({
         >
           <ArrowLeftIcon /> Back to gallery
         </Link>
-        <ButtonLink href={`/templates/${template.id}/use`} variant="primary" size="md">
-          Use design
-        </ButtonLink>
+        <div className="flex items-center gap-2">
+          <ShareButton
+            templateId={template.id}
+            templateName={template.name}
+            variant="pill"
+            size={38}
+          />
+          <ButtonLink href={`/templates/${template.id}/use`} variant="primary" size="md">
+            Use design
+          </ButtonLink>
+        </div>
       </header>
 
       <main className="mx-auto grid w-full max-w-[1200px] gap-8 px-5 sm:px-8 pb-20 pt-6 lg:grid-cols-12">

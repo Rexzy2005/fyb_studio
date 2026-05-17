@@ -357,7 +357,7 @@ describe("FigmaDesignV1 adapter", () => {
 
   it("does not forward maskType when isMask is false", () => {
     const fixture = makeFixture();
-    // The plugin emits maskType: 'ALPHA' on every node — verify it's stripped
+    // The plugin emits maskType: 'ALPHA' on every node - verify it's stripped
     // for nodes that aren't actually masks.
     const rectRaw = (fixture.pages[0].children[0] as unknown as { children: Array<Record<string, unknown>> })
       .children[0];
@@ -478,7 +478,7 @@ describe("FigmaDesignV1 adapter", () => {
     const fixture = makeFixture();
     const rect = (fixture.pages[0].children[0] as unknown as { children: Array<Record<string, unknown>> })
       .children[0];
-    // Same transform as 1:7 in Untitled.json — cssInspect reports center at 50% 50%.
+    // Same transform as 1:7 in Untitled.json - cssInspect reports center at 50% 50%.
     rect.fills = [
       {
         type: "GRADIENT_ANGULAR",
@@ -500,7 +500,7 @@ describe("FigmaDesignV1 adapter", () => {
     if (node?.kind !== "shape") throw new Error("expected shape");
     const grad = node.fills[0];
     if (grad.kind !== "gradient") throw new Error("expected gradient");
-    // Angular handle[0] is the center — should land at the bbox center.
+    // Angular handle[0] is the center - should land at the bbox center.
     expect(grad.handlePositions?.[0]).toEqual({ x: 0.5, y: 0.5 });
   });
 
@@ -588,7 +588,7 @@ describe("FigmaDesignV1 adapter", () => {
     const fixture = makeFixture();
     const card = fixture.pages[0].children[0] as unknown as { children: Array<Record<string, unknown>> };
     const text = card.children[1] as Record<string, unknown>;
-    // Force figma.mixed envelopes on every per-character field — what Figma
+    // Force figma.mixed envelopes on every per-character field - what Figma
     // returns when runs disagree. The adapter should still surface the first
     // run's values on text.* so the renderer can paint sensible characters
     // when the user starts typing into the form input.

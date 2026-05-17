@@ -70,7 +70,7 @@ export function UsernameField({
       case "checking":
         return { color: "var(--ink-faint)", text: "Checking…" };
       case "available":
-        return { color: "var(--accent-blue)", text: "Username available" };
+        return { color: "#FFD700", text: "Username available" };
       case "unavailable":
         return { color: "var(--semantic-danger)", text: status.reason };
       default:
@@ -91,15 +91,15 @@ export function UsernameField({
       <div
         className="flex items-center gap-2 rounded-[10px] px-3"
         style={{
-          background: "var(--surface-1)",
+          background: focused ? "rgba(255,255,255,0.04)" : "rgba(255,255,255,0.025)",
           border: "1px solid",
           borderColor: errorTone
             ? "var(--semantic-danger)"
             : focused
-              ? "var(--accent-blue)"
-              : "var(--hairline)",
-          boxShadow: focused && !errorTone ? "0 0 0 3px var(--accent-blue-soft)" : "none",
-          transition: "border-color 140ms ease, box-shadow 140ms ease",
+              ? "rgba(255,215,0,0.6)"
+              : "rgba(255,215,0,0.18)",
+          boxShadow: focused && !errorTone ? "0 0 0 3px rgba(255,215,0,0.15)" : "none",
+          transition: "border-color 140ms ease, box-shadow 140ms ease, background 140ms ease",
         }}
       >
         <span style={{ ...bodyMd, color: "var(--ink-faint)", fontWeight: 600 }}>@</span>
@@ -137,7 +137,7 @@ function StatusDot({ status }: { status: Status }) {
       case "checking":
         return "var(--ink-faint)";
       case "available":
-        return "var(--accent-blue)";
+        return "#FFD700";
       case "unavailable":
         return "var(--semantic-danger)";
       default:

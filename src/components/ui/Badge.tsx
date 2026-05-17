@@ -16,8 +16,8 @@ function toneStyle(tone: BadgeTone): CSSProperties {
   switch (tone) {
     case "accent":
       return {
-        background: "var(--accent-blue-soft)",
-        color: "var(--accent-blue)",
+        background: "rgba(255,215,0,0.15)",
+        color: "#FFD700",
         border: "1px solid rgba(0, 153, 255, 0.28)",
       };
     case "success":

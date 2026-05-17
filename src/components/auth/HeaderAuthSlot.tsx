@@ -53,14 +53,16 @@ export function HeaderAuthSlot() {
     return (
       <Link
         href="/signin"
-        className="inline-flex items-center justify-center rounded-full transition hover:scale-[0.98]"
+        className="inline-flex items-center justify-center rounded-full transition active:scale-95"
         style={{
           ...caption,
           height: 36,
-          padding: "0 16px",
-          background: "var(--surface-2)",
-          color: "var(--ink)",
-          border: "1px solid var(--hairline)",
+          padding: "0 18px",
+          background: "rgba(255,215,0,0.08)",
+          color: "#FFD700",
+          border: "1px solid rgba(255,215,0,0.28)",
+          fontWeight: 600,
+          letterSpacing: "0.04em",
         }}
       >
         Sign in
@@ -94,10 +96,13 @@ export function HeaderAuthSlot() {
         aria-controls={menuId}
         aria-label={`Account menu - ${name}`}
         onClick={() => setOpen((v) => !v)}
-        className="inline-flex h-9 w-9 items-center justify-center overflow-hidden rounded-full transition"
+        className="inline-flex h-9 w-9 items-center justify-center overflow-hidden rounded-full transition active:scale-95"
         style={{
-          background: "var(--surface-2)",
-          border: "1px solid var(--hairline)",
+          background: "rgba(255,215,0,0.06)",
+          border: `1px solid ${open ? "rgba(255,215,0,0.55)" : "rgba(255,215,0,0.28)"}`,
+          boxShadow: open
+            ? "0 0 0 3px rgba(255,215,0,0.18), 0 4px 12px rgba(255,180,0,0.25)"
+            : "0 4px 10px rgba(255,180,0,0.15)",
         }}
       >
         {image ? (
@@ -109,7 +114,7 @@ export function HeaderAuthSlot() {
             className="h-full w-full object-cover"
           />
         ) : (
-          <span style={{ ...bodySm, color: "var(--ink)", fontWeight: 600 }}>{initial}</span>
+          <span style={{ ...bodySm, color: "#FFD700", fontWeight: 700 }}>{initial}</span>
         )}
       </button>
 
@@ -118,21 +123,39 @@ export function HeaderAuthSlot() {
           id={menuId}
           role="menu"
           aria-label="Account menu"
-          className="absolute right-0 top-12 z-50 w-64 overflow-hidden"
+          className="absolute right-0 top-12 z-50 w-72 overflow-hidden"
           style={{
-            background: "var(--surface-1)",
-            border: "1px solid var(--hairline)",
+            background: "linear-gradient(180deg, rgba(20,16,4,0.98), rgba(8,8,8,0.98))",
+            border: "1px solid rgba(255,215,0,0.22)",
             borderRadius: 16,
-            boxShadow: "0 24px 60px rgba(0,0,0,0.5)",
+            boxShadow:
+              "0 30px 80px rgba(0,0,0,0.6), 0 0 60px rgba(255,180,0,0.06), inset 0 1px 0 rgba(255,255,255,0.04)",
+            backdropFilter: "blur(16px)",
+            position: "absolute",
           }}
         >
+          {/* Gold top accent stripe */}
           <div
-            className="flex items-center gap-3 px-4 py-3"
-            style={{ borderBottom: "1px solid var(--hairline)" }}
+            aria-hidden
+            style={{
+              position: "absolute", top: 0, left: 0, right: 0, height: 2,
+              background: "linear-gradient(90deg, transparent, #FFD700, transparent)",
+              pointerEvents: "none",
+            }}
+          />
+
+          {/* Profile header */}
+          <div
+            className="flex items-center gap-3 px-4 py-4"
+            style={{ borderBottom: "1px solid rgba(255,215,0,0.12)" }}
           >
             <div
-              className="grid h-10 w-10 place-items-center overflow-hidden rounded-full"
-              style={{ background: "var(--surface-2)", border: "1px solid var(--hairline)" }}
+              className="grid h-12 w-12 shrink-0 place-items-center overflow-hidden rounded-full"
+              style={{
+                background: "rgba(255,215,0,0.08)",
+                border: "1px solid rgba(255,215,0,0.3)",
+                boxShadow: "0 6px 16px rgba(255,180,0,0.2)",
+              }}
             >
               {image ? (
                 // eslint-disable-next-line @next/next/no-img-element
@@ -143,40 +166,59 @@ export function HeaderAuthSlot() {
                   className="h-full w-full object-cover"
                 />
               ) : (
-                <span style={{ ...bodySm, color: "var(--ink)", fontWeight: 600 }}>{initial}</span>
+                <span style={{ ...bodySm, color: "#FFD700", fontWeight: 800, fontSize: 16 }}>{initial}</span>
               )}
             </div>
-            <div className="min-w-0">
-              <div className="truncate" style={{ ...bodySm, color: "var(--ink)", fontWeight: 600 }}>
+            <div className="min-w-0 flex-1">
+              <div
+                className="truncate"
+                style={{ fontFamily: "var(--font-plus-jakarta, var(--font-geist-sans)), sans-serif", fontWeight: 700, fontSize: 14, color: "#fff", letterSpacing: "-0.01em" }}
+              >
                 {name}
               </div>
               {email ? (
-                <div className="truncate" style={{ ...micro, color: "var(--ink-faint)" }}>
+                <div
+                  className="truncate"
+                  style={{ fontFamily: "var(--font-geist-mono), monospace", fontSize: 10, color: "rgba(255,215,0,0.55)", letterSpacing: "0.04em", marginTop: 2 }}
+                >
                   {email}
                 </div>
               ) : null}
             </div>
           </div>
 
-          <div className="py-1">
+          {/* Menu items */}
+          <div className="py-1.5">
             <MenuLink href="/dashboard" onClick={() => setOpen(false)}>
               <DashboardIcon /> Dashboard
             </MenuLink>
             <MenuLink href="/dashboard#recent-downloads" onClick={() => setOpen(false)}>
               <DownloadsIcon /> Downloads
             </MenuLink>
+          </div>
+
+          {/* Sign out — separated, danger tone */}
+          <div style={{ borderTop: "1px solid rgba(255,215,0,0.12)" }} className="py-1.5">
             <button
               type="button"
               role="menuitem"
               disabled={signingOut}
               onClick={handleSignOut}
-              className="flex w-full items-center gap-2 px-4 py-2.5 text-left transition disabled:opacity-60"
+              className="flex w-full items-center gap-2.5 px-4 py-2.5 text-left transition disabled:opacity-60"
               style={{
-                ...bodySm,
-                color: "var(--semantic-danger)",
+                fontFamily: "var(--font-geist-sans), sans-serif",
+                fontSize: 13,
+                fontWeight: 500,
+                color: "rgba(255,255,255,0.75)",
               }}
-              onMouseEnter={(e) => (e.currentTarget.style.background = "rgba(239, 68, 68, 0.08)")}
-              onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.background = "rgba(239, 68, 68, 0.08)";
+                e.currentTarget.style.color = "#ef4444";
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.background = "transparent";
+                e.currentTarget.style.color = "rgba(255,255,255,0.75)";
+              }}
             >
               <SignOutIcon />
               {signingOut ? "Signing out…" : "Sign out"}
@@ -202,10 +244,21 @@ function MenuLink({
       href={href}
       role="menuitem"
       onClick={onClick}
-      className="flex items-center gap-2 px-4 py-2.5 transition"
-      style={{ ...bodySm, color: "var(--ink)" }}
-      onMouseEnter={(e) => (e.currentTarget.style.background = "var(--surface-2)")}
-      onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
+      className="flex items-center gap-2.5 px-4 py-2.5 transition"
+      style={{
+        fontFamily: "var(--font-geist-sans), sans-serif",
+        fontSize: 13,
+        fontWeight: 500,
+        color: "rgba(255,255,255,0.85)",
+      }}
+      onMouseEnter={(e) => {
+        e.currentTarget.style.background = "rgba(255,215,0,0.06)";
+        e.currentTarget.style.color = "#FFD700";
+      }}
+      onMouseLeave={(e) => {
+        e.currentTarget.style.background = "transparent";
+        e.currentTarget.style.color = "rgba(255,255,255,0.85)";
+      }}
     >
       {children}
     </Link>

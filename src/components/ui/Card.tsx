@@ -14,9 +14,18 @@ interface CardProps extends HTMLAttributes<HTMLDivElement> {
 }
 
 const VARIANT: Record<CardVariant, CSSProperties> = {
-  "surface-1": { background: "var(--surface-1)", border: "1px solid var(--hairline)" },
-  "surface-2": { background: "var(--surface-2)", border: "1px solid var(--hairline)" },
-  outline: { background: "transparent", border: "1px solid var(--hairline)" },
+  "surface-1": {
+    background: "linear-gradient(180deg, rgba(255,255,255,0.03), rgba(255,255,255,0.01))",
+    border: "1px solid rgba(255,215,0,0.14)",
+  },
+  "surface-2": {
+    background: "linear-gradient(180deg, rgba(255,215,0,0.04), rgba(255,255,255,0.01))",
+    border: "1px solid rgba(255,215,0,0.18)",
+  },
+  outline: {
+    background: "transparent",
+    border: "1px solid rgba(255,215,0,0.18)",
+  },
 };
 
 export function Card({
@@ -41,11 +50,11 @@ export function Card({
       className={className}
       style={merged}
       onMouseEnter={(e) => {
-        if (hover) e.currentTarget.style.borderColor = "var(--accent-blue)";
+        if (hover) e.currentTarget.style.borderColor = "rgba(255,215,0,0.5)";
         rest.onMouseEnter?.(e);
       }}
       onMouseLeave={(e) => {
-        if (hover) e.currentTarget.style.borderColor = "var(--hairline)";
+        if (hover) e.currentTarget.style.borderColor = "rgba(255,215,0,0.14)";
         rest.onMouseLeave?.(e);
       }}
       {...rest}

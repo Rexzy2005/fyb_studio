@@ -121,9 +121,24 @@ export function Modal({
             display: "flex",
             flexDirection: "column",
             overflow: "hidden",
+            background: "linear-gradient(180deg, rgba(20,16,4,0.96), rgba(8,8,8,0.98))",
+            border: "1px solid rgba(255,215,0,0.18)",
+            boxShadow: "0 40px 100px rgba(0,0,0,0.6), 0 0 80px rgba(255,180,0,0.08)",
+            position: "relative",
             ...panelStyle,
           }}
         >
+          {/* Gold top accent bar */}
+          {!fullscreen && (
+            <div
+              aria-hidden
+              style={{
+                position: "absolute", top: 0, left: 0, right: 0, height: 2,
+                background: "linear-gradient(90deg, transparent, #FFD700, #FF8C42, #FFD700, transparent)",
+                pointerEvents: "none",
+              }}
+            />
+          )}
           {(title || !hideClose) && (
             <div
               className="flex items-start justify-between gap-4"
@@ -147,11 +162,11 @@ export function Modal({
                   type="button"
                   onClick={onClose}
                   aria-label="Close"
-                  className="grid h-8 w-8 place-items-center rounded-full transition"
+                  className="grid h-8 w-8 place-items-center rounded-full transition hover:scale-105"
                   style={{
-                    background: "var(--surface-2)",
-                    border: "1px solid var(--hairline)",
-                    color: "var(--ink-muted)",
+                    background: "rgba(255,215,0,0.06)",
+                    border: "1px solid rgba(255,215,0,0.22)",
+                    color: "#FFD700",
                   }}
                 >
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round">
@@ -177,8 +192,8 @@ export function Modal({
               className="flex items-center justify-end gap-2"
               style={{
                 padding: "16px 24px",
-                borderTop: "1px solid var(--hairline)",
-                background: "var(--surface-1)",
+                borderTop: "1px solid rgba(255,215,0,0.12)",
+                background: "rgba(255,215,0,0.02)",
               }}
             >
               {footer}

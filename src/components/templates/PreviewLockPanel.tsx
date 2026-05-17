@@ -84,7 +84,7 @@ export function PreviewLockPanel({
         </h2>
         <p className="mt-2" style={{ ...bodyMd, color: "var(--ink-muted)" }}>
           Reserving this design makes it exclusive to your department. Members from your department
-          will be granted automatic access — no passcode needed. Other departments won&apos;t be able
+          will be granted automatic access - no passcode needed. Other departments won&apos;t be able
           to use it.
         </p>
 
@@ -126,7 +126,7 @@ export function PreviewLockPanel({
         {templateName} is reserved
       </h2>
       <p className="mt-1" style={{ ...caption, color: "var(--ink-muted)" }}>
-        Your department members can access this design automatically — no passcode or code sharing required.
+        Your department members can access this design automatically - no passcode or code sharing required.
         Students from other departments will be redirected.
       </p>
 

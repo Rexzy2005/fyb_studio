@@ -26,7 +26,7 @@ async function main() {
   const transport = getMailTransport();
   if (!transport) {
     console.error(
-      "[test-email] transport is null — one of SMTP_HOST/SMTP_PORT/SMTP_USER/SMTP_PASS is missing or env failed to load."
+      "[test-email] transport is null - one of SMTP_HOST/SMTP_PORT/SMTP_USER/SMTP_PASS is missing or env failed to load."
     );
     process.exit(1);
   }

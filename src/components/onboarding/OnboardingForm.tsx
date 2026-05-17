@@ -6,7 +6,6 @@ import type { DepartmentListItem } from "@/backend/services/department.service";
 import { UsernameField } from "@/components/onboarding/UsernameField";
 import { DepartmentSelect } from "@/components/onboarding/DepartmentSelect";
 import { safeReturnPath } from "@/lib/auth/safeRedirect";
-import { Button } from "@/components/ui/Button";
 import { bodySm, micro } from "@/lib/ui/typography";
 
 type ApiError = {
@@ -125,12 +124,17 @@ export function OnboardingForm({ returnTo }: { returnTo?: string }) {
       />
 
       <label
-        className="flex items-start gap-3 rounded-[12px] p-3 transition"
+        className="flex items-start gap-3 rounded-xl p-3.5 transition"
         style={{
-          background: headDisabled ? "var(--surface-2)" : "var(--surface-1)",
-          border: "1px solid var(--hairline)",
-          opacity: headDisabled ? 0.6 : 1,
+          background: isHead && !headDisabled
+            ? "linear-gradient(140deg, rgba(255,215,0,0.10), rgba(255,140,66,0.04))"
+            : "rgba(255,255,255,0.025)",
+          border: `1px solid ${
+            isHead && !headDisabled ? "rgba(255,215,0,0.4)" : "rgba(255,215,0,0.15)"
+          }`,
+          opacity: headDisabled ? 0.5 : 1,
           cursor: headDisabled ? "not-allowed" : "pointer",
+          boxShadow: isHead && !headDisabled ? "0 0 0 3px rgba(255,215,0,0.08)" : "none",
         }}
       >
         <input
@@ -138,15 +142,15 @@ export function OnboardingForm({ returnTo }: { returnTo?: string }) {
           checked={isHead}
           disabled={headDisabled}
           onChange={(e) => setIsHead(e.target.checked)}
-          className="mt-0.5 h-4 w-4"
-          style={{ accentColor: "var(--accent-blue)" }}
+          className="mt-0.5 h-4 w-4 shrink-0"
+          style={{ accentColor: "#FFD700" }}
         />
         <span className="flex flex-col gap-0.5">
-          <span style={{ ...bodySm, color: "var(--ink)", fontWeight: 600 }}>I am the department head</span>
-          <span style={{ ...micro, color: "var(--ink-faint)" }}>
+          <span style={{ ...bodySm, color: "#fff", fontWeight: 600 }}>I am the department head</span>
+          <span style={{ ...micro, color: "rgba(255,255,255,0.45)" }}>
             {selectedDept?.hasHead
               ? "This department already has a head."
-              : "Only one head per department."}
+              : "Only one head per department. Heads can reserve designs for their dept."}
           </span>
         </span>
       </label>
@@ -165,9 +169,38 @@ export function OnboardingForm({ returnTo }: { returnTo?: string }) {
         </div>
       ) : null}
 
-      <Button type="submit" variant="primary" size="lg" fullWidth loading={submitting} disabled={!canSubmit}>
-        {submitting ? "Setting up your account…" : "Continue to dashboard"}
-      </Button>
+      <button
+        type="submit"
+        disabled={!canSubmit}
+        className="group relative inline-flex w-full items-center justify-center gap-2.5 rounded-xl transition active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60"
+        style={{
+          height: 54,
+          padding: "0 24px",
+          background: "#FFD700",
+          color: "#000",
+          border: "1px solid #FFD700",
+          fontWeight: 800,
+          fontSize: 14,
+          letterSpacing: "0.02em",
+          boxShadow: canSubmit
+            ? "0 10px 28px rgba(255,180,0,0.35), inset 0 1px 0 rgba(255,255,255,0.25)"
+            : "none",
+        }}
+      >
+        {submitting ? (
+          <>
+            <span className="fyb-dots" aria-hidden>
+              <span /> <span /> <span />
+            </span>
+            <span>Setting things up</span>
+          </>
+        ) : (
+          <>
+            <span>Continue to dashboard</span>
+            <span aria-hidden className="transition group-hover:translate-x-1">→</span>
+          </>
+        )}
+      </button>
     </form>
   );
 }

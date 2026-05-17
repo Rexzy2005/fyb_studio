@@ -36,7 +36,7 @@ export function SectionHeader({
             className="inline-block h-1.5 w-1.5 rounded-full"
             style={{
               background:
-                tone === "accent" ? "var(--accent-blue)" : "var(--ink-muted)",
+                tone === "accent" ? "#FFD700" : "var(--ink-muted)",
             }}
             aria-hidden
           />

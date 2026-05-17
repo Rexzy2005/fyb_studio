@@ -142,7 +142,7 @@ export function FeedbackModal({
 
         {stage.kind === "success" ? (
           <div className="px-6 py-10 text-center">
-            <div className="mx-auto mb-3 grid h-12 w-12 place-items-center rounded-full bg-[var(--accent-blue-soft)] text-[var(--accent-blue)] dark:bg-[var(--accent-blue-soft)] dark:text-[var(--accent-blue)]">
+            <div className="mx-auto mb-3 grid h-12 w-12 place-items-center rounded-full bg-[rgba(255,215,0,0.15)] text-[#FFD700] dark:bg-[rgba(255,215,0,0.15)] dark:text-[#FFD700]">
               <Check className="h-5 w-5" />
             </div>
             <div className="text-sm font-semibold text-ink dark:text-ink">
@@ -179,9 +179,9 @@ export function FeedbackModal({
                       aria-label={r.label}
                       onClick={() => setRating(r.value)}
                       className={
-                        "group flex flex-col items-center gap-1 rounded-xl border px-1 py-2 text-2xl transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent-blue-ring)] " +
+                        "group flex flex-col items-center gap-1 rounded-xl border px-1 py-2 text-2xl transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[rgba(255,215,0,0.4)] " +
                         (selected
-                          ? "border-[var(--accent-blue)] bg-[var(--accent-blue-soft)] dark:border-[var(--accent-blue)] dark:bg-[var(--accent-blue-soft)]"
+                          ? "border-[#FFD700] bg-[rgba(255,215,0,0.15)] dark:border-[#FFD700] dark:bg-[rgba(255,215,0,0.15)]"
                           : "border-hairline bg-surface-1 hover:border-hairline hover:bg-canvas dark:border-hairline dark:bg-surface-1 dark:hover:bg-surface-2")
                       }
                     >
@@ -190,7 +190,7 @@ export function FeedbackModal({
                         className={
                           "text-[10px] font-medium tracking-wide " +
                           (selected
-                            ? "text-[var(--accent-blue)] dark:text-[var(--accent-blue)]"
+                            ? "text-[#FFD700] dark:text-[#FFD700]"
                             : "text-ink-faint dark:text-ink-faint")
                         }
                       >
@@ -216,9 +216,9 @@ export function FeedbackModal({
                       type="button"
                       onClick={() => toggleCategory(key)}
                       className={
-                        "inline-flex items-center rounded-full border px-2.5 py-1 text-xs font-medium transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent-blue-ring)] " +
+                        "inline-flex items-center rounded-full border px-2.5 py-1 text-xs font-medium transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[rgba(255,215,0,0.4)] " +
                         (selected
-                          ? "border-[var(--accent-blue)] bg-[var(--accent-blue)] text-white dark:bg-[var(--accent-blue)]"
+                          ? "border-[#FFD700] bg-[#FFD700] text-white dark:bg-[#FFD700]"
                           : "border-hairline bg-surface-1 text-ink-muted hover:border-hairline hover:bg-canvas dark:border-hairline dark:bg-surface-1 dark:text-ink dark:hover:bg-surface-2")
                       }
                       aria-pressed={selected}
@@ -240,7 +240,7 @@ export function FeedbackModal({
                 onChange={(e) => setMessage(e.target.value.slice(0, 4000))}
                 rows={4}
                 placeholder="Tell us what's on your mind…"
-                className="mt-1.5 w-full resize-none rounded-xl border border-hairline bg-surface-1 px-3 py-2 text-sm text-ink outline-none transition focus-visible:ring-2 focus-visible:ring-[var(--accent-blue-ring)] dark:border-hairline dark:bg-surface-1 dark:text-ink"
+                className="mt-1.5 w-full resize-none rounded-xl border border-hairline bg-surface-1 px-3 py-2 text-sm text-ink outline-none transition focus-visible:ring-2 focus-visible:ring-[rgba(255,215,0,0.4)] dark:border-hairline dark:bg-surface-1 dark:text-ink"
               />
               <div className="mt-1 text-right text-[10.5px] text-ink-faint">
                 {message.length}/4000
@@ -266,7 +266,12 @@ export function FeedbackModal({
                 type="button"
                 onClick={handleSubmit}
                 disabled={submitting || !rating}
-                className="inline-flex h-10 items-center justify-center rounded-xl bg-surface-1 px-4 text-sm font-medium text-white transition hover:bg-surface-2 disabled:cursor-not-allowed disabled:opacity-60 dark:bg-[var(--accent-blue)] dark:hover:bg-[var(--accent-blue)]"
+                className="inline-flex h-10 items-center justify-center rounded-xl px-4 text-sm font-bold transition disabled:cursor-not-allowed disabled:opacity-60 active:scale-95"
+                style={{
+                  background: "#FFD700",
+                  color: "#000",
+                  boxShadow: "0 6px 18px rgba(255,180,0,0.25)",
+                }}
               >
                 {submitting ? "Sending…" : "Send feedback"}
               </button>

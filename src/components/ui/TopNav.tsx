@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useState, type ReactNode } from "react";
+import { useSession } from "next-auth/react";
 import { X, Menu } from "lucide-react";
 import { caption, headline } from "@/lib/ui/typography";
 import { HeaderAuthSlot } from "@/components/auth/HeaderAuthSlot";
@@ -34,6 +35,10 @@ export function TopNav({
   brandHref = "/",
 }: TopNavProps) {
   const [menuOpen, setMenuOpen] = useState(false);
+  const { status } = useSession();
+  // Hide the CTA for signed-in users - their avatar covers navigation already
+  // and a "Get started" prompt is redundant once they're inside the product.
+  const showCta = cta && status !== "authenticated";
 
   return (
     <>
@@ -45,13 +50,39 @@ export function TopNav({
         }}
       >
         <div className="mx-auto flex h-full max-w-[1200px] items-center justify-between gap-4 px-5 sm:px-8">
-          <Link href={brandHref} className="flex items-center gap-2.5">
+          {/* Brand mark — logo IS the "FYB" so the wordmark reads `[logo]Studio`
+              as a continuous unit. No gap, no separator. */}
+          <Link href={brandHref} className="flex items-center gap-1.5">
             <span
-              className="inline-block h-2.5 w-2.5 rounded-full"
-              style={{ background: "#FFD700" }}
               aria-hidden
-            />
-            <span style={{ ...headline, fontSize: 18 }}>FYB Studio</span>
+              style={{
+                position: "relative",
+                display: "inline-flex",
+                width: 32, height: 32,
+                borderRadius: 7,
+                overflow: "hidden",
+                boxShadow: "0 4px 12px rgba(255,180,0,0.18)",
+                flexShrink: 0,
+              }}
+            >
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src="/logo.jpg"
+                alt="FYB"
+                style={{ width: "100%", height: "100%", objectFit: "cover" }}
+              />
+            </span>
+            <span
+              style={{
+                ...headline,
+                fontSize: 18,
+                fontWeight: 700,
+                letterSpacing: "-0.02em",
+                color: "#fff",
+              }}
+            >
+              studio
+            </span>
           </Link>
 
           {/* Desktop nav */}
@@ -65,12 +96,13 @@ export function TopNav({
 
           <div className="flex items-center gap-2">
             {rightSlot}
+            {/* Auth slot — avatar visible on every screen size when signed in */}
             {showAuth && (
-              <div className="hidden sm:block">
+              <div>
                 <HeaderAuthSlot />
               </div>
             )}
-            {cta && (
+            {showCta && cta && (
               <Link
                 href={cta.href}
                 className="inline-flex h-9 items-center justify-center rounded-full px-4 transition active:scale-95"
@@ -124,7 +156,7 @@ export function TopNav({
                 <HeaderAuthSlot />
               </div>
             )}
-            {cta && (
+            {showCta && cta && (
               <div className="mt-4">
                 <Link
                   href={cta.href}

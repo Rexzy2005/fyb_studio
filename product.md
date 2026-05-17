@@ -10,7 +10,7 @@ Every final year, the same scene plays out on every campus.
 
 A class president needs a poster mockup by Friday. A graphic needs to go on the timeline tonight. The banner for the photo wall is overdue for the printer. So someone messages the only person on campus who "knows Photoshop." That person has six other students in their DMs. The brief gets misread. A revision is requested. The designer goes quiet for two days. The week of the event, you are still chasing a deliverable, paying whatever is asked, and praying the file is in the right size.
 
-It is the same handful of designs every cohort goes through — and yet every cohort starts from zero, in chat threads, paying premium rates for the privilege of waiting.
+It is the same handful of designs every cohort goes through - and yet every cohort starts from zero, in chat threads, paying premium rates for the privilege of waiting.
 
 **FYB Studio replaces all of that with a button.** The designs are already made. You only fill in the parts that change.
 
@@ -20,13 +20,13 @@ It is the same handful of designs every cohort goes through — and yet every co
 
 ### A template that already looks finished
 
-You are not staring at a blank canvas trying to guess fonts and margins. Every template in the library was built by a designer with the typography, layout, palette, and spacing already locked in. You only see the slots that are yours to fill — a name, a department, a class year, a photo. Type, replace, done.
+You are not staring at a blank canvas trying to guess fonts and margins. Every template in the library was built by a designer with the typography, layout, palette, and spacing already locked in. You only see the slots that are yours to fill - a name, a department, a class year, a photo. Type, replace, done.
 
 If you have never opened a design tool in your life, you can still ship a poster that looks like someone was paid to make it.
 
 ### Five minutes from open to download
 
-The moment you click a template, the cover appears. Drop a name in. Drop a photo in. Watch the preview change in real time. Hit download. Five minutes. The same five minutes you would have spent typing the brief into a chat — except now you are already done.
+The moment you click a template, the cover appears. Drop a name in. Drop a photo in. Watch the preview change in real time. Hit download. Five minutes. The same five minutes you would have spent typing the brief into a chat - except now you are already done.
 
 ### A flat price you can budget for
 
@@ -36,9 +36,9 @@ For a class of 200 finalists each putting together a personal design, the math i
 
 ### Your design. Your data. Your device.
 
-Every customization you make is stored on **your** phone or laptop, not somewhere in our cloud waiting to be deleted. Open your dashboard tomorrow, the design is still there. Open it next week from the same device — still there. We do not hoard your edits, we do not message you about an "expiring file." You drove, you exported, you keep the keys.
+Every customization you make is stored on **your** phone or laptop, not somewhere in our cloud waiting to be deleted. Open your dashboard tomorrow, the design is still there. Open it next week from the same device - still there. We do not hoard your edits, we do not message you about an "expiring file." You drove, you exported, you keep the keys.
 
-(For 24 hours after a download we keep a thumbnail in your dashboard so you can re-open and re-edit without re-paying. After that the local copy clears itself — disk hygiene, not a paywall.)
+(For 24 hours after a download we keep a thumbnail in your dashboard so you can re-open and re-edit without re-paying. After that the local copy clears itself - disk hygiene, not a paywall.)
 
 ### Pick up exactly where you left off
 
@@ -52,13 +52,13 @@ Saw a typo on Instagram and want to fix the design before sending it to the prin
 
 ## For department heads
 
-If you are a department head — class president, social rep, FYB committee chair — you have one extra power.
+If you are a department head - class president, social rep, FYB committee chair - you have one extra power.
 
 ### Lock a design exclusively for your department
 
 You see a poster template that fits your department perfectly and you do not want any other department on campus using the same design? Open it, choose **"Preview & lock"**, and a six-character passcode appears.
 
-From that moment, that template is reserved for your department. Outside students see only the cover and a "locked" badge. Your members enter the passcode once on their device and get sixty minutes of exclusive access — long enough to customize and download.
+From that moment, that template is reserved for your department. Outside students see only the cover and a "locked" badge. Your members enter the passcode once on their device and get sixty minutes of exclusive access - long enough to customize and download.
 
 ### Rotate or release on demand
 
@@ -78,9 +78,9 @@ Only one person per department can hold the head role. That keeps the responsibi
 
 No subscription. No "starter / pro / premium" tiers to compare. The price is the price.
 
-Payment is processed by **Paystack**. You pay with the same card or bank transfer you would use to top up data. Your card details never touch our servers — Paystack handles them. After the payment clears, you receive an email receipt with the Paystack reference for your records, and the download appears on your dashboard.
+Payment is processed by **Paystack**. You pay with the same card or bank transfer you would use to top up data. Your card details never touch our servers - Paystack handles them. After the payment clears, you receive an email receipt with the Paystack reference for your records, and the download appears on your dashboard.
 
-If the payment goes through but the download fails (connection died, browser closed, file refused to save) — that is on us, not on you. Your dashboard shows the "Resume" button until the file is in your hand.
+If the payment goes through but the download fails (connection died, browser closed, file refused to save) - that is on us, not on you. Your dashboard shows the "Resume" button until the file is in your hand.
 
 ---
 
@@ -89,7 +89,7 @@ If the payment goes through but the download fails (connection died, browser clo
 To stay simple, FYB Studio deliberately leaves a few things out:
 
 - **No designer DMs.** The whole point is that you do not need to negotiate a brief with anyone. If a template fits, it fits; if it does not, you pick another.
-- **No bulk pricing for class reps.** Every finalist pays for their own design — no one can hold the budget for the whole class. This is intentional: it removes the political layer ("did the rep collect from everyone?") and makes the receipt trail clean for each individual.
+- **No bulk pricing for class reps.** Every finalist pays for their own design - no one can hold the budget for the whole class. This is intentional: it removes the political layer ("did the rep collect from everyone?") and makes the receipt trail clean for each individual.
 
 ---
 

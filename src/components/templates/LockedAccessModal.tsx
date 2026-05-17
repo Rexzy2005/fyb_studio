@@ -15,7 +15,7 @@ export type LockedAccessModalProps = {
 
 /**
  * Shown when a user from a different department tries to access a reserved template.
- * No passcode required — access is granted automatically based on department membership.
+ * No passcode required - access is granted automatically based on department membership.
  */
 export function LockedAccessModal({
   open,

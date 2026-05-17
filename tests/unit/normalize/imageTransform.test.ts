@@ -2,9 +2,9 @@ import { describe, expect, it } from "vitest";
 
 import { parseFills } from "@/lib/figma/normalize/paints";
 
-describe("image fill — imageTransform parsing", () => {
+describe("image fill - imageTransform parsing", () => {
   it("captures the 2x3 affine matrix from a Figma export", () => {
-    // From elegant.json's User_picture node — a custom horizontal crop on a
+    // From elegant.json's User_picture node - a custom horizontal crop on a
     // FILL-mode image. The renderer must honor this matrix even though the
     // declared scaleMode is FILL (Figma stores user crop adjustments here).
     const out = parseFills(

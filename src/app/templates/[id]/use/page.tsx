@@ -4,7 +4,7 @@ import { use, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useSession } from "next-auth/react";
-import { ArrowLeft, CheckCircle2, ChevronLeft, ChevronRight, Download, GraduationCap, Menu, X } from "lucide-react";
+import { ArrowLeft, BookmarkCheck, CheckCircle2, ChevronLeft, ChevronRight, Download, GraduationCap, Menu, X } from "lucide-react";
 
 import type { NormalizedDesignV1 } from "@/lib/figma";
 import { composeImageMap } from "@/lib/render/composeImageMap";
@@ -28,6 +28,7 @@ import {
   type PublicTemplateLockBlock,
 } from "@/lib/api/publicTemplates";
 import { LockedAccessModal } from "@/components/templates/LockedAccessModal";
+import { ShareButton } from "@/components/templates/ShareButton";
 
 import { DesignWorkspace } from "@/components/editor/DesignWorkspace";
 import { useGoogleFonts } from "@/components/editor/useGoogleFonts";
@@ -77,8 +78,22 @@ export default function UseTemplatePage({
   const router = useRouter();
   const searchParams = useSearchParams();
   const requestedDesignId = searchParams.get("userDesignId");
-  const { data: session } = useSession();
+  const viaShare = searchParams.get("via") === "share";
+  const { data: session, status: sessionStatus } = useSession();
   const isHead = Boolean(session?.user?.isDepartmentHead);
+
+  // Auth gate: unauthenticated visitors get redirected to sign-in with a
+  // callback back to this exact template URL. Honors the loading state so
+  // we don't redirect on the initial render.
+  useEffect(() => {
+    if (sessionStatus !== "unauthenticated") return;
+    const here = `/templates/${templateId}/use${viaShare ? "?via=share" : ""}`;
+    const target = `/signin?from=${encodeURIComponent(here)}`;
+    router.replace(target);
+  }, [sessionStatus, templateId, viaShare, router]);
+
+  // Track whether the "shared with you" banner is showing (dismissible).
+  const [shareBannerOpen, setShareBannerOpen] = useState(viaShare);
 
   const [userDesign, setUserDesign] = useState<UserDesignRecord | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -94,6 +109,8 @@ export default function UseTemplatePage({
   const [autoFitNonce, setAutoFitNonce] = useState(0);
   const [mobileFormPage, setMobileFormPage] = useState(0);
   const mobileFormScrollRef = useRef<HTMLDivElement | null>(null);
+  const [desktopFormPage, setDesktopFormPage] = useState(0);
+  const desktopFormScrollRef = useRef<HTMLDivElement | null>(null);
 
   const [paymentModalOpen, setPaymentModalOpen] = useState(false);
   const [previewTextByNodeId, setPreviewTextByNodeId] = useState<Record<string, string>>({});
@@ -175,7 +192,7 @@ export default function UseTemplatePage({
           : findInProgressByTemplate(templateId);
         const serverPromise = fetchPublicTemplate(templateId);
 
-        // Show cached design immediately if available — no waiting for the server.
+        // Show cached design immediately if available - no waiting for the server.
         const cachedRecord = await idbPromise;
         if (cachedRecord && !cancelled) {
           hydrateRecord(cachedRecord);
@@ -292,11 +309,22 @@ export default function UseTemplatePage({
   }, [fieldConfig]);
 
   const desktopGroups = userFormGroups;
+  const desktopSectionCount = Math.max(1, desktopGroups.length);
+  const currentDesktopSection = desktopGroups[
+    Math.min(desktopFormPage, desktopGroups.length - 1)
+  ];
   const mobileSections = userFormGroups;
   const mobileSectionCount = Math.max(1, mobileSections.length);
   const currentMobileSection = mobileSections[
     Math.min(mobileFormPage, mobileSections.length - 1)
   ];
+
+  // Clamp desktop page if section count changes
+  useEffect(() => {
+    if (desktopFormPage >= desktopSectionCount) {
+      setDesktopFormPage(Math.max(0, desktopSectionCount - 1));
+    }
+  }, [desktopSectionCount, desktopFormPage]);
 
   useEffect(() => {
     if (!mobileDetailsOpen) return;
@@ -304,6 +332,21 @@ export default function UseTemplatePage({
     const raf = requestAnimationFrame(() => mobileFormScrollRef.current?.scrollTo({ top: 0 }));
     return () => cancelAnimationFrame(raf);
   }, [mobileDetailsOpen]);
+
+  // While the auth-gate effect is redirecting an unauthenticated user, show
+  // a quiet loading state instead of flashing the workspace UI.
+  if (sessionStatus === "unauthenticated" || sessionStatus === "loading") {
+    return (
+      <div className="min-h-dvh bg-canvas dark:bg-canvas">
+        <ProgressModal
+          open
+          title={sessionStatus === "unauthenticated" ? "Redirecting to sign in" : "Loading your session"}
+          subtitle={viaShare ? "Someone shared this design with you" : "One moment"}
+          hint="Sign in once and FYB Studio remembers you on this device."
+        />
+      </div>
+    );
+  }
 
   if (loadError) {
     return (
@@ -560,28 +603,123 @@ export default function UseTemplatePage({
 
   return (
     <div className="flex h-dvh min-w-0 flex-col bg-canvas dark:bg-canvas">
-      <div className="sticky top-0 z-20 flex items-center justify-between gap-3 border-b border-hairline bg-surface-1/90 px-3 py-2 backdrop-blur lg:hidden dark:border-hairline dark:bg-surface-1/80">
+      {/* Shared-with-you banner — only when ?via=share and dismissible */}
+      {shareBannerOpen && (
+        <div
+          className="flex items-center justify-between gap-3 px-4 py-2.5"
+          style={{
+            background: "linear-gradient(90deg, rgba(255,215,0,0.12), rgba(255,140,66,0.06))",
+            borderBottom: "1px solid rgba(255,215,0,0.25)",
+          }}
+        >
+          <div className="flex min-w-0 items-center gap-2.5">
+            <span
+              aria-hidden
+              style={{
+                display: "inline-flex",
+                width: 24, height: 24,
+                borderRadius: 6,
+                background: "rgba(255,215,0,0.18)",
+                border: "1px solid rgba(255,215,0,0.35)",
+                alignItems: "center", justifyContent: "center",
+                color: "#FFD700",
+                flexShrink: 0,
+              }}
+            >
+              ✦
+            </span>
+            <div className="min-w-0">
+              <div
+                className="text-xs font-bold text-white truncate"
+                style={{ letterSpacing: "-0.01em" }}
+              >
+                Someone shared this design with you
+              </div>
+              <div
+                className="text-[10px] truncate"
+                style={{
+                  fontFamily: "var(--font-geist-mono), monospace",
+                  letterSpacing: "0.14em",
+                  color: "rgba(255,215,0,0.7)",
+                  textTransform: "uppercase",
+                  marginTop: 1,
+                }}
+              >
+                Fill in your details · 5 min · ₦1,000 to export
+              </div>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={() => setShareBannerOpen(false)}
+            aria-label="Dismiss"
+            className="shrink-0 inline-flex h-7 w-7 items-center justify-center rounded-full transition active:scale-95"
+            style={{
+              background: "rgba(0,0,0,0.3)",
+              color: "rgba(255,215,0,0.7)",
+              border: "1px solid rgba(255,215,0,0.2)",
+            }}
+          >
+            <X className="h-3.5 w-3.5" />
+          </button>
+        </div>
+      )}
+
+      <div
+        className="sticky top-0 z-20 flex items-center justify-between gap-3 px-3 py-2 backdrop-blur lg:hidden"
+        style={{
+          background: "rgba(9,9,9,0.92)",
+          borderBottom: "1px solid rgba(255,215,0,0.14)",
+          boxShadow: "0 1px 0 rgba(255,215,0,0.06)",
+        }}
+      >
         <button
           type="button"
           onClick={() => setMobileMenuOpen(true)}
-          className="inline-flex h-10 w-10 items-center justify-center rounded-2xl border border-hairline bg-surface-1 text-ink hover:bg-canvas dark:border-hairline dark:bg-surface-1 dark:text-ink dark:hover:bg-surface-2"
+          className="inline-flex h-10 w-10 items-center justify-center rounded-2xl"
+          style={{
+            border: "1px solid rgba(255,215,0,0.22)",
+            background: "rgba(255,215,0,0.05)",
+            color: "#FFD700",
+          }}
           aria-label="Open menu"
         >
           <Menu className="h-5 w-5" />
         </button>
-        <div className="min-w-0 text-center">
-          <div className="truncate text-sm font-semibold text-ink dark:text-ink">
-            {recordName}
+        <div className="min-w-0 text-center flex flex-col items-center gap-0.5">
+          <div className="flex items-center gap-1.5">
+            <span
+              aria-hidden
+              style={{ width: 5, height: 5, borderRadius: "50%", background: "#FFD700", boxShadow: "0 0 8px rgba(255,215,0,0.6)" }}
+            />
+            <div className="truncate text-sm font-semibold text-ink dark:text-ink">
+              {recordName}
+            </div>
           </div>
-          <div className="truncate text-[11px] text-ink-muted dark:text-ink-muted">Workspace</div>
+          <div className="truncate text-[10px] font-medium uppercase" style={{ color: "rgba(255,215,0,0.6)", letterSpacing: "0.16em" }}>
+            FYB · Workspace
+          </div>
         </div>
-        <button
-          type="button"
-          onClick={() => setMobileDetailsOpen(true)}
-          className="inline-flex h-9 items-center justify-center rounded-xl bg-surface-1 px-3 text-xs font-medium text-white hover:bg-surface-2 dark:bg-surface-2 dark:text-ink dark:hover:bg-surface-1"
-        >
-          Details
-        </button>
+        <div className="flex items-center gap-2">
+          <ShareButton
+            templateId={userDesign.templateId}
+            templateName={recordName}
+            variant="icon"
+            size={36}
+          />
+          <button
+            type="button"
+            onClick={() => setMobileDetailsOpen(true)}
+            className="inline-flex h-9 items-center justify-center rounded-xl px-3 text-xs font-semibold transition active:scale-95"
+            style={{
+              background: "#FFD700",
+              color: "#000",
+              letterSpacing: "0.02em",
+            }}
+          >
+            Details
+          </button>
+        </div>
       </div>
 
       <div className="flex min-h-0 min-w-0 flex-1">
@@ -591,12 +729,23 @@ export default function UseTemplatePage({
             (sidebarCollapsed ? "w-18" : "w-65")
           }
         >
-          <div className="flex items-center justify-between gap-2 border-b border-hairline px-3 py-3 dark:border-hairline">
+          <div
+            className="flex items-center justify-between gap-2 px-3 py-3"
+            style={{ borderBottom: "1px solid rgba(255,215,0,0.12)" }}
+          >
             <div className={"min-w-0 " + (sidebarCollapsed ? "sr-only" : "")}>
+              <div className="flex items-center gap-1.5 mb-0.5">
+                <span
+                  aria-hidden
+                  style={{ width: 5, height: 5, borderRadius: "50%", background: "#FFD700", boxShadow: "0 0 8px rgba(255,215,0,0.6)" }}
+                />
+                <div className="text-[10px] font-semibold uppercase" style={{ color: "rgba(255,215,0,0.7)", letterSpacing: "0.18em" }}>
+                  Template
+                </div>
+              </div>
               <div className="truncate text-sm font-semibold text-ink dark:text-ink">
                 {recordName}
               </div>
-              <div className="truncate text-xs text-ink-muted dark:text-ink-muted">Template</div>
             </div>
             <button
               type="button"
@@ -607,7 +756,12 @@ export default function UseTemplatePage({
                   return next;
                 })
               }
-              className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-hairline bg-surface-1 text-sm font-medium text-ink hover:bg-canvas dark:border-hairline dark:bg-surface-1 dark:text-ink dark:hover:bg-surface-2"
+              className="inline-flex h-9 w-9 items-center justify-center rounded-xl text-sm font-medium transition"
+              style={{
+                border: "1px solid rgba(255,215,0,0.22)",
+                background: "rgba(255,215,0,0.05)",
+                color: "#FFD700",
+              }}
               title={sidebarCollapsed ? "Expand" : "Collapse"}
               aria-label={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
             >
@@ -618,45 +772,152 @@ export default function UseTemplatePage({
           <nav className="flex-1 space-y-1 p-3 text-sm">
             <Link
               href="/templates"
-              className="block rounded-xl px-3 py-2 text-ink-muted hover:bg-canvas dark:text-ink dark:hover:bg-surface-2/60"
+              className="flex items-center gap-2 rounded-xl px-3 py-2 text-ink-muted transition hover:bg-surface-2/40 hover:text-ink"
               title="Back to templates"
             >
-              <span className={sidebarCollapsed ? "sr-only" : ""}>Back</span>
+              <ArrowLeft className="h-4 w-4 shrink-0" />
+              <span className={sidebarCollapsed ? "sr-only" : ""}>Back to templates</span>
             </Link>
             {isHead ? (
               <Link
                 href={`/templates/${templateId}/preview`}
-                className="block rounded-xl px-3 py-2 text-[var(--accent-blue)] hover:bg-[var(--accent-blue-soft)] dark:text-[var(--accent-blue)] dark:hover:bg-[var(--accent-blue-soft)]"
+                className="flex items-center gap-2 rounded-xl px-3 py-2 font-medium transition"
+                style={{
+                  color: "#FFD700",
+                  background: "rgba(255,215,0,0.06)",
+                  border: "1px solid rgba(255,215,0,0.18)",
+                }}
                 title="Preview & reserve for your department"
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.background = "rgba(255,215,0,0.12)";
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.background = "rgba(255,215,0,0.06)";
+                }}
               >
+                <BookmarkCheck className="h-4 w-4 shrink-0" />
                 <span className={sidebarCollapsed ? "sr-only" : ""}>Preview & reserve</span>
               </Link>
             ) : null}
-            <div className="mt-2 rounded-xl bg-canvas p-3 dark:bg-surface-2/40">
+            <div
+              className="mt-2 rounded-xl p-3"
+              style={{
+                background: "linear-gradient(160deg, rgba(255,215,0,0.05), rgba(255,140,66,0.02))",
+                border: "1px solid rgba(255,215,0,0.12)",
+              }}
+            >
               <div
                 className={
-                  "text-xs font-medium text-ink dark:text-ink " +
+                  "flex items-center gap-1.5 mb-1 " +
                   (sidebarCollapsed ? "sr-only" : "")
                 }
               >
-                Tips
+                <span
+                  aria-hidden
+                  style={{ width: 5, height: 5, borderRadius: "50%", background: "#FFD700" }}
+                />
+                <div
+                  className="text-[10px] font-semibold uppercase"
+                  style={{ color: "rgba(255,215,0,0.7)", letterSpacing: "0.18em" }}
+                >
+                  Tips
+                </div>
               </div>
               <div
                 className={
-                  "mt-1 text-xs text-ink-muted dark:text-ink-muted " +
+                  "text-xs text-ink-muted dark:text-ink-muted " +
                   (sidebarCollapsed ? "sr-only" : "")
                 }
               >
-                Pan: Space + drag • Zoom: Ctrl+Wheel
+                Pan: Space + drag<br />Zoom: Ctrl+Wheel
               </div>
             </div>
           </nav>
         </aside>
 
         <main className="flex h-full min-w-0 flex-1 flex-col overflow-hidden">
-          <div className="hidden items-center justify-between border-b border-hairline bg-surface-1 px-4 py-3 lg:flex dark:border-hairline dark:bg-surface-1">
-            <div className="text-sm font-semibold text-ink dark:text-ink">Workspace</div>
-            {/* <div className="text-xs text-ink-muted dark:text-ink-muted">Read-only canvas</div> */}
+          {/* Workspace top bar — hosts Reset + Download for prominence */}
+          <div
+            className="hidden items-center justify-between gap-4 px-4 py-2.5 lg:flex"
+            style={{
+              background: "rgba(9,9,9,0.85)",
+              borderBottom: "1px solid rgba(255,215,0,0.14)",
+              backdropFilter: "blur(12px)",
+            }}
+          >
+            <div className="flex items-center gap-2 min-w-0">
+              <span
+                aria-hidden
+                className="relative inline-flex shrink-0"
+                style={{ width: 6, height: 6 }}
+              >
+                <span
+                  className="nv-pulse-ring absolute inset-0"
+                  style={{ border: "1.5px solid rgba(255,215,0,0.5)", borderRadius: "50%" }}
+                />
+                <span
+                  style={{ width: 6, height: 6, borderRadius: "50%", background: "#FFD700" }}
+                />
+              </span>
+              <div
+                className="text-[10px] font-semibold uppercase truncate"
+                style={{ color: "rgba(255,215,0,0.75)", letterSpacing: "0.22em" }}
+              >
+                Live Preview
+              </div>
+              <span style={{ opacity: 0.35, color: "rgba(255,215,0,0.5)" }}>·</span>
+              <div
+                className="text-[10px] font-medium uppercase truncate"
+                style={{ color: "rgba(255,255,255,0.45)", letterSpacing: "0.16em" }}
+              >
+                ₦1,000 to export
+              </div>
+            </div>
+
+            {/* Reset + Share + Download action cluster */}
+            <div className="flex items-center gap-2 shrink-0">
+              <button
+                type="button"
+                disabled={exporting || !hasEdits}
+                onClick={resetUserWorkspace}
+                className="inline-flex h-9 items-center justify-center rounded-xl px-3 text-xs font-semibold uppercase transition disabled:opacity-30"
+                style={{
+                  border: "1px solid rgba(255,255,255,0.1)",
+                  background: "rgba(255,255,255,0.04)",
+                  color: "rgba(255,255,255,0.7)",
+                  letterSpacing: "0.06em",
+                }}
+                title="Clear all your edits"
+              >
+                Reset
+              </button>
+              <ShareButton
+                templateId={userDesign.templateId}
+                templateName={recordName}
+                variant="pill"
+                size={36}
+              />
+              <button
+                type="button"
+                disabled={exporting || downloadChecking}
+                onClick={startExport}
+                className="inline-flex h-9 items-center justify-center gap-2 rounded-xl px-4 text-xs font-bold uppercase transition active:scale-95 disabled:opacity-60"
+                style={{
+                  background: downloadChecking || exporting ? "var(--surface-2)" : "#FFD700",
+                  color: downloadChecking || exporting ? "var(--ink-muted)" : "#000",
+                  boxShadow: downloadChecking || exporting ? "none" : "0 6px 18px rgba(255,180,0,0.32)",
+                  letterSpacing: "0.06em",
+                }}
+              >
+                {downloadChecking ? (
+                  <><span className="fyb-dots"><span /><span /><span /></span> Checking</>
+                ) : exporting ? (
+                  "Exporting…"
+                ) : (
+                  <><Download className="h-3.5 w-3.5" /> Download PNG</>
+                )}
+              </button>
+            </div>
           </div>
 
           <div className="flex-1 overflow-hidden p-0 sm:p-2 lg:p-2 xl:p-2">
@@ -678,91 +939,176 @@ export default function UseTemplatePage({
           </div>
         </main>
 
-        <aside className="hidden h-full w-80 flex-col border-l border-hairline bg-surface-1 lg:flex xl:w-95 dark:border-hairline dark:bg-surface-1">
-          <div className="border-b border-hairline px-4 py-2.5 dark:border-hairline">
-            <div className="text-sm font-semibold text-ink dark:text-ink">Your details</div>
-            <div className="mt-1 text-xs text-ink-muted dark:text-ink-muted">
-              Generated from admin configuration.
+        <aside
+          className="hidden h-full w-80 flex-col bg-surface-1 lg:flex xl:w-95"
+          style={{ borderLeft: "1px solid rgba(255,215,0,0.12)" }}
+        >
+          {/* Header — title + section indicator */}
+          <div
+            className="px-4 py-3"
+            style={{ borderBottom: "1px solid rgba(255,215,0,0.12)" }}
+          >
+            <div className="flex items-center gap-1.5 mb-1">
+              <span
+                aria-hidden
+                style={{ width: 5, height: 5, borderRadius: "50%", background: "#FFD700", boxShadow: "0 0 8px rgba(255,215,0,0.6)" }}
+              />
+              <div
+                className="text-[10px] font-semibold uppercase"
+                style={{ color: "rgba(255,215,0,0.7)", letterSpacing: "0.18em" }}
+              >
+                Personalize
+              </div>
+            </div>
+            <div className="flex items-center justify-between gap-2">
+              <div className="min-w-0 flex items-center gap-2">
+                {currentDesktopSection ? (() => {
+                  const Icon = sectionIcon(currentDesktopSection.section.icon);
+                  return (
+                    <span
+                      className="grid h-7 w-7 shrink-0 place-items-center rounded-lg"
+                      style={{ background: "rgba(255,215,0,0.1)", border: "1px solid rgba(255,215,0,0.2)" }}
+                    >
+                      <Icon className="h-3.5 w-3.5" style={{ color: "#FFD700" }} />
+                    </span>
+                  );
+                })() : null}
+                <div className="min-w-0">
+                  <div className="truncate text-sm font-semibold text-ink dark:text-ink">
+                    {currentDesktopSection?.section.label ?? "Your details"}
+                  </div>
+                  <div className="text-[10px] uppercase" style={{ color: "rgba(255,255,255,0.4)", letterSpacing: "0.14em" }}>
+                    Section {Math.min(desktopFormPage + 1, desktopSectionCount)} of {desktopSectionCount}
+                  </div>
+                </div>
+              </div>
+              <span
+                className="shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold"
+                style={{ background: "rgba(255,215,0,0.08)", color: "rgba(255,215,0,0.7)", letterSpacing: "0.05em" }}
+              >
+                {currentDesktopSection?.fields.length ?? 0}
+              </span>
+            </div>
+            {/* Section dots — tappable */}
+            {desktopSectionCount > 1 && (
+              <div className="mt-3 flex items-center gap-1.5">
+                {desktopGroups.map((g, idx) => {
+                  const active = idx === desktopFormPage;
+                  return (
+                    <button
+                      key={g.section.id}
+                      type="button"
+                      onClick={() => {
+                        setDesktopFormPage(idx);
+                        requestAnimationFrame(() =>
+                          desktopFormScrollRef.current?.scrollTo({ top: 0, behavior: "smooth" })
+                        );
+                      }}
+                      aria-label={`Go to ${g.section.label}`}
+                      className="rounded-full transition-all"
+                      style={{
+                        height: 4,
+                        width: active ? 18 : 4,
+                        background: active ? "#FFD700" : "rgba(255,255,255,0.18)",
+                      }}
+                    />
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
+          {/* Scrollable section content */}
+          <div ref={desktopFormScrollRef} className="min-h-0 flex-1 overflow-y-auto p-3 xl:p-4">
+            <div className="space-y-2">
+              {(currentDesktopSection?.fields ?? []).map((f) => (
+                <FormField
+                  key={f.id}
+                  field={f}
+                  previewTextByNodeId={previewTextByNodeId}
+                  previewImageByNodeId={previewImageByNodeId}
+                  previewColorByNodeId={previewColorByNodeId}
+                  onPreviewTextChange={onPreviewTextChange}
+                  onPreviewImageChange={onPreviewImageChange}
+                  onPreviewColorChange={onPreviewColorChange}
+                  density="compact"
+                />
+              ))}
             </div>
           </div>
 
-          <div className="min-h-0 flex-1 overflow-y-auto p-3 xl:p-4">
-            <div className="space-y-3">
-              {desktopGroups.map(({ section, fields }) => {
-                const Icon = sectionIcon(section.icon);
-                return (
-                  <details
-                    key={section.id}
-                    open
-                    className="group rounded-2xl border border-hairline bg-surface-1 open:shadow-sm dark:border-hairline dark:bg-surface-1"
-                  >
-                    <summary className="flex cursor-pointer items-center justify-between gap-2 px-3 py-2 text-xs font-semibold text-ink marker:hidden dark:text-ink [&::-webkit-details-marker]:hidden">
-                      <span className="flex min-w-0 items-center gap-2">
-                        <Icon className="h-4 w-4 shrink-0 text-ink-muted dark:text-ink-muted" />
-                        <span className="truncate">{section.label}</span>
-                      </span>
-                      <span className="shrink-0 text-[11px] font-normal text-ink-muted dark:text-ink-faint">
-                        {fields.length}
-                      </span>
-                    </summary>
-                    <div className="space-y-2 border-t border-hairline p-3 dark:border-hairline">
-                      {fields.map((f) => (
-                        <FormField
-                          key={f.id}
-                          field={f}
-                          previewTextByNodeId={previewTextByNodeId}
-                          previewImageByNodeId={previewImageByNodeId}
-                          previewColorByNodeId={previewColorByNodeId}
-                          onPreviewTextChange={onPreviewTextChange}
-                          onPreviewImageChange={onPreviewImageChange}
-                          onPreviewColorChange={onPreviewColorChange}
-                          density="compact"
-                        />
-                      ))}
-                    </div>
-                  </details>
-                );
-              })}
+          {/* Back / Next pager */}
+          {desktopSectionCount > 1 && (
+            <div
+              className="px-4 py-2.5"
+              style={{ borderTop: "1px solid rgba(255,215,0,0.1)" }}
+            >
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  disabled={desktopFormPage <= 0}
+                  onClick={() => {
+                    setDesktopFormPage((p) => Math.max(0, p - 1));
+                    requestAnimationFrame(() =>
+                      desktopFormScrollRef.current?.scrollTo({ top: 0, behavior: "smooth" })
+                    );
+                  }}
+                  className="inline-flex h-9 flex-1 items-center justify-center gap-1.5 rounded-xl px-3 text-xs font-semibold uppercase transition disabled:opacity-30"
+                  style={{
+                    border: "1px solid rgba(255,255,255,0.1)",
+                    background: "rgba(255,255,255,0.03)",
+                    color: "rgba(255,255,255,0.7)",
+                    letterSpacing: "0.06em",
+                  }}
+                >
+                  <ChevronLeft className="h-3.5 w-3.5" />
+                  Back
+                </button>
+                <button
+                  type="button"
+                  disabled={desktopFormPage >= desktopSectionCount - 1}
+                  onClick={() => {
+                    setDesktopFormPage((p) => Math.min(desktopSectionCount - 1, p + 1));
+                    requestAnimationFrame(() =>
+                      desktopFormScrollRef.current?.scrollTo({ top: 0, behavior: "smooth" })
+                    );
+                  }}
+                  className="inline-flex h-9 flex-1 items-center justify-center gap-1.5 rounded-xl px-3 text-xs font-semibold uppercase transition disabled:opacity-30"
+                  style={{
+                    background: desktopFormPage >= desktopSectionCount - 1 ? "rgba(255,255,255,0.05)" : "#FFD700",
+                    color: desktopFormPage >= desktopSectionCount - 1 ? "rgba(255,255,255,0.5)" : "#000",
+                    letterSpacing: "0.06em",
+                  }}
+                >
+                  Next
+                  <ChevronRight className="h-3.5 w-3.5" />
+                </button>
+              </div>
             </div>
-          </div>
+          )}
 
-          <div className="border-t border-hairline p-4 dark:border-hairline">
-            <div className="flex items-center gap-2">
-              <button
-                type="button"
-                disabled={exporting || !hasEdits}
-                onClick={resetUserWorkspace}
-                className="inline-flex h-9 flex-1 items-center justify-center rounded-xl border border-hairline bg-surface-1 px-4 text-sm font-medium text-ink hover:bg-canvas disabled:opacity-50 dark:border-hairline dark:bg-surface-1 dark:text-ink dark:hover:bg-surface-2"
-              >
-                Reset
-              </button>
-              <button
-                type="button"
-                disabled={exporting || downloadChecking}
-                onClick={startExport}
-                className="inline-flex h-9 flex-1 items-center justify-center gap-2 rounded-xl px-4 text-sm font-semibold text-white transition disabled:opacity-60"
-                style={{ background: downloadChecking || exporting ? "var(--surface-2)" : "#FFD700", color: downloadChecking || exporting ? "var(--ink-muted)" : "#000" }}
-              >
-                {downloadChecking ? (
-                  <><span className="fyb-dots"><span /><span /><span /></span> Checking…</>
-                ) : exporting ? (
-                  "Exporting…"
-                ) : (
-                  <><Download className="h-4 w-4" /> Download PNG</>
-                )}
-              </button>
-            </div>
-          </div>
         </aside>
       </div>
 
-      <div className="fixed inset-x-0 bottom-0 z-30 border-t border-hairline bg-surface-1/90 p-3 backdrop-blur lg:hidden dark:border-hairline dark:bg-surface-1/80 pb-[calc(env(safe-area-inset-bottom)+0.75rem)]">
+      <div
+        className="fixed inset-x-0 bottom-0 z-30 p-3 backdrop-blur lg:hidden pb-[calc(env(safe-area-inset-bottom)+0.75rem)]"
+        style={{
+          background: "rgba(9,9,9,0.92)",
+          borderTop: "1px solid rgba(255,215,0,0.18)",
+          boxShadow: "0 -8px 24px rgba(0,0,0,0.4)",
+        }}
+      >
         <div className="mx-auto flex w-full max-w-xl items-center gap-2">
           <button
             type="button"
             disabled={exporting || downloadChecking || !hasEdits}
             onClick={resetUserWorkspace}
-            className="inline-flex h-11 flex-1 items-center justify-center rounded-2xl border border-hairline bg-surface-1 px-4 text-sm font-semibold text-ink hover:bg-canvas disabled:opacity-50 dark:border-hairline dark:bg-surface-1 dark:text-ink dark:hover:bg-surface-2"
+            className="inline-flex h-11 flex-1 items-center justify-center rounded-2xl px-4 text-sm font-semibold transition disabled:opacity-40 active:scale-95"
+            style={{
+              border: "1px solid rgba(255,255,255,0.1)",
+              background: "rgba(255,255,255,0.04)",
+              color: "rgba(255,255,255,0.7)",
+            }}
           >
             Reset
           </button>
@@ -770,8 +1116,12 @@ export default function UseTemplatePage({
             type="button"
             disabled={exporting || downloadChecking}
             onClick={startExport}
-            className="inline-flex h-11 flex-1 items-center justify-center gap-2 rounded-2xl px-4 text-sm font-semibold transition active:scale-[0.98] disabled:opacity-60"
-            style={{ background: downloadChecking || exporting ? "var(--surface-2)" : "#FFD700", color: downloadChecking || exporting ? "var(--ink-muted)" : "#000" }}
+            className="inline-flex h-11 flex-1 items-center justify-center gap-2 rounded-2xl px-4 text-sm font-bold transition active:scale-95 disabled:opacity-60"
+            style={{
+              background: downloadChecking || exporting ? "var(--surface-2)" : "#FFD700",
+              color: downloadChecking || exporting ? "var(--ink-muted)" : "#000",
+              boxShadow: downloadChecking || exporting ? "none" : "0 8px 24px rgba(255,180,0,0.32)",
+            }}
           >
             {downloadChecking ? (
               <><span className="fyb-dots"><span /><span /><span /></span> Checking…</>

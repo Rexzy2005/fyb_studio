@@ -39,7 +39,7 @@ export function DepartmentLocks({ departmentName }: { departmentName: string }) 
       <SectionHeader
         eyebrow="Reserved"
         title="Reserved designs"
-        description={`Designs you have reserved exclusively for ${departmentName}. Members get automatic access — no passcode needed.`}
+        description={`Designs you have reserved exclusively for ${departmentName}. Members get automatic access - no passcode needed.`}
         count={loading ? null : locks.length}
       />
 
@@ -80,7 +80,7 @@ export function DepartmentLocks({ departmentName }: { departmentName: string }) 
             style={{ ...bodySm, color: "var(--ink-muted)", fontWeight: 400 }}
           >
             Open a template, choose &ldquo;Preview &amp; reserve&rdquo;, and reserve it for{" "}
-            {departmentName}. Members get automatic access — no passcode sharing required.
+            {departmentName}. Members get automatic access - no passcode sharing required.
           </p>
         </div>
       ) : (
@@ -166,7 +166,7 @@ function ReserveCard({
             })}
           </div>
           <div className="mt-1" style={{ ...micro, color: "var(--ink-faint)" }}>
-            Members access automatically — no code needed
+            Members access automatically - no code needed
           </div>
         </div>
       </div>

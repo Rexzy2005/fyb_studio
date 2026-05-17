@@ -22,18 +22,35 @@ export function GoogleSignInButton({ callbackUrl }: { callbackUrl?: string }) {
       type="button"
       onClick={onClick}
       disabled={pending}
-      className="inline-flex w-full items-center justify-center gap-3 rounded-full transition disabled:cursor-not-allowed disabled:opacity-60"
+      className="group relative inline-flex w-full items-center justify-center gap-3 rounded-xl transition active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60"
       style={{
         ...bodySm,
-        height: 48,
-        padding: "0 22px",
-        background: "var(--ink)",
+        height: 54,
+        padding: "0 24px",
+        background: "#FFD700",
         color: "#000",
-        border: "1px solid var(--ink)",
+        border: "1px solid #FFD700",
+        fontWeight: 700,
+        boxShadow: "0 8px 24px rgba(255,180,0,0.32), inset 0 1px 0 rgba(255,255,255,0.25)",
+        letterSpacing: "0.01em",
       }}
     >
-      <GoogleMark />
+      <span
+        aria-hidden
+        className="grid h-7 w-7 shrink-0 place-items-center rounded-full"
+        style={{ background: "#fff" }}
+      >
+        <GoogleMark />
+      </span>
       <span>{pending ? "Redirecting…" : "Continue with Google"}</span>
+      {/* Arrow absolutely positioned so it doesn't push the label off-center */}
+      <span
+        aria-hidden
+        className="absolute right-5 transition group-hover:translate-x-1"
+        style={{ color: "rgba(0,0,0,0.6)" }}
+      >
+        →
+      </span>
     </button>
   );
 }

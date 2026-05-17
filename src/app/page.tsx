@@ -7,17 +7,11 @@ import {
   useRef,
   useState,
   type CSSProperties,
-  type MouseEvent,
   type ReactNode,
 } from "react";
-import { useSession } from "next-auth/react";
 
-import {
-  fetchPublicTemplateList,
-  type PublicTemplateListItem,
-} from "@/lib/api/publicTemplates";
+import { useSession } from "next-auth/react";
 import { HeaderAuthSlot } from "@/components/auth/HeaderAuthSlot";
-import { HeadEntryModal } from "@/components/templates/HeadEntryModal";
 import { GraduationCap } from "lucide-react";
 
 /* ─── Type tokens ────────────────────────────────────────── */
@@ -120,26 +114,9 @@ function useCounter(target: number, duration = 1400) {
 
 /* ─── Page ───────────────────────────────────────────────── */
 export default function Home() {
-  const { data: session } = useSession();
-  const isHead = Boolean(session?.user?.isDepartmentHead);
-  const [headEntry, setHeadEntry] = useState<{ id: string; name: string } | null>(null);
-  const [templates, setTemplates] = useState<PublicTemplateListItem[]>([]);
   const [showLoading, setShowLoading] = useState(true);
   const [showCelebration, setShowCelebration] = useState(false);
   const classYear = getClassYear();
-
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        const list = await fetchPublicTemplateList();
-        if (!cancelled) setTemplates(list);
-      } catch (err) {
-        if (!cancelled) console.warn("[home] template fetch failed", err);
-      }
-    })();
-    return () => { cancelled = true; };
-  }, []);
 
   const handleLoadingDone = useCallback(() => {
     setShowLoading(false);
@@ -149,15 +126,6 @@ export default function Home() {
   const handleCelebrationClose = useCallback(() => {
     setShowCelebration(false);
   }, []);
-
-  const onTemplateClick = useCallback(
-    (e: MouseEvent, t: PublicTemplateListItem) => {
-      if (!isHead) return;
-      e.preventDefault();
-      setHeadEntry({ id: t.id, name: t.name });
-    },
-    [isHead]
-  );
 
   return (
     <>
@@ -194,11 +162,6 @@ export default function Home() {
         <StatsStrip />
         <HowItWorks />
         <WallOfClass classYear={classYear} />
-        <ShowcaseSection
-          templates={templates.slice(0, 6)}
-          loading={templates.length === 0}
-          onTemplateClick={onTemplateClick}
-        />
         <MemoryLane classYear={classYear} />
         <DepartmentSection />
         <PricingSection />
@@ -208,13 +171,6 @@ export default function Home() {
       </div>
 
       <MobileBottomNav />
-
-      <HeadEntryModal
-        open={headEntry !== null}
-        templateId={headEntry?.id ?? ""}
-        templateName={headEntry?.name ?? ""}
-        onClose={() => setHeadEntry(null)}
-      />
     </>
   );
 }
@@ -232,6 +188,10 @@ function TopNav() {
   const [scrolled, setScrolled] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const classYear = getClassYear();
+  const { status } = useSession();
+  // Auth-aware CTA: hide "Get started" / "Sign in" once the user is signed in.
+  // Their avatar slot covers navigation from that point on.
+  const isAuthed = status === "authenticated";
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 24);
@@ -261,19 +221,18 @@ function TopNav() {
         <div className="mx-auto flex h-16 items-center justify-between gap-3 px-4 sm:gap-6 sm:px-8 lg:px-10"
           style={{ maxWidth: 1480 }}>
 
-          {/* Logo */}
-          <Link href="/" className="flex shrink-0 items-center gap-2.5 group">
+          {/* Brand mark — logo is the "FYB" so it reads `[logo]studio` as one
+              continuous unit. Class-year micro-text sits below. */}
+          <Link href="/" className="flex shrink-0 items-center gap-1.5 group">
             <span
               aria-hidden
               style={{
                 position: "relative",
                 display: "inline-flex",
                 width: 36, height: 36,
-                borderRadius: 10,
+                borderRadius: 8,
                 overflow: "hidden",
-                border: "1px solid rgba(255,215,0,0.3)",
-                boxShadow: "0 0 0 1px rgba(255,215,0,0.08), 0 6px 16px rgba(255,180,0,0.18)",
-                background: "linear-gradient(140deg, rgba(255,215,0,0.18), rgba(168,85,247,0.18))",
+                boxShadow: "0 6px 18px rgba(255,180,0,0.22)",
               }}
             >
               {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -285,16 +244,11 @@ function TopNav() {
               <span
                 aria-hidden
                 className="nv-pulse-ring"
-                style={{ position: "absolute", inset: -3, border: "1.5px solid rgba(255,215,0,0.45)", borderRadius: 12 }}
+                style={{ position: "absolute", inset: -3, border: "1.5px solid rgba(255,215,0,0.45)", borderRadius: 11 }}
               />
             </span>
-            <span style={{ display: "flex", flexDirection: "column", lineHeight: 1 }}>
-              <span style={{ ...mono, fontSize: 12, fontWeight: 800, letterSpacing: "0.1em", textTransform: "uppercase", color: "#fff" }}>
-                FYB Studio
-              </span>
-              <span style={{ ...mono, fontSize: 7.5, letterSpacing: "0.32em", color: "rgba(255,215,0,0.55)", textTransform: "uppercase", marginTop: 2 }}>
-                Class of {classYear}
-              </span>
+            <span style={{ ...jkt, fontSize: 18, fontWeight: 700, color: "#fff", letterSpacing: "-0.02em", lineHeight: 1 }}>
+              studio
             </span>
           </Link>
 
@@ -331,19 +285,21 @@ function TopNav() {
             <div className="hidden sm:block">
               <HeaderAuthSlot />
             </div>
-            <Link
-              href="/templates"
-              className="nv-laser-btn hidden sm:inline-flex"
-              style={{
-                height: 40, padding: "0 22px",
-                borderRadius: 8, fontSize: 11,
-                letterSpacing: "0.1em", ...mono,
-                alignItems: "center", gap: 8,
-                textTransform: "uppercase",
-              }}
-            >
-              Start designing →
-            </Link>
+            {!isAuthed && (
+              <Link
+                href="/signin"
+                className="nv-laser-btn hidden lg:inline-flex"
+                style={{
+                  height: 40, padding: "0 22px",
+                  borderRadius: 8, fontSize: 11,
+                  letterSpacing: "0.1em", ...mono,
+                  alignItems: "center", gap: 8,
+                  textTransform: "uppercase",
+                }}
+              >
+                Get started
+              </Link>
+            )}
             {/* Mobile hamburger */}
             <button
               type="button"
@@ -373,7 +329,7 @@ function TopNav() {
           </div>
         </div>
 
-        {/* Section underline gradient — only when scrolled */}
+        {/* Section underline gradient - only when scrolled */}
         {scrolled && (
           <div
             aria-hidden
@@ -418,24 +374,18 @@ function TopNav() {
               </Link>
             ))}
 
-            <div style={{ marginTop: 24, display: "flex", flexDirection: "column", gap: 12 }}>
-              <Link
-                href="/templates"
-                onClick={() => setMobileOpen(false)}
-                className="nv-laser-btn"
-                style={{ height: 56, padding: "0 28px", borderRadius: 10, fontSize: 13, letterSpacing: "0.1em", ...mono, display: "inline-flex", alignItems: "center", justifyContent: "center", textTransform: "uppercase" }}
-              >
-                Start designing →
-              </Link>
-              <Link
-                href="/signin"
-                onClick={() => setMobileOpen(false)}
-                className="nv-ghost-btn"
-                style={{ height: 56, padding: "0 28px", borderRadius: 10, fontSize: 12, letterSpacing: "0.1em", ...mono, display: "inline-flex", alignItems: "center", justifyContent: "center", textTransform: "uppercase" }}
-              >
-                Sign in
-              </Link>
-            </div>
+            {!isAuthed && (
+              <div style={{ marginTop: 24, display: "flex", flexDirection: "column", gap: 12 }}>
+                <Link
+                  href="/signin"
+                  onClick={() => setMobileOpen(false)}
+                  className="nv-laser-btn"
+                  style={{ height: 56, padding: "0 28px", borderRadius: 10, fontSize: 13, letterSpacing: "0.1em", ...mono, display: "inline-flex", alignItems: "center", justifyContent: "center", textTransform: "uppercase" }}
+                >
+                  Get started
+                </Link>
+              </div>
+            )}
           </nav>
           <div style={{ padding: "20px 24px", borderTop: "1px solid rgba(255,255,255,0.05)", textAlign: "center", ...mono, fontSize: 9, letterSpacing: "0.22em", color: "rgba(255,215,0,0.4)", textTransform: "uppercase" }}>
             FYB Studio · Class of {classYear}
@@ -484,18 +434,40 @@ function FloatingHats() {
   );
 }
 
-/* ─── Cap toss launch (initial load — 14 caps fly across the sky) ── */
+/* ─── Cap toss launch (initial load - 14 caps fly across the sky) ── */
+// Deterministic seeded values — Math.random would cause SSR/CSR hydration
+// mismatches because the module re-evaluates on the client with new values.
 const TOSS_CAPS = Array.from({ length: 14 }).map((_, i) => {
-  const left = 5 + i * 6.5 + Math.random() * 3;
-  const x = (Math.random() - 0.5) * 70; // vw of horizontal arc
-  const delay = i * 0.08 + Math.random() * 0.2;
-  const dur = 2.8 + Math.random() * 1.6;
-  const sz = 24 + Math.floor(Math.random() * 22);
+  const seedA = Math.sin(i * 12.9898 + 1) * 43758.5453;
+  const seedB = Math.sin(i * 78.233 + 2) * 43758.5453;
+  const seedC = Math.sin(i * 39.346 + 3) * 43758.5453;
+  const seedD = Math.sin(i * 91.5347 + 4) * 43758.5453;
+  const seedE = Math.sin(i * 27.917 + 5) * 43758.5453;
+  const rA = seedA - Math.floor(seedA);
+  const rB = seedB - Math.floor(seedB);
+  const rC = seedC - Math.floor(seedC);
+  const rD = seedD - Math.floor(seedD);
+  const rE = seedE - Math.floor(seedE);
+  const left = 5 + i * 6.5 + rA * 3;
+  const x = (rB - 0.5) * 70; // vw of horizontal arc
+  const delay = i * 0.08 + rC * 0.2;
+  const dur = 2.8 + rD * 1.6;
+  const sz = 24 + Math.floor(rE * 22);
   const color = ["#FFD700", "#FF8C42", "#FF6B6B", "#4ECDC4", "#A855F7"][i % 5];
   return { left, x, delay, dur, sz, color };
 });
 
 function CapTossLayer() {
+  // Defer to client-only render. Avoids any chance of hydration mismatch from
+  // floating-point precision drift between server and client when computing
+  // the pseudo-random positions/sizes. setState lives inside setTimeout so
+  // the effect itself is async-only (React 19 purity-rule compliant).
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => {
+    const id = setTimeout(() => setMounted(true), 0);
+    return () => clearTimeout(id);
+  }, []);
+  if (!mounted) return null;
   return (
     <div aria-hidden style={{ position: "absolute", inset: 0, pointerEvents: "none", overflow: "hidden", zIndex: 1 }}>
       {TOSS_CAPS.map((c, i) => (
@@ -609,7 +581,7 @@ function CapArcOnScroll() {
 /* ─── Scoreboard flip number ── */
 function FlipNum({ value, color = "#FFD700" }: { value: string; color?: string }) {
   const [display, setDisplay] = useState(value);
-  // Derive "flipping" synchronously from value vs display — no setState in effect.
+  // Derive "flipping" synchronously from value vs display - no setState in effect.
   const flipping = display !== value;
   useEffect(() => {
     if (display === value) return;
@@ -662,13 +634,13 @@ function Hero({ classYear }: { classYear: number }) {
       <SpotlightLayer />
       <CapTossLayer />
 
-      {/* Decorative side rails — film-strip vibe */}
+      {/* Decorative side rails - film-strip vibe */}
       <div aria-hidden className="hidden md:block" style={{ position: "absolute", inset: 0, pointerEvents: "none", zIndex: 0 }}>
         <div style={{ position: "absolute", top: 0, bottom: 0, left: "8%", width: 1, background: "linear-gradient(to bottom, transparent, rgba(255,215,0,0.12) 20%, rgba(255,215,0,0.12) 80%, transparent)" }} />
         <div style={{ position: "absolute", top: 0, bottom: 0, right: "8%", width: 1, background: "linear-gradient(to bottom, transparent, rgba(168,85,247,0.12) 20%, rgba(168,85,247,0.12) 80%, transparent)" }} />
       </div>
 
-      {/* Floating poster cards behind the headline — depth/parallax feel */}
+      {/* Floating poster cards behind the headline - depth/parallax feel */}
       <HeroPosterStack />
 
       {/* Dot grid (subtle) */}
@@ -712,7 +684,7 @@ function Hero({ classYear }: { classYear: number }) {
           </span>
         </div>
 
-        {/* THE HEADLINE — much bigger, centered, shimmering */}
+        {/* THE HEADLINE - much bigger, centered, shimmering */}
         <h1
           style={{
             ...jkt, fontWeight: 900,
@@ -726,8 +698,11 @@ function Hero({ classYear }: { classYear: number }) {
             <AnimatedWords text="IT'S YOUR" delay={50} />
           </div>
           <div style={{ fontSize: "clamp(76px, 17vw, 260px)", marginTop: "clamp(4px,0.5vw,8px)" }}>
-            <span className="nv-shimmer-text nv-stretch" style={{ display: "inline-block" }}>
-              <AnimatedWords text="FINAL YEAR" delay={250} />
+            <span
+              className="nv-shimmer-text nv-stretch"
+              style={{ display: "inline-block", whiteSpace: "wrap" }}
+            >
+              FINAL YEAR
             </span>
           </div>
         </h1>
@@ -790,7 +765,7 @@ function Hero({ classYear }: { classYear: number }) {
             className="nv-laser-btn w-full sm:flex-1"
             style={{ height: 58, padding: "0 36px", borderRadius: 10, fontSize: 13, letterSpacing: "0.06em", ...mono, display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 10 }}
           >
-            Open the studio →
+            Open the studio
           </Link>
           <Link
             href="/signin"
@@ -839,7 +814,7 @@ function Hero({ classYear }: { classYear: number }) {
             </div>
           </div>
 
-          {/* Stadium countdown — now centered & on its own pedestal */}
+          {/* Stadium countdown - now centered & on its own pedestal */}
           {tick && (
             <div
               style={{
@@ -902,7 +877,7 @@ function Hero({ classYear }: { classYear: number }) {
   );
 }
 
-/* ─── Hero Poster Stack — floating poster cards behind the headline ─── */
+/* ─── Hero Poster Stack - floating poster cards behind the headline ─── */
 const HERO_POSTERS = [
   { rot: -16, x: -42, y: -18, c: "#FFD700",  tag: "FYB · 01", side: "left",  scale: 0.92 },
   { rot:  18, x:  44, y: -22, c: "#A855F7",  tag: "SIGN-OUT", side: "right", scale: 0.96 },
@@ -1004,7 +979,7 @@ function MarqueeStrip() {
       overflow: "hidden",
       background: "linear-gradient(90deg, rgba(255,215,0,0.04) 0%, rgba(255,107,107,0.03) 50%, rgba(168,85,247,0.03) 100%)",
     }}>
-      {/* Top row — forward, gold */}
+      {/* Top row - forward, gold */}
       <div style={{ padding: "12px 0 8px", borderBottom: "1px solid rgba(255,255,255,0.04)" }}>
         <div className="nv-marquee-track" style={{ display: "flex", width: "max-content" }}>
           {[0, 1].map(k => (
@@ -1014,7 +989,7 @@ function MarqueeStrip() {
           ))}
         </div>
       </div>
-      {/* Bottom row — reverse, coral/white */}
+      {/* Bottom row - reverse, coral/white */}
       <div style={{ padding: "8px 0 12px" }}>
         <div className="nv-marquee-track-rev" style={{ display: "flex", width: "max-content" }}>
           {[0, 1].map(k => (
@@ -1091,7 +1066,7 @@ const STEPS = [
   {
     num: "03", label: "EXPORT", color: "#4ECDC4",
     title: "₦1,000. Print-ready. Yours forever.",
-    desc: "Pay via Paystack — card, bank transfer, USSD. One high-resolution PNG delivered to your device. If anything goes wrong, your dashboard holds a Resume button.",
+    desc: "Pay via Paystack - card, bank transfer, USSD. One high-resolution PNG delivered to your device. If anything goes wrong, your dashboard holds a Resume button.",
     badge: "03:00 → 05:00",
   },
 ] as const;
@@ -1117,7 +1092,7 @@ function HowItWorks() {
       </div>
 
       <div className="mx-auto px-5 sm:px-8" style={{ maxWidth: 1400, position: "relative", zIndex: 1 }}>
-        {/* Section header — scoreboard-style "5 MIN" centerpiece */}
+        {/* Section header - scoreboard-style "5 MIN" centerpiece */}
         <div ref={headerRef} className="nv-stagger" style={{ textAlign: "center", marginBottom: "clamp(48px,6vw,80px)" }}>
           <NvEyebrow color="rgba(168,85,247,0.7)">How it works</NvEyebrow>
           <div style={{ marginTop: 18, display: "flex", flexDirection: "column", alignItems: "center", gap: 4 }}>
@@ -1138,7 +1113,7 @@ function HowItWorks() {
             </div>
           </div>
           <p style={{ ...sans, fontSize: "clamp(14px,1.3vw,17px)", color: "rgba(255,255,255,0.42)", marginTop: 24, maxWidth: "54ch", marginLeft: "auto", marginRight: "auto", lineHeight: 1.65 }}>
-            Three steps. No briefs. No DMs. No back-and-forth. Watch the demos play below — that&apos;s the whole story.
+            Three steps. No briefs. No DMs. No back-and-forth. Watch the demos play below - that&apos;s the whole story.
           </p>
         </div>
 
@@ -1147,7 +1122,7 @@ function HowItWorks() {
           <div className="nv-rail" style={{ position: "absolute", left: "16.66%", right: "16.66%", top: 170, opacity: 0.65 }} aria-hidden />
         </div>
 
-        {/* Steps grid — now with live demos */}
+        {/* Steps grid - now with live demos */}
         <div ref={ref} className="nv-stagger grid gap-6" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 300px), 1fr))" }}>
           {STEPS.map((step, i) => (
             <div
@@ -1783,7 +1758,7 @@ function Polaroid({
         </div>
       </div>
 
-      {/* Caption — handwritten feel */}
+      {/* Caption - handwritten feel */}
       <div style={{ marginTop: 10, textAlign: "center", color: "#1a1408" }}>
         <div style={{ ...jkt, fontWeight: 700, fontSize: 14, letterSpacing: "-0.01em" }}>{name}</div>
         <div style={{ ...mono, fontSize: 8, letterSpacing: "0.12em", color: "rgba(26,20,8,0.5)", marginTop: 2, textTransform: "uppercase" }}>
@@ -1794,84 +1769,6 @@ function Polaroid({
   );
 }
 
-/* ─── Template Showcase ──────────────────────────────────── */
-function ShowcaseSection({ templates, loading, onTemplateClick }: {
-  templates: PublicTemplateListItem[];
-  loading: boolean;
-  onTemplateClick: (e: MouseEvent, t: PublicTemplateListItem) => void;
-}) {
-  const ref = useReveal();
-  return (
-    <section style={{ padding: "clamp(80px, 10vw, 140px) 0", background: "rgba(255,107,107,0.02)" }} id="templates">
-      <div className="mx-auto px-5 sm:px-8" style={{ maxWidth: 1400 }}>
-        <NvEyebrow color="rgba(255,107,107,0.7)">The template library</NvEyebrow>
-        <div style={{ marginTop: 16, display: "flex", flexWrap: "wrap", alignItems: "flex-end", justifyContent: "space-between", gap: 20 }}>
-          <div>
-            <h2 style={{ ...jkt, fontWeight: 800, fontSize: "clamp(28px, 4.5vw, 68px)", lineHeight: 0.95, letterSpacing: "-0.025em", textTransform: "uppercase", maxWidth: "18ch" }}>
-              Every design your final year deserves.
-            </h2>
-            <p style={{ ...sans, fontSize: "clamp(14px,1.2vw,16px)", color: "rgba(255,255,255,0.32)", marginTop: 14, maxWidth: "44ch", lineHeight: 1.65 }}>
-              Built by designers who know what FYB week looks like. Picked by finalists exactly like you.
-            </p>
-          </div>
-          <Link href="/templates" className="nv-ghost-btn"
-            style={{ height: 42, padding: "0 22px", borderRadius: 4, fontSize: 11, letterSpacing: "0.08em", ...mono, textTransform: "uppercase" }}>
-            See full library →
-          </Link>
-        </div>
-
-        <div ref={ref} className="nv-reveal mt-10 grid grid-cols-2 gap-3 sm:gap-4 md:grid-cols-3">
-          {loading
-            ? Array.from({ length: 6 }).map((_, i) => <SkeletonCard key={i} />)
-            : templates.map(t => <TemplateCard key={t.id} template={t} onClick={onTemplateClick} />)}
-        </div>
-      </div>
-    </section>
-  );
-}
-
-function TemplateCard({ template, onClick }: {
-  template: PublicTemplateListItem;
-  onClick: (e: MouseEvent, t: PublicTemplateListItem) => void;
-}) {
-  return (
-    <Link
-      href={`/templates/${template.id}/use`}
-      onClick={e => onClick(e, template)}
-      className="group nv-card block overflow-hidden"
-      style={{ borderRadius: 14, padding: 10, transition: "transform 400ms cubic-bezier(0.16,1,0.3,1), border-color 350ms, box-shadow 350ms" }}
-      aria-label={`Use template ${template.name}`}
-      onMouseEnter={e => { (e.currentTarget as HTMLElement).style.transform = "translateY(-6px) scale(1.01)"; }}
-      onMouseLeave={e => { (e.currentTarget as HTMLElement).style.transform = ""; }}
-    >
-      <div className="relative aspect-[4/5] w-full overflow-hidden" style={{ background: "rgba(20,20,20,1)", borderRadius: 8 }}>
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src={template.coverUrl} alt={`${template.name} preview`} loading="lazy" decoding="async"
-          className="absolute inset-0 h-full w-full object-contain p-2 transition-transform duration-700 group-hover:scale-[1.06] sm:p-3" />
-      </div>
-      <div className="mt-3 flex items-center justify-between gap-2 px-1 pb-1">
-        <span style={{ ...sans, fontSize: 13, fontWeight: 500, color: "rgba(255,255,255,0.65)" }} className="truncate">
-          {template.name}
-        </span>
-        <span style={{ color: "rgba(255,255,255,0.35)", fontSize: 14, flexShrink: 0, transition: "color 200ms, transform 200ms" }}
-          className="group-hover:!text-white group-hover:translate-x-0.5 group-hover:-translate-y-0.5" aria-hidden>
-          ↗
-        </span>
-      </div>
-    </Link>
-  );
-}
-
-function SkeletonCard() {
-  return (
-    <div style={{ background: "rgba(14,14,14,0.9)", borderRadius: 14, padding: 10 }}>
-      <div className="fyb-skeleton-shine aspect-[4/5] w-full rounded-[8px]" style={{ background: "rgba(20,20,20,0.9)" }} />
-      <div className="mt-3 space-y-2 px-1 pb-1">
-        <div className="fyb-skeleton h-2.5 w-2/3 rounded-full" />
-      </div>
-    </div>
-  );
-}
 
 /* ─── Memory Lane (4 years in 30 seconds) ─────────────────── */
 const MEMORY_STOPS: Array<{
@@ -1929,7 +1826,7 @@ function MemoryLane({ classYear }: { classYear: number }) {
       }}
       id="memory"
     >
-      {/* Side rails — film strip feel */}
+      {/* Side rails - film strip feel */}
       <div aria-hidden style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: 24, display: "flex", flexDirection: "column", justifyContent: "space-around", opacity: 0.06 }}>
         {Array.from({ length: 20 }).map((_, i) => (
           <div key={i} style={{ width: 16, height: 12, background: "#fff", margin: "0 auto", borderRadius: 1 }} />
@@ -1991,84 +1888,40 @@ function MemoryStop({
   year: string; level: string; title: string; line: string; color: string; emoji: string; index: number; side: "left" | "right";
 }) {
   const ref = useRef<HTMLDivElement>(null);
-  // Continuous fraction (0..1) — how much of the card is in view.
-  // Drives bloom-in on enter and gentle dim on exit. Bidirectional by design.
-  const [progress, setProgress] = useState(0);
-  const [typed, setTyped] = useState("");
-  const typingTimerRef = useRef<number | null>(null);
+  // visible toggles in BOTH directions as the card enters / leaves the viewport.
+  // Scrolling down past a card emerges it from the spine. Scrolling back up
+  // past it retracts back into the spine. The animation replays both ways.
+  const [visible, setVisible] = useState(false);
 
   useEffect(() => {
     const el = ref.current;
     if (!el) return;
     const obs = new IntersectionObserver(
       ([entry]) => {
-        // intersectionRatio gives us a smooth 0..1 with the configured thresholds.
-        const ratio = entry.intersectionRatio;
-        setProgress(ratio);
-
-        // Re-trigger the typewriter each time the card crosses into "warmly visible".
-        // Reset when it leaves, so re-entering replays the welcome.
-        if (ratio >= 0.45) {
-          if (typingTimerRef.current === null && typed !== line) {
-            let i = typed.length;
-            typingTimerRef.current = window.setInterval(() => {
-              i++;
-              setTyped(line.slice(0, i));
-              if (i >= line.length && typingTimerRef.current !== null) {
-                window.clearInterval(typingTimerRef.current);
-                typingTimerRef.current = null;
-              }
-            }, 22);
-          }
-        } else if (ratio < 0.15) {
-          if (typingTimerRef.current !== null) {
-            window.clearInterval(typingTimerRef.current);
-            typingTimerRef.current = null;
-          }
-          // Reset so the next entrance feels fresh.
-          if (typed.length > 0) setTyped("");
-        }
+        setVisible(entry.isIntersecting);
       },
-      {
-        // Many thresholds = smooth continuous fade in both directions
-        threshold: Array.from({ length: 21 }).map((_, i) => i / 20),
-      }
+      { threshold: 0.35, rootMargin: "0px 0px -10% 0px" }
     );
     obs.observe(el);
-    return () => {
-      obs.disconnect();
-      if (typingTimerRef.current !== null) {
-        window.clearInterval(typingTimerRef.current);
-        typingTimerRef.current = null;
-      }
-    };
-  }, [line, typed]);
+    return () => obs.disconnect();
+  }, []);
 
   const isLeft = side === "left";
-
-  // Smooth easing for the bloom-in effect
-  const eased = easeOutCubic(progress);
-  const opacity = 0.15 + eased * 0.85;          // never fully invisible — feels warmer
-  const translate = (1 - eased) * 32;           // moves into place
-  const scale = 0.96 + eased * 0.04;            // gentle bloom
-  const dotScale = 0.6 + eased * 0.4;           // dot grows
-  const glowAlpha = eased;                      // glow fades in
 
   return (
     <div
       ref={ref}
       className="memory-stop"
+      data-visible={visible ? "true" : "false"}
       style={{
         display: "grid",
         gridTemplateColumns: "1fr 60px 1fr",
         alignItems: "center",
         gap: 12,
         marginBottom: "clamp(40px, 6vw, 72px)",
-        transitionDelay: `${index * 40}ms`,
-        // Tell the layout to act mobile-first via CSS (handled by .memory-stop class)
       }}
     >
-      {/* Left card */}
+      {/* Left card — emerges from the center spine and slides outward */}
       <div
         className="memory-card-slot memory-card-slot-left"
         data-empty={!isLeft}
@@ -2078,27 +1931,50 @@ function MemoryStop({
           maxWidth: 420,
           textAlign: "right",
           visibility: isLeft ? "visible" : "hidden",
-          opacity: isLeft ? opacity : 0,
-          transform: isLeft ? `translateX(${-translate}px) scale(${scale})` : undefined,
-          transition: "opacity 280ms ease, transform 280ms cubic-bezier(0.34, 1.56, 0.64, 1)",
+          opacity: isLeft ? (visible ? 1 : 0) : 0,
+          transform: isLeft
+            ? visible
+              ? "translateX(0) scale(1)"
+              : "translateX(80px) scale(0.86)"
+            : undefined,
+          transformOrigin: "right center",
+          transition: `opacity 700ms cubic-bezier(0.22, 0.61, 0.36, 1) ${index * 60}ms, transform 800ms cubic-bezier(0.22, 0.61, 0.36, 1) ${index * 60}ms`,
+          filter: isLeft && !visible ? "blur(6px)" : "blur(0)",
+          willChange: "transform, opacity, filter",
         }}
       >
-        {isLeft && <MemoryCard year={year} level={level} title={title} typed={typed} color={color} emoji={emoji} side="left" />}
+        {isLeft && <MemoryCard year={year} level={level} title={title} line={line} color={color} emoji={emoji} side="left" />}
       </div>
 
-      {/* Center dot (with welcoming pulse halo) */}
+      {/* Center dot — pulse appears with the card */}
       <div className="memory-dot-col" style={{ gridColumn: 2, display: "flex", justifyContent: "center", position: "relative" }}>
         <div style={{ position: "relative", display: "inline-flex", alignItems: "center", justifyContent: "center" }}>
-          {/* Glow halo — fades in with progress */}
+          {/* Glow halo */}
           <span
             aria-hidden
             style={{
-              position: "absolute", inset: -14,
+              position: "absolute", inset: -16,
               borderRadius: "50%",
               background: `radial-gradient(circle, ${color}55, transparent 60%)`,
-              opacity: glowAlpha,
-              transition: "opacity 320ms ease",
-              filter: "blur(4px)",
+              opacity: visible ? 1 : 0,
+              transition: `opacity 600ms ease ${index * 60 + 80}ms`,
+              filter: "blur(5px)",
+            }}
+          />
+          {/* Burst ring — flashes outward as the card emerges */}
+          <span
+            aria-hidden
+            style={{
+              position: "absolute", inset: 0,
+              width: 22, height: 22,
+              borderRadius: "50%",
+              border: `2px solid ${color}`,
+              opacity: visible ? 0 : 0,
+              transform: visible ? "scale(2.6)" : "scale(0.6)",
+              transition: visible
+                ? `opacity 700ms ease ${index * 60}ms, transform 700ms cubic-bezier(0.22, 0.61, 0.36, 1) ${index * 60}ms`
+                : "none",
+              animation: visible ? `none` : undefined,
             }}
           />
           <div
@@ -2107,15 +1983,17 @@ function MemoryStop({
               borderRadius: "50%",
               background: color,
               border: `2px solid ${color}`,
-              boxShadow: `0 0 0 ${6 * eased}px ${color}25, 0 0 ${30 * eased}px ${color}80`,
-              transform: `scale(${dotScale})`,
-              transition: "transform 600ms cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 320ms ease",
+              boxShadow: visible
+                ? `0 0 0 6px ${color}25, 0 0 30px ${color}80`
+                : "none",
+              transform: visible ? "scale(1)" : "scale(0.5)",
+              transition: `transform 600ms cubic-bezier(0.34, 1.56, 0.64, 1) ${index * 60}ms, box-shadow 600ms ease ${index * 60 + 100}ms`,
             }}
           />
         </div>
       </div>
 
-      {/* Right card */}
+      {/* Right card — emerges from center spine sliding right */}
       <div
         className="memory-card-slot memory-card-slot-right"
         data-empty={isLeft}
@@ -2125,26 +2003,28 @@ function MemoryStop({
           maxWidth: 420,
           textAlign: "left",
           visibility: !isLeft ? "visible" : "hidden",
-          opacity: !isLeft ? opacity : 0,
-          transform: !isLeft ? `translateX(${translate}px) scale(${scale})` : undefined,
-          transition: "opacity 280ms ease, transform 280ms cubic-bezier(0.34, 1.56, 0.64, 1)",
+          opacity: !isLeft ? (visible ? 1 : 0) : 0,
+          transform: !isLeft
+            ? visible
+              ? "translateX(0) scale(1)"
+              : "translateX(-80px) scale(0.86)"
+            : undefined,
+          transformOrigin: "left center",
+          transition: `opacity 700ms cubic-bezier(0.22, 0.61, 0.36, 1) ${index * 60}ms, transform 800ms cubic-bezier(0.22, 0.61, 0.36, 1) ${index * 60}ms`,
+          filter: !isLeft && !visible ? "blur(6px)" : "blur(0)",
+          willChange: "transform, opacity, filter",
         }}
       >
-        {!isLeft && <MemoryCard year={year} level={level} title={title} typed={typed} color={color} emoji={emoji} side="right" />}
+        {!isLeft && <MemoryCard year={year} level={level} title={title} line={line} color={color} emoji={emoji} side="right" />}
       </div>
     </div>
   );
 }
 
-function easeOutCubic(t: number): number {
-  const x = Math.max(0, Math.min(1, t));
-  return 1 - Math.pow(1 - x, 3);
-}
-
 function MemoryCard({
-  year, level, title, typed, color, emoji, side,
+  year, level, title, line, color, emoji, side,
 }: {
-  year: string; level: string; title: string; typed: string; color: string; emoji: string; side: "left" | "right";
+  year: string; level: string; title: string; line: string; color: string; emoji: string; side: "left" | "right";
 }) {
   return (
     <div
@@ -2175,9 +2055,8 @@ function MemoryCard({
       <h3 style={{ ...jkt, fontWeight: 700, fontSize: 18, color: "#fff", letterSpacing: "-0.02em", marginBottom: 8, lineHeight: 1.2 }}>
         {title}
       </h3>
-      <p style={{ ...sans, fontSize: 13.5, color: "rgba(255,255,255,0.5)", lineHeight: 1.65, minHeight: "5em" }}>
-        {typed}
-        <span className="nv-caret" style={{ background: color, marginLeft: 2 }} />
+      <p style={{ ...sans, fontSize: 13.5, color: "rgba(255,255,255,0.55)", lineHeight: 1.65 }}>
+        {line}
       </p>
     </div>
   );
@@ -2209,10 +2088,9 @@ function TicketStub({ classYear }: { classYear: number }) {
 
 /* ─── Department Section ─────────────────────────────────── */
 const RESERVE_PERKS = [
-  { title: "One-tap reserve",        body: "Reserve any template. The system locks it to your department instantly." },
-  { title: "Auto-grant on sign-in",  body: "Members of your department get access automatically. No codes. No friction." },
-  { title: "Others see a polite no", body: "Anyone outside your department gets a message: 'Reserved for [Department].'" },
-  { title: "Release when done",      body: "Free the design after sign-out week. No subscriptions. No monthly fees." },
+  { title: "One-tap reserve",  body: "Lock a design to your dept instantly." },
+  { title: "Auto-access",      body: "Members sign in and they're in. No codes." },
+  { title: "Release any time", body: "Free it after sign-out week. Zero fees." },
 ] as const;
 
 function DepartmentSection() {
@@ -2252,9 +2130,9 @@ function DepartmentSection() {
                 your department.
               </span>
             </h2>
-            <p style={{ ...sans, fontSize: "clamp(15px, 1.3vw, 18px)", lineHeight: 1.7, color: "rgba(255,255,255,0.5)", marginTop: 22, maxWidth: "48ch" }}>
-              Reserve any template for your department in one tap. Members of your department get access
-              <span style={{ color: "#4ECDC4", fontWeight: 600 }}> automatically on sign-in</span> — no passcodes, no codes to share, no DM chains. Anyone outside your dept sees a friendly &ldquo;Reserved for [Department]&rdquo; message.
+            <p style={{ ...sans, fontSize: "clamp(15px, 1.3vw, 18px)", lineHeight: 1.65, color: "rgba(255,255,255,0.55)", marginTop: 22, maxWidth: "42ch" }}>
+              Reserve a template for your department. Members get
+              <span style={{ color: "#4ECDC4", fontWeight: 600 }}> automatic access</span>. Outsiders see a polite &ldquo;reserved&rdquo; message.
             </p>
 
             {/* Perks grid (2x2) */}
@@ -2675,7 +2553,7 @@ function PricingSection() {
                   textTransform: "uppercase",
                 }}
               >
-                Start designing — ₦1,000 →
+                Start designing
               </Link>
               <p style={{ ...mono, fontSize: 9, letterSpacing: "0.18em", color: "rgba(255,255,255,0.32)", textTransform: "uppercase", textAlign: "center", marginTop: 14 }}>
                 No card needed yet · Pay only on export
@@ -2692,7 +2570,7 @@ function PricingSection() {
 const FAQ_ITEMS = [
   { q: "Do I need design experience?", a: "No. Every template carries the design intent - fonts, layout, colour rules - and exposes only the fields that matter (your name, your department, your photo). Type, replace, export." },
   { q: "What does the ₦1,000 cover?", a: "One high-resolution PNG export of one design. Editing is always free. If your download fails after payment, you can resume from your dashboard at no extra cost." },
-  { q: "How does the department reserve work?", a: "If you're a department head, you can reserve any template for your department in one tap. Members of your department get access automatically when they sign in — no passcodes, no codes to share. Outsiders see a polite 'Reserved for [Department]' message. Release the reservation any time, no monthly fee." },
+  { q: "How does the department reserve work?", a: "If you're a department head, you can reserve any template for your department in one tap. Members of your department get access automatically when they sign in - no passcodes, no codes to share. Outsiders see a polite 'Reserved for [Department]' message. Release the reservation any time, no monthly fee." },
   { q: "Can I edit a downloaded design later?", a: "Yes - your edits are saved locally on the device you used. Open the design from your dashboard and pick up where you left off. A second download is a fresh ₦1,000." },
   { q: "Is my payment secure?", a: "Payments are processed by Paystack. We never see your card details. Every payment is verified server-side before the download unlocks. You receive an email receipt with the Paystack reference." },
   { q: "What if my download fails mid-way?", a: "Your payment is reserved the moment Paystack confirms it. If the browser dies, network drops, or you close the tab - your dashboard shows a Resume button waiting for you. No extra charge." },
@@ -2763,7 +2641,7 @@ function ClosingCta({ classYear }: { classYear: number }) {
       {/* Canvas confetti */}
       <ConfettiCanvas />
 
-      {/* Floating decoration — glowing graduation cap */}
+      {/* Floating decoration - glowing graduation cap */}
       <div aria-hidden style={{ position: "absolute", top: "10%", right: "5%", pointerEvents: "none", zIndex: 0 }}>
         <svg width="120" height="120" viewBox="0 0 80 80" fill="none" style={{ opacity: 0.18, filter: "drop-shadow(0 0 20px rgba(255,215,0,0.4))" }}>
           <polygon points="40,8 72,24 40,40 8,24" fill="#FFD700" />
@@ -2864,7 +2742,7 @@ function FooterSection({ classYear }: { classYear: number }) {
       </div>
 
       <div className="mx-auto px-5 sm:px-8" style={{ maxWidth: 1400, position: "relative" }}>
-        {/* HERO PAYOFF — giant brand mark */}
+        {/* HERO PAYOFF - giant brand mark */}
         <div style={{ textAlign: "center", marginBottom: "clamp(56px,7vw,96px)" }}>
           <div style={{ display: "inline-flex", alignItems: "center", gap: 10, marginBottom: 20 }}>
             <span
@@ -2905,7 +2783,7 @@ function FooterSection({ classYear }: { classYear: number }) {
               className="nv-laser-btn"
               style={{ height: 54, padding: "0 32px", borderRadius: 10, fontSize: 12, letterSpacing: "0.1em", ...mono, display: "inline-flex", alignItems: "center", gap: 10, textTransform: "uppercase" }}
             >
-              Open the studio →
+              Open the studio
             </Link>
             <Link
               href="/signin"
@@ -3039,23 +2917,66 @@ function FLink({ href, children }: { href: string; children: ReactNode }) {
 
 /* ─── Mobile Bottom Nav ──────────────────────────────────── */
 function MobileBottomNav() {
+  // Only appears once the user scrolls past the hero. Visible on every screen
+  // size — small floating pill nav for quick jumps from anywhere on the page.
+  const [visible, setVisible] = useState(false);
+
+  useEffect(() => {
+    const threshold = 220; // px — beyond the fold
+    let raf = 0;
+    const update = () => {
+      raf = 0;
+      setVisible(window.scrollY > threshold);
+    };
+    const onScroll = () => {
+      if (raf) return;
+      raf = requestAnimationFrame(update);
+    };
+    window.addEventListener("scroll", onScroll, { passive: true });
+    onScroll();
+    return () => {
+      window.removeEventListener("scroll", onScroll);
+      if (raf) cancelAnimationFrame(raf);
+    };
+  }, []);
+
   return (
-    <nav className="md:hidden" aria-label="Mobile navigation" style={{
-      position: "fixed", bottom: 16, left: "50%", transform: "translateX(-50%)",
-      zIndex: 40, backdropFilter: "blur(20px)", WebkitBackdropFilter: "blur(20px)",
-      background: "rgba(16,16,16,0.9)", border: "1px solid rgba(255,255,255,0.1)",
-      borderRadius: 100, display: "flex", alignItems: "center", height: 56, padding: "0 6px",
-      boxShadow: "0 8px 40px rgba(0,0,0,0.6), 0 1px 0 rgba(255,255,255,0.06) inset",
-    }}>
+    <nav
+      aria-label="Page navigation"
+      style={{
+        position: "fixed", bottom: 18, left: "50%",
+        transform: visible ? "translateX(-50%) translateY(0)" : "translateX(-50%) translateY(120%)",
+        zIndex: 40,
+        backdropFilter: "blur(20px)",
+        WebkitBackdropFilter: "blur(20px)",
+        background: "rgba(12,12,12,0.92)",
+        border: "1px solid rgba(255,215,0,0.18)",
+        borderRadius: 100,
+        display: "flex", alignItems: "center",
+        height: 52, padding: "0 6px",
+        boxShadow: "0 18px 50px rgba(0,0,0,0.7), 0 0 40px rgba(255,180,0,0.06), 0 1px 0 rgba(255,255,255,0.06) inset",
+        opacity: visible ? 1 : 0,
+        pointerEvents: visible ? "auto" : "none",
+        transition: "transform 500ms cubic-bezier(0.34, 1.56, 0.64, 1), opacity 400ms cubic-bezier(0.4, 0, 0.2, 1)",
+      }}
+    >
       {([["Home", "/"], ["Templates", "/templates"], ["Pricing", "#pricing"], ["Sign in", "/signin"]] as const).map(([label, href]) => (
-        <Link key={label} href={href} style={{
-          ...mono, fontSize: 10, letterSpacing: "0.08em", color: "rgba(255,255,255,0.45)",
-          textDecoration: "none", textTransform: "uppercase", display: "flex",
-          alignItems: "center", justifyContent: "center", minHeight: 48, minWidth: 56,
-          padding: "0 14px", borderRadius: 100, transition: "color 200ms, background 200ms", whiteSpace: "nowrap",
-        }}
-          onMouseEnter={e => { e.currentTarget.style.color = "#fff"; e.currentTarget.style.background = "rgba(255,255,255,0.07)"; }}
-          onMouseLeave={e => { e.currentTarget.style.color = "rgba(255,255,255,0.45)"; e.currentTarget.style.background = "transparent"; }}>
+        <Link
+          key={label}
+          href={href}
+          style={{
+            ...mono, fontSize: 10, letterSpacing: "0.08em",
+            color: "rgba(255,255,255,0.5)",
+            textDecoration: "none", textTransform: "uppercase",
+            display: "flex", alignItems: "center", justifyContent: "center",
+            minHeight: 44, minWidth: 56,
+            padding: "0 14px", borderRadius: 100,
+            transition: "color 200ms, background 200ms",
+            whiteSpace: "nowrap",
+          }}
+          onMouseEnter={(e) => { e.currentTarget.style.color = "#FFD700"; e.currentTarget.style.background = "rgba(255,215,0,0.06)"; }}
+          onMouseLeave={(e) => { e.currentTarget.style.color = "rgba(255,255,255,0.5)"; e.currentTarget.style.background = "transparent"; }}
+        >
           {label}
         </Link>
       ))}
@@ -3262,223 +3183,365 @@ function AnimatedWords({ text, delay = 0, style }: { text: string; delay?: numbe
 }
 
 
-/* ── Loading screen (first-visit only) — ceremony prelude ── */
+/* ── Loading screen (first-visit only) - ceremony prelude ── */
+/* ── Cinematic intro: curtain open → confetti puff → trigger welcome ── */
 function LoadingScreen({ onDone }: { onDone: () => void }) {
-  const [phase, setPhase] = useState<"in" | "hold" | "out">("in");
-  const [progress, setProgress] = useState(0);
+  // Phase timing — celebration countdown → curtain opens → confetti puff
+  //   0–2700ms  : "3, 2, 1" countdown over the closed curtains
+  //   2700ms    : curtains start opening
+  //   3300ms    : confetti puff bursts from center as curtains pass mid-point
+  //   4300ms    : curtains fully open, layer fades out → trigger welcome
+  const [phase, setPhase] = useState<"countdown" | "opening" | "open">("countdown");
+  const [tick, setTick] = useState(3);
+  const puffCanvasRef = useRef<HTMLCanvasElement>(null);
 
+  // 3-2-1 countdown ticks every 700ms
   useEffect(() => {
-    const start = performance.now();
-    const dur = 2200;
-    let raf: number;
-    const tick = (now: number) => {
-      const p = Math.min((now - start) / dur, 1);
-      const eased = 1 - Math.pow(1 - p, 3);
-      setProgress(eased);
-      if (p < 1) {
-        raf = requestAnimationFrame(tick);
-      } else {
-        setPhase("hold");
-        setTimeout(() => {
-          setPhase("out");
-          setTimeout(onDone, 700);
-        }, 350);
-      }
+    if (phase !== "countdown") return;
+    const a = window.setTimeout(() => setTick(2), 700);
+    const b = window.setTimeout(() => setTick(1), 1400);
+    return () => {
+      window.clearTimeout(a);
+      window.clearTimeout(b);
     };
-    raf = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(raf);
+  }, [phase]);
+
+  // Phase transitions
+  useEffect(() => {
+    const t1 = window.setTimeout(() => setPhase("opening"), 2100);
+    const t2 = window.setTimeout(() => setPhase("open"), 3700);
+    const t3 = window.setTimeout(onDone, 4400);
+    return () => {
+      window.clearTimeout(t1);
+      window.clearTimeout(t2);
+      window.clearTimeout(t3);
+    };
   }, [onDone]);
 
-  const opening = phase === "out";
+  // Fire confetti puff from center exactly as curtains pass mid-point
+  useEffect(() => {
+    if (phase !== "opening") return;
+    const fireDelay = 600;
+    const t = window.setTimeout(() => firePuff(puffCanvasRef.current), fireDelay);
+    return () => window.clearTimeout(t);
+  }, [phase]);
+
+  const curtainOpen = phase !== "countdown";
+  const layerOut = phase === "open";
 
   return (
     <div
       style={{
         position: "fixed", inset: 0, zIndex: 9999,
-        background: "#050505",
-        display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
-        transition: "opacity 650ms cubic-bezier(0.32,0,0.18,1)",
-        opacity: opening ? 0 : 1,
-        pointerEvents: opening ? "none" : "auto",
+        pointerEvents: layerOut ? "none" : "auto",
+        opacity: layerOut ? 0 : 1,
+        transition: "opacity 700ms cubic-bezier(0.4,0,0.2,1)",
         overflow: "hidden",
       }}
+      aria-hidden
     >
-      {/* Curtain reveal — two panels slide apart at the end */}
+      {/* Backdrop behind the curtains — soft gold radial */}
       <div
-        aria-hidden
-        style={{
-          position: "absolute",
-          top: 0, bottom: 0, left: 0,
-          width: "50%",
-          background: "linear-gradient(90deg, #050505 60%, #0c0904)",
-          transform: opening ? "translateX(-100%)" : "translateX(0)",
-          transition: "transform 800ms cubic-bezier(0.86, 0, 0.07, 1) 50ms",
-          zIndex: 8,
-        }}
-      />
-      <div
-        aria-hidden
-        style={{
-          position: "absolute",
-          top: 0, bottom: 0, right: 0,
-          width: "50%",
-          background: "linear-gradient(270deg, #050505 60%, #0c0904)",
-          transform: opening ? "translateX(100%)" : "translateX(0)",
-          transition: "transform 800ms cubic-bezier(0.86, 0, 0.07, 1) 50ms",
-          zIndex: 8,
-        }}
-      />
-
-      {/* Soft gold radial glow */}
-      <div
-        aria-hidden
         style={{
           position: "absolute", inset: 0,
-          background: "radial-gradient(ellipse 50% 35% at 50% 50%, rgba(255,180,0,0.18), transparent 70%)",
-          opacity: progress,
-          zIndex: 1,
+          background:
+            "radial-gradient(ellipse 60% 45% at 50% 50%, rgba(255,180,0,0.18), rgba(8,6,2,1) 70%), #050505",
         }}
       />
 
-      {/* Top eyebrow — studio mark */}
+      {/* Confetti puff canvas — rendered behind the curtains so the puff is
+          REVEALED as the curtains open over it */}
+      <canvas
+        ref={puffCanvasRef}
+        style={{
+          position: "absolute", inset: 0,
+          width: "100%", height: "100%",
+          pointerEvents: "none",
+        }}
+      />
+
+      {/* Brand mark — small, top-center, fades out as curtains start to open */}
       <div
         style={{
-          position: "absolute", top: "clamp(28px,5vw,52px)", left: 0, right: 0,
-          display: "flex", justifyContent: "center", alignItems: "center", gap: 10,
-          zIndex: 5,
-          opacity: progress,
-          transition: "opacity 400ms ease",
+          position: "absolute",
+          top: "clamp(36px, 8vh, 72px)",
+          left: 0, right: 0,
+          display: "flex", alignItems: "center", justifyContent: "center",
+          zIndex: 9,
+          opacity: phase === "countdown" ? 1 : 0,
+          transition: "opacity 400ms cubic-bezier(0.4,0,0.2,1)",
         }}
       >
-        <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#FFD700" }} />
-        <span style={{ ...mono, fontSize: 10, letterSpacing: "0.5em", color: "rgba(255,255,255,0.55)", textTransform: "uppercase" }}>
-          FYB Studio
-        </span>
-      </div>
-
-      {/* Center: graduation cap with rotating outer ring */}
-      <div
-        style={{
-          position: "relative", zIndex: 5,
-          display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
-          width: "min(280px, 60vw)", aspectRatio: "1",
-        }}
-      >
-        {/* Rotating outer ring (progress fill) */}
-        <svg
-          aria-hidden
-          viewBox="0 0 200 200"
-          style={{ position: "absolute", inset: 0, width: "100%", height: "100%", transform: "rotate(-90deg)" }}
-        >
-          <circle cx="100" cy="100" r="90" fill="none" stroke="rgba(255,215,0,0.08)" strokeWidth="1.5" />
-          <circle
-            cx="100" cy="100" r="90"
-            fill="none"
-            stroke="url(#loadGrad)"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeDasharray={Math.PI * 2 * 90}
-            strokeDashoffset={Math.PI * 2 * 90 * (1 - progress)}
-            style={{ filter: "drop-shadow(0 0 8px #FFD700)", transition: "stroke-dashoffset 80ms linear" }}
-          />
-          <defs>
-            <linearGradient id="loadGrad" x1="0" y1="0" x2="1" y2="1">
-              <stop offset="0%"   stopColor="#FFD700" />
-              <stop offset="100%" stopColor="#FF6B6B" />
-            </linearGradient>
-          </defs>
-        </svg>
-
-        {/* Inner concentric dotted ring */}
-        <div
-          aria-hidden
-          className="nv-spin-slow"
-          style={{
-            position: "absolute", inset: "18%",
-            borderRadius: "50%",
-            border: "1px dashed rgba(255,215,0,0.22)",
-          }}
-        />
-
-        {/* Graduation cap (drops in + slight bounce) */}
-        <div
-          style={{
-            color: "#FFD700",
-            filter: "drop-shadow(0 12px 30px rgba(255,180,0,0.5))",
-            transform: progress < 0.15
-              ? `translateY(-40px) scale(0.7)`
-              : progress < 0.4
-                ? `translateY(0) scale(1.05)`
-                : `translateY(0) scale(1)`,
-            opacity: progress < 0.05 ? 0 : 1,
-            transition: "transform 600ms cubic-bezier(0.34, 1.56, 0.64, 1), opacity 400ms",
-          }}
-        >
-          <GraduationCap size={72} strokeWidth={1.5} />
+        <div className="flex items-center gap-2.5">
+          <span
+            aria-hidden
+            style={{
+              position: "relative",
+              display: "inline-flex",
+              width: 32, height: 32,
+              borderRadius: 8,
+              overflow: "hidden",
+              boxShadow: "0 4px 14px rgba(255,180,0,0.3)",
+            }}
+          >
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src="/logo.jpg" alt="FYB" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+          </span>
+          <span
+            style={{
+              ...mono, fontSize: 11, fontWeight: 800,
+              letterSpacing: "0.32em", color: "rgba(255,255,255,0.85)", textTransform: "uppercase",
+            }}
+          >
+            FYB Studio
+          </span>
         </div>
       </div>
 
-      {/* Loading line — refined */}
+      {/* Celebration countdown — big "3, 2, 1" with ring + tagline */}
       <div
         style={{
-          marginTop: 52, zIndex: 5,
-          display: "flex", alignItems: "center", gap: 14,
-          opacity: progress,
-          transition: "opacity 400ms ease",
+          position: "absolute", inset: 0,
+          display: "flex", flexDirection: "column",
+          alignItems: "center", justifyContent: "center",
+          zIndex: 9,
+          opacity: phase === "countdown" ? 1 : 0,
+          transition: "opacity 350ms cubic-bezier(0.4,0,0.2,1)",
+          pointerEvents: "none",
         }}
       >
-        <span
+        {/* "The ceremony begins in" tag */}
+        <div
           style={{
-            ...mono, fontSize: 10, letterSpacing: "0.3em",
-            color: "rgba(255,215,0,0.85)", textTransform: "uppercase",
+            display: "inline-flex", alignItems: "center", gap: 10,
+            marginBottom: 28,
           }}
         >
-          Curtain rising
-        </span>
-        <span style={{ ...mono, fontSize: 10, color: "rgba(255,215,0,0.4)", fontVariantNumeric: "tabular-nums" }}>
-          {Math.round(progress * 100)}%
-        </span>
-      </div>
-
-      {/* Tiny scattered motes drifting upward */}
-      <div aria-hidden style={{ position: "absolute", inset: 0, pointerEvents: "none", zIndex: 2, overflow: "hidden" }}>
-        {LOAD_MOTES.map((m, i) => (
           <span
-            key={i}
-            className="nv-float-slow"
             style={{
-              position: "absolute",
-              left: `${m.x}%`, top: `${m.y}%`,
-              width: m.s, height: m.s,
+              position: "relative", width: 7, height: 7, display: "inline-flex",
+            }}
+          >
+            <span className="nv-pulse-ring" style={{ position: "absolute", inset: 0, border: "1.5px solid rgba(255,215,0,0.6)", borderRadius: "50%" }} />
+            <span style={{ width: 7, height: 7, borderRadius: "50%", background: "#FFD700" }} />
+          </span>
+          <span
+            style={{
+              ...mono, fontSize: 11, letterSpacing: "0.3em",
+              color: "rgba(255,215,0,0.8)", textTransform: "uppercase",
+              fontWeight: 700,
+            }}
+          >
+            The ceremony begins in
+          </span>
+        </div>
+
+        {/* Countdown digit with pulse ring */}
+        <div
+          key={tick}
+          style={{
+            position: "relative",
+            display: "inline-flex",
+            alignItems: "center", justifyContent: "center",
+            width: 200, height: 200,
+            animation: "nv-countdown-pop 700ms cubic-bezier(0.34, 1.56, 0.64, 1) both",
+          }}
+        >
+          {/* Outer pulsing rings */}
+          <span
+            aria-hidden
+            style={{
+              position: "absolute", inset: -10,
               borderRadius: "50%",
-              background: m.c,
-              opacity: progress * 0.7,
-              boxShadow: `0 0 ${m.s * 3}px ${m.c}`,
-              animationDelay: `${m.d}s`,
+              border: "1.5px solid rgba(255,215,0,0.25)",
             }}
           />
-        ))}
+          <span
+            aria-hidden
+            style={{
+              position: "absolute", inset: 8,
+              borderRadius: "50%",
+              border: "1.5px dashed rgba(255,215,0,0.4)",
+              animation: "nv-spin-cw 12s linear infinite",
+            }}
+          />
+          <span
+            aria-hidden
+            style={{
+              position: "absolute", inset: 0,
+              borderRadius: "50%",
+              background: "radial-gradient(circle, rgba(255,180,0,0.18), transparent 70%)",
+              filter: "blur(8px)",
+            }}
+          />
+          {/* The digit */}
+          <span
+            className="nv-shimmer-text"
+            style={{
+              ...jkt,
+              fontSize: 180, fontWeight: 900,
+              lineHeight: 1, letterSpacing: "-0.04em",
+              fontVariantNumeric: "tabular-nums",
+              display: "inline-block",
+            }}
+          >
+            {tick}
+          </span>
+        </div>
+
+        {/* Subtitle */}
+        <div
+          style={{
+            marginTop: 28,
+            ...mono, fontSize: 10, letterSpacing: "0.28em",
+            color: "rgba(255,255,255,0.5)", textTransform: "uppercase",
+          }}
+        >
+          Class of {getClassYear()} · One unforgettable week
+        </div>
       </div>
+
+      {/* LEFT curtain — solid then slides off-screen left */}
+      <div
+        style={{
+          position: "absolute", top: 0, bottom: 0, left: 0,
+          width: "50%",
+          background: "linear-gradient(90deg, #050505 0%, #0c0904 100%)",
+          borderRight: curtainOpen ? "1px solid rgba(255,215,0,0.35)" : "none",
+          transform: curtainOpen ? "translateX(-100%)" : "translateX(0)",
+          transition: "transform 1500ms cubic-bezier(0.76, 0, 0.24, 1)",
+          zIndex: 10,
+          boxShadow: curtainOpen ? "10px 0 40px rgba(255,180,0,0.18)" : "none",
+        }}
+      />
+      {/* RIGHT curtain */}
+      <div
+        style={{
+          position: "absolute", top: 0, bottom: 0, right: 0,
+          width: "50%",
+          background: "linear-gradient(270deg, #050505 0%, #0c0904 100%)",
+          borderLeft: curtainOpen ? "1px solid rgba(255,215,0,0.35)" : "none",
+          transform: curtainOpen ? "translateX(100%)" : "translateX(0)",
+          transition: "transform 1500ms cubic-bezier(0.76, 0, 0.24, 1)",
+          zIndex: 10,
+          boxShadow: curtainOpen ? "-10px 0 40px rgba(255,180,0,0.18)" : "none",
+        }}
+      />
+
+      {/* Top rim light — appears as curtains begin to part */}
+      <div
+        style={{
+          position: "absolute", top: 0, left: 0, right: 0,
+          height: 2,
+          background: "linear-gradient(90deg, transparent, #FFD700 50%, transparent)",
+          opacity: curtainOpen ? 1 : 0,
+          transition: "opacity 600ms 200ms cubic-bezier(0.4,0,0.2,1)",
+          zIndex: 11,
+          filter: "drop-shadow(0 0 12px #FFD700)",
+        }}
+      />
     </div>
   );
 }
 
-const LOAD_MOTES = Array.from({ length: 14 }).map((_, i) => {
-  const seed = Math.sin(i * 12.99 + 1) * 43758.5453;
-  const r = seed - Math.floor(seed);
-  const seed2 = Math.sin(i * 78.233 + 3) * 43758.5453;
-  const r2 = seed2 - Math.floor(seed2);
-  const colors = ["#FFD700", "#FF8C42", "#FF6B6B", "#4ECDC4", "#A855F7"];
+/**
+ * Pre-computed (deterministic) confetti particles. Avoids Math.random in render
+ * which would trigger React 19 purity warnings. Each particle gets a
+ * stable angle, distance, color, rotation, and size.
+ */
+const PUFF_PARTICLES = Array.from({ length: 120 }).map((_, i) => {
+  const a = Math.sin(i * 12.9898) * 43758.5453;
+  const b = Math.sin(i * 78.233) * 43758.5453;
+  const c = Math.sin(i * 39.346) * 43758.5453;
+  const ra = a - Math.floor(a);
+  const rb = b - Math.floor(b);
+  const rc = c - Math.floor(c);
+  const angle = ra * Math.PI * 2;
+  const speed = 6 + rb * 18;
+  const colors = ["#FFD700", "#FFED4A", "#FF8C42", "#FF6B6B", "#4ECDC4", "#A855F7", "#84CC16", "#06B6D4", "#EC4899"];
   return {
-    x: 5 + r * 90,
-    y: 10 + r2 * 80,
-    s: 2 + r * 4,
-    c: colors[i % colors.length],
-    d: r2 * 4,
+    vx: Math.cos(angle) * speed,
+    vy: Math.sin(angle) * speed - 4, // slight upward bias for a celebratory rise
+    rotV: (rc - 0.5) * 0.45,
+    color: colors[i % colors.length],
+    w: 4 + rb * 7,
+    h: 6 + ra * 9,
+    shape: (["rect", "rect", "circle", "ribbon"] as const)[i % 4],
   };
 });
 
-/* ── Celebration modal — opening ceremony moment ── */
+function firePuff(canvas: HTMLCanvasElement | null) {
+  if (!canvas) return;
+  const W = canvas.clientWidth || window.innerWidth;
+  const H = canvas.clientHeight || window.innerHeight;
+  const dpr = Math.min(window.devicePixelRatio ?? 1, 2);
+  canvas.width = W * dpr;
+  canvas.height = H * dpr;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return;
+  ctx.scale(dpr, dpr);
+
+  const cx = W / 2;
+  const cy = H / 2;
+  const particles = PUFF_PARTICLES.map((p) => ({
+    x: cx, y: cy,
+    vx: p.vx, vy: p.vy,
+    rot: 0, rotV: p.rotV,
+    w: p.w, h: p.h,
+    color: p.color,
+    shape: p.shape,
+    opacity: 1,
+  }));
+
+  let lastTime = performance.now();
+  let raf = 0;
+  const draw = (now: number) => {
+    const dt = now - lastTime;
+    lastTime = now;
+    ctx.clearRect(0, 0, W, H);
+    let alive = false;
+    for (const p of particles) {
+      if (p.opacity <= 0) continue;
+      alive = true;
+      const f = dt / 16;
+      p.x += p.vx * f;
+      p.y += p.vy * f;
+      p.vy += 0.35 * f;       // gravity
+      p.vx *= Math.pow(0.985, f); // drag
+      p.rot += p.rotV * f;
+      // Fade out as it falls below the viewport
+      if (p.y > H * 0.6) p.opacity = Math.max(0, p.opacity - 0.02 * f);
+
+      ctx.save();
+      ctx.globalAlpha = p.opacity;
+      ctx.translate(p.x, p.y);
+      ctx.rotate(p.rot);
+      ctx.fillStyle = p.color;
+      ctx.shadowColor = p.color;
+      ctx.shadowBlur = 8;
+      if (p.shape === "circle") {
+        ctx.beginPath();
+        ctx.arc(0, 0, p.w / 2, 0, Math.PI * 2);
+        ctx.fill();
+      } else if (p.shape === "ribbon") {
+        ctx.beginPath();
+        ctx.moveTo(-p.w / 2, -p.h / 5);
+        ctx.quadraticCurveTo(0, -p.h * 0.6, p.w / 2, -p.h / 5);
+        ctx.quadraticCurveTo(0, p.h * 0.6, -p.w / 2, p.h / 5);
+        ctx.closePath();
+        ctx.fill();
+      } else {
+        ctx.fillRect(-p.w / 2, -p.h / 2, p.w, p.h);
+      }
+      ctx.restore();
+    }
+    if (alive) raf = requestAnimationFrame(draw);
+  };
+  raf = requestAnimationFrame(draw);
+  return () => cancelAnimationFrame(raf);
+}
+
+/* ── Celebration modal - opening ceremony moment ── */
 const CEL_COLORS = [
   "#FFD700", "#FFED4A", // gold
   "#FF6B6B", "#FF4757", // coral/red
@@ -3702,7 +3765,7 @@ function CelebrationModal({ classYear, onClose }: { classYear: number; onClose: 
         ))}
       </div>
 
-      {/* Ceremony stage — centerpiece */}
+      {/* Ceremony stage - centerpiece */}
       <div
         style={{
           position: "relative", zIndex: 5,
@@ -3796,22 +3859,7 @@ function CelebrationModal({ classYear, onClose }: { classYear: number; onClose: 
               display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 12,
             }}
           >
-            Take your seat — enter the studio →
-          </button>
-          <button
-            type="button"
-            onClick={handleClose}
-            style={{
-              ...mono, fontSize: 10, letterSpacing: "0.18em",
-              color: "rgba(255,255,255,0.32)", textTransform: "uppercase",
-              background: "none", border: "none", cursor: "pointer",
-              padding: "8px 16px",
-              transition: "color 200ms",
-            }}
-            onMouseEnter={e => (e.currentTarget.style.color = "rgba(255,255,255,0.7)")}
-            onMouseLeave={e => (e.currentTarget.style.color = "rgba(255,255,255,0.32)")}
-          >
-            Just browse for now
+            Take your seat - enter the studio
           </button>
         </div>
       </div>

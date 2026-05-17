@@ -101,7 +101,7 @@ export function FeedbackLauncher() {
           </button>
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
             <div className="flex items-start gap-3">
-              <div className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-[var(--accent-blue-soft)] text-[var(--accent-blue)] dark:bg-[var(--accent-blue-soft)] dark:text-[var(--accent-blue)]">
+              <div className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-[rgba(255,215,0,0.15)] text-[#FFD700] dark:bg-[rgba(255,215,0,0.15)] dark:text-[#FFD700]">
                 <Sparkles className="h-4 w-4" />
               </div>
               <div>
@@ -116,7 +116,7 @@ export function FeedbackLauncher() {
             <button
               type="button"
               onClick={() => openModal("dashboard_card")}
-              className="inline-flex h-9 shrink-0 items-center justify-center rounded-xl bg-surface-1 px-4 text-xs font-semibold text-white transition hover:bg-surface-2 dark:bg-[var(--accent-blue)] dark:hover:bg-[var(--accent-blue)]"
+              className="inline-flex h-9 shrink-0 items-center justify-center rounded-xl bg-surface-1 px-4 text-xs font-semibold text-white transition hover:bg-surface-2 dark:bg-[#FFD700] dark:hover:bg-[#FFD700]"
             >
               Share feedback
             </button>

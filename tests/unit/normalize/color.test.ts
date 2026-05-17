@@ -3,10 +3,10 @@ import { describe, expect, it } from "vitest";
 import { rgbaCss } from "@/lib/figma/normalize/shared/color";
 
 describe("rgbaCss", () => {
-  it("preserves full JS-number precision (no rounding) — Figma source values pass through unchanged", () => {
+  it("preserves full JS-number precision (no rounding) - Figma source values pass through unchanged", () => {
     // 0.003921568859368563 is what Figma exports for what is conceptually 1/255.
     // After multiplying by 255 we get 1.0000000591389835. The renderer must NOT
-    // truncate this to "1" — the full float must reach the CSS output.
+    // truncate this to "1" - the full float must reach the CSS output.
     const css = rgbaCss({ r: 0.003921568859368563, g: 0, b: 0, a: 1 });
     expect(css).toBe("rgba(1.0000000591389835, 0, 0, 1)");
   });

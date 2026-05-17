@@ -30,7 +30,7 @@ async function main() {
   }
 
   console.log(
-    `[seed] departments — created: ${created}, updated: ${updated}, total: ${DEPARTMENT_SEED.length}`
+    `[seed] departments - created: ${created}, updated: ${updated}, total: ${DEPARTMENT_SEED.length}`
   );
   process.exit(0);
 }

@@ -63,13 +63,13 @@ interface TextInputProps extends InputHTMLAttributes<HTMLInputElement> {
 const inputBase: CSSProperties = {
   ...bodyMd,
   width: "100%",
-  background: "var(--surface-1)",
+  background: "rgba(255,255,255,0.025)",
   color: "var(--ink)",
-  border: "1px solid var(--hairline)",
+  border: "1px solid rgba(255,215,0,0.18)",
   borderRadius: 10,
   padding: "10px 14px",
   outline: "none",
-  transition: "border-color 140ms ease, box-shadow 140ms ease",
+  transition: "border-color 140ms ease, box-shadow 140ms ease, background 140ms ease",
 };
 
 export const TextInput = forwardRef<HTMLInputElement, TextInputProps>(function TextInput(
@@ -92,7 +92,7 @@ export const TextInput = forwardRef<HTMLInputElement, TextInputProps>(function T
   const errorTone = Boolean(error);
   const baseStyle: CSSProperties = {
     ...inputBase,
-    borderColor: errorTone ? "var(--semantic-danger)" : "var(--hairline)",
+    borderColor: errorTone ? "var(--semantic-danger)" : "rgba(255,215,0,0.18)",
     paddingLeft: leftSlot ? 38 : 14,
     paddingRight: rightSlot ? 38 : 14,
     ...inputStyle,
@@ -122,15 +122,15 @@ export const TextInput = forwardRef<HTMLInputElement, TextInputProps>(function T
           style={baseStyle}
           onFocus={(e) => {
             if (!errorTone) {
-              e.currentTarget.style.borderColor = "var(--accent-blue)";
-              e.currentTarget.style.boxShadow = "0 0 0 3px var(--accent-blue-soft)";
+              e.currentTarget.style.borderColor = "rgba(255,215,0,0.6)";
+              e.currentTarget.style.boxShadow = "0 0 0 3px rgba(255,215,0,0.15)";
             }
             rest.onFocus?.(e);
           }}
           onBlur={(e) => {
             e.currentTarget.style.borderColor = errorTone
               ? "var(--semantic-danger)"
-              : "var(--hairline)";
+              : "rgba(255,215,0,0.18)";
             e.currentTarget.style.boxShadow = "none";
             rest.onBlur?.(e);
           }}
@@ -178,22 +178,22 @@ export const Textarea = forwardRef<HTMLTextAreaElement, TextareaProps>(function 
         className={className}
         style={{
           ...inputBase,
-          borderColor: errorTone ? "var(--semantic-danger)" : "var(--hairline)",
+          borderColor: errorTone ? "var(--semantic-danger)" : "rgba(255,215,0,0.18)",
           minHeight: 96,
           resize: "vertical",
           ...style,
         }}
         onFocus={(e) => {
           if (!errorTone) {
-            e.currentTarget.style.borderColor = "var(--accent-blue)";
-            e.currentTarget.style.boxShadow = "0 0 0 3px var(--accent-blue-soft)";
+            e.currentTarget.style.borderColor = "rgba(255,215,0,0.6)";
+            e.currentTarget.style.boxShadow = "0 0 0 3px rgba(255,215,0,0.15)";
           }
           rest.onFocus?.(e);
         }}
         onBlur={(e) => {
           e.currentTarget.style.borderColor = errorTone
             ? "var(--semantic-danger)"
-            : "var(--hairline)";
+            : "rgba(255,215,0,0.18)";
           e.currentTarget.style.boxShadow = "none";
           rest.onBlur?.(e);
         }}
@@ -232,7 +232,7 @@ export const Select = forwardRef<HTMLSelectElement, SelectProps>(function Select
         className={className}
         style={{
           ...inputBase,
-          borderColor: errorTone ? "var(--semantic-danger)" : "var(--hairline)",
+          borderColor: errorTone ? "var(--semantic-danger)" : "rgba(255,215,0,0.18)",
           paddingRight: 36,
           appearance: "none",
           backgroundImage:
@@ -243,15 +243,15 @@ export const Select = forwardRef<HTMLSelectElement, SelectProps>(function Select
         }}
         onFocus={(e) => {
           if (!errorTone) {
-            e.currentTarget.style.borderColor = "var(--accent-blue)";
-            e.currentTarget.style.boxShadow = "0 0 0 3px var(--accent-blue-soft)";
+            e.currentTarget.style.borderColor = "rgba(255,215,0,0.6)";
+            e.currentTarget.style.boxShadow = "0 0 0 3px rgba(255,215,0,0.15)";
           }
           rest.onFocus?.(e);
         }}
         onBlur={(e) => {
           e.currentTarget.style.borderColor = errorTone
             ? "var(--semantic-danger)"
-            : "var(--hairline)";
+            : "rgba(255,215,0,0.18)";
           e.currentTarget.style.boxShadow = "none";
           rest.onBlur?.(e);
         }}

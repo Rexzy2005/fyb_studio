@@ -1,7 +1,7 @@
 import mongoose from "mongoose";
 
 import { connectDb } from "@/backend/db/client";
-import { Template, type TemplateDoc } from "@/backend/db/models";
+import { Template, TemplateLock, type TemplateDoc } from "@/backend/db/models";
 import { AppError } from "@/backend/errors/app-error";
 import {
   coverFolder,
@@ -30,6 +30,12 @@ export type TemplateListItem = {
   coverHeight: number | null;
   publishedAt: string;
   updatedAt: string;
+  /**
+   * True when the viewer is signed-in, belongs to a department, AND that
+   * department's head has reserved this template. Lets the client highlight
+   * those templates and sort them to the top. Always false for guests.
+   */
+  reservedByMyDept: boolean;
 };
 
 export type TemplateDetailView = {
@@ -47,7 +53,7 @@ export type TemplateDetailView = {
   version: number;
 };
 
-function toListItem(doc: TemplateDoc): TemplateListItem {
+function toListItem(doc: TemplateDoc, reservedByMyDept = false): TemplateListItem {
   return {
     id: doc._id.toString(),
     name: doc.name,
@@ -57,6 +63,7 @@ function toListItem(doc: TemplateDoc): TemplateListItem {
     coverHeight: doc.cover.height ?? null,
     publishedAt: (doc.publishedAt ?? doc.createdAt).toISOString(),
     updatedAt: doc.updatedAt.toISOString(),
+    reservedByMyDept,
   };
 }
 
@@ -229,13 +236,40 @@ export async function deleteTemplateCompletely(templateId: string): Promise<void
   emitTemplateChange({ type: "unpublished", templateId: idStr, at: new Date().toISOString() });
 }
 
-export async function listPublishedTemplates(): Promise<TemplateListItem[]> {
+export async function listPublishedTemplates(opts?: {
+  /**
+   * When set, templates reserved by this department's head are tagged
+   * `reservedByMyDept: true` and sorted to the top of the list.
+   * For guests (no department), this is a no-op and items return false.
+   */
+  viewerDepartmentId?: string | null;
+}): Promise<TemplateListItem[]> {
   await connectDb();
   const docs = await Template.find({ status: "published" })
     .sort({ publishedAt: -1, updatedAt: -1 })
     .select("name category cover publishedAt updatedAt createdAt status")
     .lean<TemplateDoc[]>();
-  return docs.map((d) => toListItem(d));
+
+  const deptId = opts?.viewerDepartmentId;
+  if (!deptId || !mongoose.isValidObjectId(deptId)) {
+    // Guest or no-dept user: no priority sorting, just return the natural order
+    return docs.map((d) => toListItem(d, false));
+  }
+
+  // Pull all locks for this dept in a single query, then sort dept-reserved
+  // templates to the top while preserving the publishedAt order within groups.
+  const locks = await TemplateLock.find({ departmentId: deptId })
+    .select("templateId")
+    .lean<Array<{ templateId: mongoose.Types.ObjectId | string }>>();
+  const reservedSet = new Set(locks.map((l) => String(l.templateId)));
+
+  const items = docs.map((d) => toListItem(d, reservedSet.has(String(d._id))));
+  // Stable sort: reserved-by-my-dept first, otherwise keep existing order
+  items.sort((a, b) => {
+    if (a.reservedByMyDept === b.reservedByMyDept) return 0;
+    return a.reservedByMyDept ? -1 : 1;
+  });
+  return items;
 }
 
 export async function listAllTemplatesForAdmin(): Promise<TemplateListItem[]> {

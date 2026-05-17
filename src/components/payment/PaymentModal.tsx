@@ -194,7 +194,7 @@ export function PaymentModal({
               Re-downloads free for 24 h
             </span>
             <span className="flex items-center gap-1.5">
-              <ShieldCheck size={11} style={{ color: "var(--accent-blue)" }} />
+              <ShieldCheck size={11} style={{ color: "#FFD700" }} />
               Secured by Paystack
             </span>
           </div>

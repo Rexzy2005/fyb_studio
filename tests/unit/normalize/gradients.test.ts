@@ -2,9 +2,9 @@ import { describe, expect, it } from "vitest";
 
 import { parseFills } from "@/lib/figma/normalize/paints";
 
-describe("gradient normalization — all four kinds", () => {
+describe("gradient normalization - all four kinds", () => {
   it("captures GRADIENT_ANGULAR with multiple stops and no handles", () => {
-    // Mirrors the shape found in fyb_3.json — handles omitted, only stops + position.
+    // Mirrors the shape found in fyb_3.json - handles omitted, only stops + position.
     const out = parseFills(
       {
         fills: [

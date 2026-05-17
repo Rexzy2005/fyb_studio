@@ -30,6 +30,12 @@ export type PublicTemplateListItem = {
   coverHeight: number | null;
   publishedAt: string;
   updatedAt: string;
+  /**
+   * True when the viewer is signed in with a department AND the template's
+   * head has reserved it for that department. False for guests / non-members.
+   * The /api/templates list endpoint pins these to the top of the response.
+   */
+  reservedByMyDept: boolean;
 };
 
 async function readError(res: Response): Promise<string> {

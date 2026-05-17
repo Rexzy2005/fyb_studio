@@ -38,21 +38,23 @@ function variantStyle(variant: ButtonVariant): CSSProperties {
   switch (variant) {
     case "primary":
       return {
-        background: "var(--ink)",
+        background: "#FFD700",
         color: "#000",
-        border: "1px solid var(--ink)",
+        border: "1px solid #FFD700",
+        fontWeight: 700,
+        boxShadow: "0 6px 18px rgba(255,180,0,0.25)",
       };
     case "secondary":
       return {
-        background: "var(--surface-2)",
+        background: "rgba(255,215,0,0.06)",
         color: "var(--ink)",
-        border: "1px solid var(--hairline)",
+        border: "1px solid rgba(255,215,0,0.28)",
       };
     case "ghost":
       return {
         background: "transparent",
         color: "var(--ink)",
-        border: "1px solid var(--hairline)",
+        border: "1px solid rgba(255,215,0,0.22)",
       };
     case "danger":
       return {
@@ -63,7 +65,7 @@ function variantStyle(variant: ButtonVariant): CSSProperties {
     case "link":
       return {
         background: "transparent",
-        color: "var(--accent-blue)",
+        color: "#FFD700",
         border: "none",
         padding: 0,
         height: "auto",

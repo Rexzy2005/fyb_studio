@@ -1,5 +1,6 @@
 "use client";
 
+import type { CSSProperties } from "react";
 import type { FieldConfig } from "@/lib/storage/types";
 import { ImageUpload, inferFileMeta } from "@/components/forms/ImageUpload";
 
@@ -11,6 +12,27 @@ import { ImageUpload, inferFileMeta } from "@/components/forms/ImageUpload";
  * `density` controls input sizing only - not styling logic - so the same
  * field always renders consistently across surfaces.
  */
+const INPUT_BASE: CSSProperties = {
+  width: "100%",
+  background: "rgba(255,255,255,0.025)",
+  border: "1px solid rgba(255,215,0,0.18)",
+  borderRadius: 10,
+  color: "var(--ink)",
+  outline: "none",
+  transition: "border-color 140ms ease, box-shadow 140ms ease, background 140ms ease",
+};
+
+function focusGold(e: React.FocusEvent<HTMLInputElement | HTMLSelectElement>) {
+  e.currentTarget.style.borderColor = "rgba(255,215,0,0.6)";
+  e.currentTarget.style.boxShadow = "0 0 0 3px rgba(255,215,0,0.15)";
+  e.currentTarget.style.background = "rgba(255,255,255,0.04)";
+}
+function blurGold(e: React.FocusEvent<HTMLInputElement | HTMLSelectElement>) {
+  e.currentTarget.style.borderColor = "rgba(255,215,0,0.18)";
+  e.currentTarget.style.boxShadow = "none";
+  e.currentTarget.style.background = "rgba(255,255,255,0.025)";
+}
+
 export function FormField({
   field,
   previewTextByNodeId,
@@ -30,22 +52,31 @@ export function FormField({
   onPreviewColorChange: (nodeId: string, value: string) => void;
   density: "compact" | "comfortable";
 }) {
-  const inputClass =
-    density === "compact"
-      ? "h-9 rounded-xl border border-hairline bg-surface-1 px-3 text-[13px] text-ink dark:border-hairline dark:bg-surface-1 dark:text-ink"
-      : "h-11 rounded-2xl border border-hairline bg-surface-1 px-3 text-sm text-ink dark:border-hairline dark:bg-surface-1 dark:text-ink";
+  const inputStyle: CSSProperties = {
+    ...INPUT_BASE,
+    height: density === "compact" ? 38 : 44,
+    padding: "0 14px",
+    fontSize: density === "compact" ? 13 : 14,
+  };
 
   if (field.kind === "text") {
     const value = previewTextByNodeId[field.nodeId] ?? "";
     return (
-      <label className="grid gap-1">
-        <span className="text-xs font-medium text-ink dark:text-ink">{field.label}</span>
+      <label className="grid gap-1.5">
+        <span
+          className="text-[11px] font-semibold"
+          style={{ color: "#fff", letterSpacing: "0.01em" }}
+        >
+          {field.label}
+        </span>
         <input
           value={value}
           maxLength={field.maxChars}
           placeholder={field.placeholder ?? ""}
           onChange={(e) => onPreviewTextChange(field.nodeId, e.target.value)}
-          className={inputClass}
+          onFocus={focusGold}
+          onBlur={blurGold}
+          style={inputStyle}
         />
       </label>
     );
@@ -78,13 +109,20 @@ export function FormField({
     const palette = field.colorBehavior?.palette?.filter(Boolean) ?? [];
     const value = previewColorByNodeId[field.nodeId] ?? (palette[0] ?? "#000000");
     return (
-      <label className="grid gap-1">
-        <span className="text-xs font-medium text-ink dark:text-ink">{field.label}</span>
+      <label className="grid gap-1.5">
+        <span
+          className="text-[11px] font-semibold"
+          style={{ color: "#fff", letterSpacing: "0.01em" }}
+        >
+          {field.label}
+        </span>
         {palette.length ? (
           <select
             value={value}
             onChange={(e) => onPreviewColorChange(field.nodeId, e.target.value)}
-            className={inputClass}
+            onFocus={focusGold}
+            onBlur={blurGold}
+            style={inputStyle}
           >
             {palette.map((c) => (
               <option key={c} value={c}>
@@ -97,11 +135,15 @@ export function FormField({
             type="color"
             value={value}
             onChange={(e) => onPreviewColorChange(field.nodeId, e.target.value)}
-            className={
-              density === "compact"
-                ? "h-9 w-16 rounded-xl border border-hairline bg-surface-1 dark:border-hairline dark:bg-surface-1"
-                : "h-11 w-24 rounded-2xl border border-hairline bg-surface-1 dark:border-hairline dark:bg-surface-1"
-            }
+            onFocus={focusGold}
+            onBlur={blurGold}
+            style={{
+              ...INPUT_BASE,
+              height: density === "compact" ? 38 : 44,
+              width: density === "compact" ? 72 : 96,
+              padding: 4,
+              cursor: "pointer",
+            }}
           />
         )}
       </label>

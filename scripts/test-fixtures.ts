@@ -6,7 +6,7 @@
  * committed *.normalized.json snapshot.
  *
  * Modes:
- *   npm run test:fixtures            # diff mode — exits non-zero on mismatch
+ *   npm run test:fixtures            # diff mode - exits non-zero on mismatch
  *   npm run test:fixtures:update     # writes snapshots (use after intentional changes)
  *   npm run test:fixtures -- --list  # lists discovered fixtures
  *   npm run test:fixtures -- --only=elegant  # restrict to one fixture
@@ -120,7 +120,7 @@ async function runFixture(file: string, args: Args): Promise<FixtureResult> {
       name,
       status: "missing-snapshot",
       actualPath,
-      message: "no snapshot committed yet — re-run with --update to lock baseline",
+      message: "no snapshot committed yet - re-run with --update to lock baseline",
     };
   }
 
@@ -130,11 +130,11 @@ async function runFixture(file: string, args: Args): Promise<FixtureResult> {
       name,
       status: "diff",
       actualPath,
-      message: `IR drift — wrote ${actualPath}; diff externally to inspect`,
+      message: `IR drift - wrote ${actualPath}; diff externally to inspect`,
     };
   }
 
-  // Match — clear any leftover .actual.json from a prior run.
+  // Match - clear any leftover .actual.json from a prior run.
   await fs.rm(actualPath, { force: true });
   return { name, status: "ok" };
 }
@@ -187,7 +187,7 @@ async function main(): Promise<void> {
               : r.status === "missing-snapshot"
                 ? "MISS"
                 : "ERR ";
-    const line = `[${tag}] ${r.name}${r.message ? ` — ${r.message}` : ""}`;
+    const line = `[${tag}] ${r.name}${r.message ? ` - ${r.message}` : ""}`;
     if (r.status === "diff" || r.status === "missing-snapshot" || r.status === "error") {
       console.error(line);
       failures++;

@@ -131,7 +131,7 @@ export function PendingDownloads() {
               >
                 <Loader2
                   className="h-4 w-4 animate-spin"
-                  style={{ color: "var(--accent-blue)" }}
+                  style={{ color: "#FFD700" }}
                 />
                 <span style={{ ...caption, color: "var(--ink-muted)" }}>
                   Loading your pending downloads…

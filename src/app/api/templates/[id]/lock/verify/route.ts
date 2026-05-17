@@ -11,7 +11,7 @@ export const POST = withErrorHandler(async (req, ctx) => {
   const session = await requireSession();
   const { id } = await ctx.params;
 
-  // Accept any POST body — passcode is no longer required
+  // Accept any POST body - passcode is no longer required
   await req.json().catch(() => ({}));
 
   const result = await verifyPasscode({

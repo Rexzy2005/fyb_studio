@@ -78,19 +78,25 @@ function ActionRow({
       onClick={onClick}
       className="group flex items-start gap-3 transition"
       style={{
-        background: "var(--surface-2)",
-        border: "1px solid var(--hairline)",
+        background: "rgba(255,215,0,0.04)",
+        border: "1px solid rgba(255,215,0,0.18)",
         borderRadius: 12,
         padding: 14,
       }}
-      onMouseEnter={(e) => (e.currentTarget.style.borderColor = "var(--accent-blue)")}
-      onMouseLeave={(e) => (e.currentTarget.style.borderColor = "var(--hairline)")}
+      onMouseEnter={(e) => {
+        e.currentTarget.style.borderColor = "rgba(255,215,0,0.5)";
+        e.currentTarget.style.background = "rgba(255,215,0,0.08)";
+      }}
+      onMouseLeave={(e) => {
+        e.currentTarget.style.borderColor = "rgba(255,215,0,0.18)";
+        e.currentTarget.style.background = "rgba(255,215,0,0.04)";
+      }}
     >
       <div
         className="mt-0.5 grid h-9 w-9 flex-none place-items-center rounded-[10px]"
         style={{
-          background: accent ? "var(--accent-blue-soft)" : "var(--surface-3)",
-          color: accent ? "var(--accent-blue)" : "var(--ink)",
+          background: accent ? "rgba(255,215,0,0.15)" : "var(--surface-3)",
+          color: accent ? "#FFD700" : "var(--ink)",
         }}
       >
         {icon}

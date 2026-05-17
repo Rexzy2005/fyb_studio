@@ -5,8 +5,147 @@
  * Single dark canvas. Tokens mirror DESIGN.md.
  * ============================================================ */
 
+/* ============================================================
+ * GLOBAL CURSOR — Figma-style "Move" tool arrow
+ *
+ * Black-filled arrow with white outline, hotspot at the tip.
+ * Applied to the whole page; interactive elements override with
+ * the pointer (hand) variant. Form controls keep system cursors
+ * for accessibility (text caret, resize handles, etc.).
+ * ============================================================ */
 :root {
-  /* Color tokens — see DESIGN.md */
+  /* Encoded inline as data URLs so they render instantly with no
+     extra HTTP request. The number after the URL is the hotspot
+     (x y) in image pixels — the point that actually "clicks". */
+  /* Figma design-workspace "Move" (V) cursor — slim, angled black arrow
+     with a thin white outline. Hotspot is the very tip of the arrow. */
+  --cursor-default: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='18' height='18' viewBox='0 0 18 18'><path d='M3 2 L3 13 L6 10.5 L7.6 14.5 L9 13.9 L7.4 10 L11 10 Z' fill='%23000' stroke='%23fff' stroke-width='1.1' stroke-linejoin='round' stroke-linecap='round'/></svg>") 3 2;
+  /* Pointer (clickable) cursor — same slim arrow shape but with a small +
+     mark next to it, mirroring Figma's "can interact" hover affordance. */
+  --cursor-pointer: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='22' height='22' viewBox='0 0 22 22'><path d='M3 2 L3 13 L6 10.5 L7.6 14.5 L9 13.9 L7.4 10 L11 10 Z' fill='%23000' stroke='%23fff' stroke-width='1.1' stroke-linejoin='round' stroke-linecap='round'/><circle cx='15.5' cy='15.5' r='4' fill='%23000' stroke='%23fff' stroke-width='1.1'/><path d='M15.5 13.5 V17.5 M13.5 15.5 H17.5' stroke='%23fff' stroke-width='1.2' stroke-linecap='round'/></svg>") 3 2;
+}
+
+html, body {
+  cursor: var(--cursor-default), default;
+}
+
+/* Pointer (hand) cursor for clickable elements */
+a:not([disabled]),
+button:not([disabled]),
+[role="button"]:not([disabled]),
+[role="link"],
+[role="menuitem"],
+[role="tab"],
+[role="option"],
+[role="switch"],
+label[for],
+summary,
+select:not([disabled]),
+input[type="button"]:not([disabled]),
+input[type="submit"]:not([disabled]),
+input[type="reset"]:not([disabled]),
+input[type="checkbox"]:not([disabled]),
+input[type="radio"]:not([disabled]),
+.cursor-pointer {
+  cursor: var(--cursor-pointer), pointer;
+}
+
+/* Text inputs keep the native text caret for accessibility */
+input[type="text"],
+input[type="email"],
+input[type="password"],
+input[type="search"],
+input[type="url"],
+input[type="tel"],
+input[type="number"],
+input[type="date"],
+input[type="time"],
+input[type="datetime-local"],
+textarea,
+[contenteditable="true"],
+[contenteditable=""] {
+  cursor: text;
+}
+
+/* Disabled elements get the "not-allowed" indication */
+a[disabled],
+button[disabled],
+input[disabled],
+select[disabled],
+textarea[disabled],
+[aria-disabled="true"] {
+  cursor: not-allowed;
+}
+
+/* Canvas / pan-zoom surfaces should let users see their own gestures.
+   The DesignWorkspace canvas opts out via .fyb-canvas-cursor */
+.fyb-canvas-cursor {
+  cursor: grab;
+}
+.fyb-canvas-cursor:active {
+  cursor: grabbing;
+}
+
+/* ============================================================
+ * GLOBAL SCROLLBAR — slim, gold-accented, brand-matched
+ *
+ * WebKit (Chrome/Edge/Safari) + Firefox in one go.
+ * ============================================================ */
+
+/* WebKit-based browsers */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.015);
+  border-radius: 100px;
+}
+::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, rgba(255, 215, 0, 0.35) 0%, rgba(255, 140, 66, 0.25) 100%);
+  border: 2px solid #050505;
+  border-radius: 100px;
+  transition: background 200ms ease;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(180deg, rgba(255, 215, 0, 0.6) 0%, rgba(255, 140, 66, 0.45) 100%);
+  box-shadow: inset 0 0 6px rgba(255, 215, 0, 0.4);
+}
+::-webkit-scrollbar-thumb:active {
+  background: linear-gradient(180deg, #FFD700 0%, #FF8C42 100%);
+}
+::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+/* Firefox */
+html {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 215, 0, 0.35) rgba(255, 255, 255, 0.015);
+}
+
+/* Scoped, more compact scrollbar for inner scroll regions
+   (sidebars, modals, dropdowns). Opt-in via .fyb-scroll-slim */
+.fyb-scroll-slim::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+.fyb-scroll-slim::-webkit-scrollbar-thumb {
+  border: 1px solid transparent;
+  background-clip: padding-box;
+  background-color: rgba(255, 215, 0, 0.25);
+}
+.fyb-scroll-slim::-webkit-scrollbar-thumb:hover {
+  background-color: rgba(255, 215, 0, 0.5);
+}
+.fyb-scroll-slim {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 215, 0, 0.25) transparent;
+}
+
+
+:root {
+  /* Color tokens - see DESIGN.md */
   --canvas: #090909;
   --surface-1: #141414;
   --surface-2: #1c1c1c;
@@ -45,7 +184,7 @@
   --glow-accent: 0 0 0 1px rgba(0, 153, 255, 0.25), 0 8px 28px rgba(0, 153, 255, 0.18);
   --shadow-card: 0 1px 0 rgba(255, 255, 255, 0.04) inset, 0 24px 60px rgba(0, 0, 0, 0.5);
 
-  /* Legacy compat tokens — kept so any unrefactored components don't crash. */
+  /* Legacy compat tokens - kept so any unrefactored components don't crash. */
   --background: #090909;
   --foreground: #ffffff;
   --surface: #141414;
@@ -58,7 +197,7 @@
   color-scheme: dark;
 }
 
-/* Tailwind v4 theme — exposes tokens as utility classes (bg-canvas, text-ink, etc.) */
+/* Tailwind v4 theme - exposes tokens as utility classes (bg-canvas, text-ink, etc.) */
 @theme inline {
   --color-canvas: var(--canvas);
   --color-surface-1: var(--surface-1);
@@ -94,7 +233,7 @@
 }
 
 /* Single font family across the whole UI: Geist Sans.
- * Applied to html so every descendant inherits — no element can fall back to
+ * Applied to html so every descendant inherits - no element can fall back to
  * a system font. The rendering engine sets its own fontFamily on text nodes
  * inside the design canvas, so this does NOT affect rendered designs. */
 html {
@@ -118,7 +257,7 @@ button, input, textarea, select {
 }
 
 /* ============================================================
- * Helper classes — shared layout primitives.
+ * Helper classes - shared layout primitives.
  * ============================================================ */
 
 .fyb-surface-1 {
@@ -136,7 +275,7 @@ button, input, textarea, select {
   border-color: var(--hairline-soft);
 }
 
-/* Pill buttons — primary (white on dark) and secondary (charcoal). */
+/* Pill buttons - primary (white on dark) and secondary (charcoal). */
 .fyb-pill-primary {
   display: inline-flex;
   align-items: center;
@@ -222,7 +361,7 @@ button, input, textarea, select {
   cursor: not-allowed;
 }
 
-/* Modal panel base — paired with .fyb-modal-overlay */
+/* Modal panel base - paired with .fyb-modal-overlay */
 .fyb-modal-overlay {
   position: fixed;
   inset: 0;
@@ -251,7 +390,7 @@ button, input, textarea, select {
   border-radius: var(--radius-lg);
 }
 
-/* Eyebrow — small accent-blue dot + caption */
+/* Eyebrow - small accent-blue dot + caption */
 .fyb-eyebrow-dot {
   width: 6px;
   height: 6px;
@@ -260,7 +399,7 @@ button, input, textarea, select {
   display: inline-block;
 }
 
-/* Form controls — global baseline (inputs not using .fyb-input still readable) */
+/* Form controls - global baseline (inputs not using .fyb-input still readable) */
 input,
 textarea,
 select {
@@ -294,7 +433,7 @@ html {
 }
 
 /* ============================================================
- * Animations — modal, dots, skeleton shimmer, progress.
+ * Animations - modal, dots, skeleton shimmer, progress.
  * Honour prefers-reduced-motion below.
  * ============================================================ */
 
@@ -342,7 +481,7 @@ html {
     50%      { transform: translateY(-2px); opacity: 0.85; }
   }
 
-  /* Skeleton shimmer — surface-2 base, hairline glint. */
+  /* Skeleton shimmer - surface-2 base, hairline glint. */
   @keyframes fyb-skeleton-base {
     0%   { background-position: 200% 0; }
     100% { background-position: -200% 0; }
@@ -468,7 +607,7 @@ html {
   --nv-ease: cubic-bezier(0.16, 1, 0.3, 1);
 }
 
-/* Primary Button — gold gradient, celebration energy */
+/* Primary Button - gold gradient, celebration energy */
 @keyframes nv-laser-sweep {
   from { background-position: 200% 0; }
   to   { background-position: -100% 0; }
@@ -522,7 +661,7 @@ html {
   transform: scale(0.97);
 }
 
-/* Ghost Button — warm border on hover */
+/* Ghost Button - warm border on hover */
 .nv-ghost-btn {
   display: inline-flex;
   align-items: center;
@@ -541,7 +680,7 @@ html {
   background: rgba(255, 215, 0, 0.04);
 }
 
-/* Luminosity Card — dark glass */
+/* Luminosity Card - dark glass */
 .nv-card {
   background: rgba(12, 12, 12, 0.95);
   border: 1px solid rgba(255, 255, 255, 0.07);
@@ -584,7 +723,7 @@ html {
  * Animation keyframes + utility classes
  * ============================================================ */
 
-/* ── Word-rise — overflow:hidden wrapper + this inner span ── */
+/* ── Word-rise - overflow:hidden wrapper + this inner span ── */
 @keyframes nv-word-rise {
   from {
     opacity: 0;
@@ -765,7 +904,7 @@ html {
 }
 
 /* ────────────────────────────────────────────────────────────
-   CELEBRATION ANIMATIONS — for the landing page
+   CELEBRATION ANIMATIONS - for the landing page
    ──────────────────────────────────────────────────────────── */
 
 /* ── Cap toss: parabolic launch + spin ── */
@@ -1066,6 +1205,13 @@ html {
   transform: translateY(-6px);
 }
 
+/* ── Cinematic countdown digit pop ── */
+@keyframes nv-countdown-pop {
+  0%   { opacity: 0; transform: scale(1.6); filter: blur(8px); }
+  35%  { opacity: 1; transform: scale(0.92); filter: blur(0); }
+  100% { opacity: 1; transform: scale(1); filter: blur(0); }
+}
+
 /* ── Memory Lane mobile layout ── */
 @media (max-width: 720px) {
   .memory-lane-spine {
@@ -1090,8 +1236,24 @@ html {
     text-align: left !important;
     max-width: 100% !important;
     visibility: visible !important;
-    /* Reset translate on mobile so cards always fully visible */
-    transform: none !important;
+    /* Mobile uses a vertical slide-up + blur reveal driven by the
+       parent's data-visible state. Overrides the horizontal slide
+       direction the JS sets for desktop. */
+    transform-origin: center top !important;
+    transition:
+      opacity 600ms cubic-bezier(0.22, 0.61, 0.36, 1),
+      transform 700ms cubic-bezier(0.22, 0.61, 0.36, 1),
+      filter 500ms cubic-bezier(0.22, 0.61, 0.36, 1) !important;
+  }
+  .memory-stop[data-visible="false"] .memory-card-slot {
+    opacity: 0 !important;
+    transform: translateY(28px) scale(0.95) !important;
+    filter: blur(4px) !important;
+  }
+  .memory-stop[data-visible="true"] .memory-card-slot {
+    opacity: 1 !important;
+    transform: translateY(0) scale(1) !important;
+    filter: blur(0) !important;
   }
 }
 

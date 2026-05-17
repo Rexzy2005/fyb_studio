@@ -60,7 +60,7 @@ export const GET = withErrorHandler(async (_req, ctx) => {
     { template },
     {
       headers: {
-        // Unlocked templates are public data — allow a short shared-cache window
+        // Unlocked templates are public data - allow a short shared-cache window
         // (30 s) with stale-while-revalidate so subsequent requests serve from
         // CDN/router cache while a background refresh fires. The lock check path
         // above always returns no-store, so authenticated payloads are never cached.

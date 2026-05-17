@@ -2,6 +2,7 @@ import Link from "next/link";
 import { GraduationCap } from "lucide-react";
 import { OnboardingForm } from "@/components/onboarding/OnboardingForm";
 import { safeReturnPath } from "@/lib/auth/safeRedirect";
+import { CurtainOpen } from "@/components/ui/CurtainOpen";
 
 export const metadata = {
   title: "Set up your profile - FYB Studio",
@@ -30,6 +31,7 @@ export default async function OnboardingPage({
         fontFamily: "var(--font-plus-jakarta, var(--font-geist-sans)), sans-serif",
       }}
     >
+      <CurtainOpen brand="ALMOST IN" />
       {/* Fractal noise overlay */}
       <div
         aria-hidden

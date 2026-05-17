@@ -6,6 +6,7 @@ import {
   useEffect,
   useRef,
   useState,
+  useSyncExternalStore,
   type CSSProperties,
   type ReactNode,
 } from "react";
@@ -113,18 +114,76 @@ function useCounter(target: number, duration = 1400) {
 
 
 /* ─── Page ───────────────────────────────────────────────── */
+const WELCOME_STORAGE_KEY = "fyb_welcomed_v1";
+
+// External-store snapshot: returns true if the visitor has already seen the
+// welcome ceremony. Read at render time via useSyncExternalStore so we avoid
+// setState-in-effect and stay hydration-safe (SSR snapshot = true → no modal
+// in server HTML; client snapshot flips to false post-hydration for new
+// visitors). The `tick` ref lets the close handler force a re-snapshot.
+const welcomeStore = (() => {
+  const listeners = new Set<() => void>();
+  return {
+    subscribe(cb: () => void) {
+      listeners.add(cb);
+      return () => { listeners.delete(cb); };
+    },
+    getSnapshot(): boolean {
+      try { return window.localStorage.getItem(WELCOME_STORAGE_KEY) === "1"; }
+      catch { return false; }
+    },
+    getServerSnapshot(): boolean {
+      return true;
+    },
+    markWelcomed() {
+      try { window.localStorage.setItem(WELCOME_STORAGE_KEY, "1"); }
+      catch { /* ignore */ }
+      listeners.forEach((cb) => cb());
+    },
+  };
+})();
+
 export default function Home() {
-  const [showLoading, setShowLoading] = useState(true);
-  const [showCelebration, setShowCelebration] = useState(false);
   const classYear = getClassYear();
+  const hasWelcomed = useSyncExternalStore(
+    welcomeStore.subscribe,
+    welcomeStore.getSnapshot,
+    welcomeStore.getServerSnapshot,
+  );
+
+  // Ceremony state machine. Curtain (`loading`) plays on every visit so the
+  // brand entrance is consistent. The celebration modal only shows for
+  // first-time visitors — returning users skip straight to `done` once the
+  // curtain finishes.
+  const [phase, setPhase] = useState<"loading" | "celebration" | "done">("loading");
+
+  const showLoading = phase === "loading";
+  const showCelebration = !hasWelcomed && phase === "celebration";
+
+  // Lock body scroll for the curtain (always) and the celebration modal
+  // (when shown). Released once the user dismisses, or once a returning
+  // visitor's curtain finishes.
+  useEffect(() => {
+    const locked = showLoading || showCelebration;
+    if (!locked) return;
+    const prevOverflow = document.body.style.overflow;
+    const prevOverscroll = document.body.style.overscrollBehavior;
+    document.body.style.overflow = "hidden";
+    document.body.style.overscrollBehavior = "none";
+    return () => {
+      document.body.style.overflow = prevOverflow;
+      document.body.style.overscrollBehavior = prevOverscroll;
+    };
+  }, [showLoading, showCelebration]);
 
   const handleLoadingDone = useCallback(() => {
-    setShowLoading(false);
-    setShowCelebration(true);
+    // First-timers see the celebration; returning visitors skip it.
+    setPhase(welcomeStore.getSnapshot() ? "done" : "celebration");
   }, []);
 
   const handleCelebrationClose = useCallback(() => {
-    setShowCelebration(false);
+    setPhase("done");
+    welcomeStore.markWelcomed();
   }, []);
 
   return (
@@ -282,9 +341,14 @@ function TopNav() {
 
           {/* Right cluster */}
           <div className="flex shrink-0 items-center gap-2">
-            <div className="hidden sm:block">
-              <HeaderAuthSlot />
-            </div>
+            {/* Avatar slot is only rendered once authenticated — the unauth
+                "Sign in" fallback is intentionally hidden here so the navbar
+                shows just one CTA ("Get started"). */}
+            {isAuthed && (
+              <div className="hidden sm:block">
+                <HeaderAuthSlot />
+              </div>
+            )}
             {!isAuthed && (
               <Link
                 href="/signin"
@@ -616,6 +680,8 @@ const AVATAR_COLS = ["rgba(255,215,0,0.2)", "rgba(255,107,107,0.18)", "rgba(78,2
 function Hero({ classYear }: { classYear: number }) {
   const target = fybTarget(classYear);
   const tick = useCountdown(target);
+  const { status } = useSession();
+  const isAuthed = status === "authenticated";
 
   return (
     <section
@@ -767,6 +833,7 @@ function Hero({ classYear }: { classYear: number }) {
           >
             Open the studio
           </Link>
+          {!isAuthed && (
           <Link
             href="/signin"
             className="nv-ghost-btn w-full sm:w-auto"
@@ -774,6 +841,7 @@ function Hero({ classYear }: { classYear: number }) {
           >
             Sign in
           </Link>
+          )}
         </div>
 
         {/* Avatars + countdown stack */}
@@ -1235,7 +1303,7 @@ function HowItWorks() {
               display: "inline-flex", alignItems: "center", gap: 10,
             }}
           >
-            Start the 5-minute timer →
+            Start the 5-minute timer
           </Link>
           <div style={{ ...mono, fontSize: 10, letterSpacing: "0.18em", color: "rgba(255,255,255,0.3)", textTransform: "uppercase" }}>
             No card needed yet
@@ -1551,29 +1619,26 @@ function FileIcon({ color }: { color: string }) {
   );
 }
 
-/* ─── Wall of the Class (yearbook polaroid wall) ──────────── */
-const WALL_FACES: Array<{
-  name: string;
-  dept: string;
-  initials: string;
-  bg: string;
-  accent: string;
-  rot: number;
-  scrib: string;
+
+/* ─── Sign-Out Week Lineup ───────────────────────────────────
+   A festival-lineup-style program for sign-out week — every day of the
+   final week as a styled card, like a music-festival playbill. No
+   photos required, all typographic. */
+const SIGNOUT_WEEK: Array<{
+  day: string;
+  date: string;
+  title: string;
+  vibe: string;
+  blurb: string;
+  color: string;
 }> = [
-  { name: "Adaeze O.",   dept: "Mass Comm.",    initials: "AO", bg: "linear-gradient(140deg,#FFD700,#FF8C42)", accent: "#FFD700", rot: -4, scrib: "❝Made it!❞" },
-  { name: "Chuka S.",    dept: "Eng. Mech.",    initials: "CS", bg: "linear-gradient(140deg,#FF6B6B,#A855F7)", accent: "#FF6B6B", rot:  3, scrib: "Class of the year" },
-  { name: "Esi F.",      dept: "Law",           initials: "EF", bg: "linear-gradient(140deg,#4ECDC4,#0099FF)", accent: "#4ECDC4", rot: -2, scrib: "👑" },
-  { name: "Muiz I.",     dept: "Comp. Sci.",    initials: "MI", bg: "linear-gradient(140deg,#A855F7,#0099FF)", accent: "#A855F7", rot:  5, scrib: "git push --tags" },
-  { name: "Bisi T.",     dept: "Architecture",  initials: "BT", bg: "linear-gradient(140deg,#F97316,#FFD700)", accent: "#F97316", rot: -3, scrib: "drew the line" },
-  { name: "Dami K.",     dept: "Med. Phys.",    initials: "DK", bg: "linear-gradient(140deg,#0099FF,#A855F7)", accent: "#0099FF", rot:  4, scrib: "scrubs off" },
-  { name: "Zara N.",     dept: "Fine Arts",     initials: "ZN", bg: "linear-gradient(140deg,#FF8C42,#FF6B6B)", accent: "#FF8C42", rot: -5, scrib: "exhibit ready" },
-  { name: "Tobi A.",     dept: "Accounting",    initials: "TA", bg: "linear-gradient(140deg,#FFD700,#4ECDC4)", accent: "#FFD700", rot:  2, scrib: "balanced ✓" },
-  { name: "Kelechi P.",  dept: "Pol. Science",  initials: "KP", bg: "linear-gradient(140deg,#A855F7,#FF6B6B)", accent: "#A855F7", rot: -3, scrib: "next move" },
-  { name: "Yemisi R.",   dept: "Pharmacy",      initials: "YR", bg: "linear-gradient(140deg,#4ECDC4,#FFD700)", accent: "#4ECDC4", rot:  4, scrib: "Rx for life" },
-  { name: "Femi U.",     dept: "Elect/Elect",   initials: "FU", bg: "linear-gradient(140deg,#FF6B6B,#FFD700)", accent: "#FF6B6B", rot: -2, scrib: "voltage up" },
-  { name: "Ngozi B.",    dept: "Biochem.",      initials: "NB", bg: "linear-gradient(140deg,#0099FF,#4ECDC4)", accent: "#0099FF", rot:  3, scrib: "reaction: yes" },
-];
+  { day: "Mon", date: "Day 01", title: "Corporate Day",  vibe: "Suit & tie",       blurb: "Blazers, ties, heels, briefcases. The class shows up looking like the LinkedIn version of itself.", color: "#FFD700" },
+  { day: "Tue", date: "Day 02", title: "Costume Day",    vibe: "Pick a character", blurb: "Superheroes, anime, cartoons, throwback villains. The group chat decides the theme by Sunday night.",   color: "#FF8C42" },
+  { day: "Wed", date: "Day 03", title: "Old School Day", vibe: "Throwback fits",   blurb: "70s flares, 90s denim, school uniforms reimagined. Mama's wardrobe meets the gram.",                   color: "#FF6B6B" },
+  { day: "Thu", date: "Day 04", title: "Cultural Day",   vibe: "Heritage on",      blurb: "Ankara, agbada, gele, isi-agu, atiku. Every state shows up, every culture takes a bow.",               color: "#4ECDC4" },
+  { day: "Fri", date: "Day 05", title: "Jersey Day",     vibe: "Squad colours",    blurb: "Football kits, basketball jerseys, dept colours. Pick your team. Wear it loud.",                       color: "#A855F7" },
+  { day: "Sat", date: "Day 06", title: "Party Night",    vibe: "Headline event",   blurb: "DJ booked. Decor up. The night every flyer, banner, and save-the-date has been pointing to.",          color: "#EC4899" },
+] as const;
 
 function WallOfClass({ classYear }: { classYear: number }) {
   const headerRef = useReveal();
@@ -1590,7 +1655,7 @@ function WallOfClass({ classYear }: { classYear: number }) {
       }}
       id="wall"
     >
-      {/* Background scribbles */}
+      {/* Background flourishes */}
       <div aria-hidden style={{ position: "absolute", inset: 0, opacity: 0.04, pointerEvents: "none", color: "#FFD700" }}>
         <div style={{ position: "absolute", top: "8%", left: "6%", fontSize: 120, fontWeight: 900, transform: "rotate(-12deg)", ...jkt }}>★</div>
         <div style={{ position: "absolute", top: "70%", right: "8%", fontSize: 160, fontWeight: 900, transform: "rotate(8deg)", ...jkt }}>♛</div>
@@ -1599,31 +1664,34 @@ function WallOfClass({ classYear }: { classYear: number }) {
 
       <div className="mx-auto px-5 sm:px-8" style={{ maxWidth: 1400, position: "relative" }}>
         <div ref={headerRef} className="nv-stagger" style={{ textAlign: "center", marginBottom: "clamp(40px,5vw,72px)" }}>
-          <NvEyebrow color="rgba(255,215,0,0.7)">The wall of the class</NvEyebrow>
+          <NvEyebrow color="rgba(255,215,0,0.7)">Seven days, one ceremony</NvEyebrow>
           <h2 style={{ ...jkt, fontWeight: 800, fontSize: "clamp(32px, 6vw, 84px)", lineHeight: 0.95, letterSpacing: "-0.03em", textTransform: "uppercase", marginTop: 18 }}>
-            Faces of <span className="nv-shimmer-text">{classYear}</span>
+            Sign-out week <span className="nv-shimmer-text">{classYear}</span>
           </h2>
-          <p style={{ ...sans, fontSize: "clamp(14px,1.3vw,17px)", color: "rgba(255,255,255,0.4)", marginTop: 18, maxWidth: "56ch", marginLeft: "auto", marginRight: "auto", lineHeight: 1.65 }}>
-            Every polaroid is a story. The all-nighters, the 8am classes, the chapel runs, the wedding-style sign-outs.
-            This wall is for you. Pin yours next.
+          <p style={{ ...sans, fontSize: "clamp(14px,1.3vw,17px)", color: "rgba(255,255,255,0.4)", marginTop: 18, maxWidth: "60ch", marginLeft: "auto", marginRight: "auto", lineHeight: 1.65 }}>
+            The week your campus turns into a stage. Every day deserves a poster — a flyer for the hangout, a banner for the photoshoot, a save-the-date for the party.
           </p>
         </div>
 
-        {/* Polaroid grid */}
+        {/* Festival-lineup grid — flex so wrapped rows centre instead of
+            stretching their last items full-width. */}
         <div
           style={{
-            display: "grid",
-            gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 160px), 1fr))",
-            gap: "clamp(20px, 2.5vw, 36px)",
+            display: "flex",
+            flexWrap: "wrap",
+            justifyContent: "center",
+            gap: "clamp(16px, 2vw, 22px)",
             padding: "20px 0 40px",
           }}
         >
-          {WALL_FACES.map((f, i) => (
-            <Polaroid key={f.initials + i} {...f} delay={i * 60} />
+          {SIGNOUT_WEEK.map((d, i) => (
+            <div key={d.day} className="lineup-card-slot">
+              <LineupCard {...d} index={i} />
+            </div>
           ))}
         </div>
 
-        {/* "Pin yours" CTA */}
+        {/* CTA */}
         <div style={{ textAlign: "center", marginTop: "clamp(28px,4vw,52px)" }}>
           <Link
             href="/templates"
@@ -1640,7 +1708,7 @@ function WallOfClass({ classYear }: { classYear: number }) {
               gap: 10,
             }}
           >
-            Pin yours on the wall →
+            Design your week - browse templates
           </Link>
         </div>
       </div>
@@ -1648,10 +1716,10 @@ function WallOfClass({ classYear }: { classYear: number }) {
   );
 }
 
-function Polaroid({
-  name, dept, initials, bg, accent, rot, scrib, delay,
+function LineupCard({
+  day, date, title, vibe, blurb, color, index,
 }: {
-  name: string; dept: string; initials: string; bg: string; accent: string; rot: number; scrib: string; delay: number;
+  day: string; date: string; title: string; vibe: string; blurb: string; color: string; index: number;
 }) {
   const ref = useRef<HTMLDivElement>(null);
   const [visible, setVisible] = useState(false);
@@ -1660,114 +1728,116 @@ function Polaroid({
     if (!el) return;
     const obs = new IntersectionObserver(
       ([e]) => { if (e.isIntersecting) { setVisible(true); obs.disconnect(); } },
-      { threshold: 0.1 }
+      { threshold: 0.15 }
     );
     obs.observe(el);
     return () => obs.disconnect();
   }, []);
+
   return (
     <div
       ref={ref}
-      className={visible ? "nv-polaroid-in" : undefined}
       style={{
-        ["--rot-from" as string]: `${rot - 8}deg`,
-        ["--rot-to" as string]: `${rot}deg`,
-        ["--pol-delay" as string]: `${delay}ms`,
-        background: "linear-gradient(180deg,#fdfaf3,#f0ebe0)",
-        padding: "14px 14px 38px",
-        borderRadius: 4,
-        boxShadow:
-          "0 12px 30px rgba(0,0,0,0.45), inset 0 1px 0 rgba(255,255,255,0.7), 0 1px 0 rgba(0,0,0,0.08)",
-        transform: visible ? undefined : `translateY(-60px) rotate(${rot - 8}deg) scale(0.92)`,
-        opacity: visible ? undefined : 0,
-        transition: "transform 350ms cubic-bezier(0.34, 1.56, 0.64, 1)",
         position: "relative",
-        cursor: "pointer",
-      }}
-      onMouseEnter={(e) => {
-        e.currentTarget.style.transform = `rotate(0deg) scale(1.04) translateY(-6px)`;
-        e.currentTarget.style.zIndex = "5";
-      }}
-      onMouseLeave={(e) => {
-        e.currentTarget.style.transform = `rotate(${rot}deg) scale(1) translateY(0)`;
-        e.currentTarget.style.zIndex = "1";
+        padding: "22px 22px 20px",
+        background: "linear-gradient(180deg, rgba(20,16,4,0.55), rgba(8,8,8,0.45))",
+        border: `1px solid ${color}28`,
+        borderRadius: 14,
+        boxShadow:
+          `inset 0 1px 0 rgba(255,255,255,0.04), 0 18px 36px rgba(0,0,0,0.35)`,
+        opacity: visible ? 1 : 0,
+        transform: visible ? "translateY(0)" : "translateY(24px)",
+        transition: `opacity 700ms cubic-bezier(0.22, 0.61, 0.36, 1) ${index * 60}ms, transform 800ms cubic-bezier(0.22, 0.61, 0.36, 1) ${index * 60}ms`,
+        overflow: "hidden",
       }}
     >
-      {/* Tape */}
-      <div className="nv-tape" style={{ top: -8, left: "50%", transform: "translateX(-50%) rotate(-3deg)" }} />
-
-      {/* Photo */}
+      {/* Top accent stripe */}
       <div
+        aria-hidden
         style={{
-          aspectRatio: "4/5",
-          background: bg,
-          borderRadius: 2,
-          position: "relative",
-          overflow: "hidden",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          boxShadow: "inset 0 0 0 1px rgba(0,0,0,0.08), inset 0 0 30px rgba(0,0,0,0.15)",
+          position: "absolute", top: 0, left: 0, right: 0, height: 2,
+          background: `linear-gradient(90deg, transparent, ${color}, transparent)`,
         }}
-      >
-        {/* Cap watermark behind */}
-        <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", opacity: 0.18, color: "#fff" }}>
-          <GraduationCap size={120} strokeWidth={1} />
-        </div>
-        {/* Initials medallion */}
+      />
+
+      {/* Day chip + date */}
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
         <div
           style={{
-            position: "relative",
-            zIndex: 1,
-            width: 72, height: 72,
-            borderRadius: "50%",
-            background: "rgba(0,0,0,0.45)",
-            backdropFilter: "blur(8px)",
-            border: "2px solid rgba(255,255,255,0.5)",
-            display: "flex", alignItems: "center", justifyContent: "center",
-            ...jkt, fontWeight: 800, fontSize: 24, color: "#fff", letterSpacing: "-0.02em",
-            boxShadow: `0 8px 20px ${accent}50`,
+            display: "inline-flex", alignItems: "baseline", gap: 8,
           }}
         >
-          {initials}
+          <span
+            style={{
+              ...jkt, fontWeight: 900,
+              fontSize: 30, lineHeight: 1,
+              letterSpacing: "-0.04em",
+              background: `linear-gradient(140deg, #fff, ${color})`,
+              WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent", backgroundClip: "text",
+              textTransform: "uppercase",
+            }}
+          >
+            {day}
+          </span>
+          <span style={{ ...mono, fontSize: 9, letterSpacing: "0.22em", color: `${color}cc`, textTransform: "uppercase", fontWeight: 700 }}>
+            {date}
+          </span>
         </div>
-        {/* Year corner stamp */}
-        <div
+        <span
+          aria-hidden
           style={{
-            position: "absolute", top: 8, right: 8,
-            ...mono, fontSize: 8, letterSpacing: "0.18em",
-            color: "rgba(255,255,255,0.85)",
-            background: "rgba(0,0,0,0.35)",
-            padding: "3px 7px",
-            borderRadius: 3,
+            width: 8, height: 8, borderRadius: "50%",
+            background: color,
+            boxShadow: `0 0 14px ${color}90`,
           }}
-        >
-          FYB
-        </div>
-        {/* Scribble */}
-        <div
-          style={{
-            position: "absolute", bottom: 10, left: 10,
-            ...mono, fontSize: 9,
-            color: "#fff",
-            opacity: 0.85,
-            transform: "rotate(-2deg)",
-          }}
-        >
-          {scrib}
-        </div>
+        />
       </div>
 
-      {/* Caption - handwritten feel */}
-      <div style={{ marginTop: 10, textAlign: "center", color: "#1a1408" }}>
-        <div style={{ ...jkt, fontWeight: 700, fontSize: 14, letterSpacing: "-0.01em" }}>{name}</div>
-        <div style={{ ...mono, fontSize: 8, letterSpacing: "0.12em", color: "rgba(26,20,8,0.5)", marginTop: 2, textTransform: "uppercase" }}>
-          {dept}
-        </div>
+      {/* Title */}
+      <h3
+        style={{
+          ...jkt, fontWeight: 800, fontSize: 22, lineHeight: 1.1,
+          letterSpacing: "-0.02em", color: "#fff",
+          marginBottom: 6,
+        }}
+      >
+        {title}
+      </h3>
+
+      {/* Vibe tag */}
+      <div
+        style={{
+          ...mono, fontSize: 9, letterSpacing: "0.22em",
+          color: "rgba(255,255,255,0.45)", textTransform: "uppercase",
+          marginBottom: 14, fontWeight: 700,
+        }}
+      >
+        {vibe}
+      </div>
+
+      {/* Blurb */}
+      <p style={{ ...sans, fontSize: 12.5, lineHeight: 1.6, color: "rgba(255,255,255,0.5)", margin: 0 }}>
+        {blurb}
+      </p>
+
+      {/* Bottom rule */}
+      <div
+        style={{
+          marginTop: 16,
+          paddingTop: 12,
+          borderTop: "1px dashed rgba(255,255,255,0.06)",
+          display: "flex", alignItems: "center", justifyContent: "space-between",
+          ...mono, fontSize: 8, letterSpacing: "0.2em",
+          color: "rgba(255,255,255,0.3)", textTransform: "uppercase",
+        }}
+      >
+        <span>Class of the year</span>
+        <span style={{ color, opacity: 0.7 }}>★</span>
       </div>
     </div>
   );
 }
+
 
 
 /* ─── Memory Lane (4 years in 30 seconds) ─────────────────── */
@@ -2037,7 +2107,7 @@ function MemoryCard({
         boxShadow: `inset 0 1px 0 rgba(255,255,255,0.05), 0 12px 30px rgba(0,0,0,0.25)`,
       }}
     >
-      <div style={{ display: "flex", alignItems: "baseline", gap: 10, justifyContent: side === "left" ? "flex-end" : "flex-start", marginBottom: 6 }}>
+      <div className="memory-card-head" style={{ display: "flex", alignItems: "baseline", gap: 10, justifyContent: side === "left" ? "flex-end" : "flex-start", marginBottom: 6 }}>
         <span
           style={{
             ...jkt, fontWeight: 800, fontSize: 32, lineHeight: 1,
@@ -2684,7 +2754,7 @@ function ClosingCta({ classYear }: { classYear: number }) {
           <div style={{ display: "flex", flexWrap: "wrap", gap: 14, alignItems: "center" }}>
             <Link href="/templates" className="nv-laser-btn"
               style={{ height: 62, padding: "0 52px", borderRadius: 8, fontSize: 14, letterSpacing: "0.06em", ...mono }}>
-              Pick your template →
+              Pick your template
             </Link>
             <Link href="/signin" className="nv-ghost-btn"
               style={{ height: 62, padding: "0 36px", borderRadius: 8, fontSize: 12, letterSpacing: "0.08em", ...mono, textTransform: "uppercase" }}>

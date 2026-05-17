@@ -9,6 +9,7 @@ import type { TemplateRecord } from "@/lib/storage/types";
 import { ProgressModal } from "@/components/ui/ProgressModal";
 import { useSimulatedProgress } from "@/components/ui/useSimulatedProgress";
 import { TopNav } from "@/components/ui/TopNav";
+import { CurtainOpen } from "@/components/ui/CurtainOpen";
 import { Card } from "@/components/ui/Card";
 import { ButtonLink } from "@/components/ui/Button";
 import { headline, bodySm, caption } from "@/lib/ui/typography";
@@ -74,6 +75,7 @@ export default function TemplatePreviewPage({
 
   return (
     <div className="min-h-dvh" style={{ background: "var(--canvas)", color: "var(--ink)" }}>
+      <CurtainOpen brand="PREVIEW" />
       <TopNav cta={undefined} />
 
       <header

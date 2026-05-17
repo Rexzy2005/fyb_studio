@@ -17,12 +17,14 @@
   /* Encoded inline as data URLs so they render instantly with no
      extra HTTP request. The number after the URL is the hotspot
      (x y) in image pixels — the point that actually "clicks". */
-  /* Figma design-workspace "Move" (V) cursor — slim, angled black arrow
-     with a thin white outline. Hotspot is the very tip of the arrow. */
-  --cursor-default: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='18' height='18' viewBox='0 0 18 18'><path d='M3 2 L3 13 L6 10.5 L7.6 14.5 L9 13.9 L7.4 10 L11 10 Z' fill='%23000' stroke='%23fff' stroke-width='1.1' stroke-linejoin='round' stroke-linecap='round'/></svg>") 3 2;
-  /* Pointer (clickable) cursor — same slim arrow shape but with a small +
-     mark next to it, mirroring Figma's "can interact" hover affordance. */
-  --cursor-pointer: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='22' height='22' viewBox='0 0 22 22'><path d='M3 2 L3 13 L6 10.5 L7.6 14.5 L9 13.9 L7.4 10 L11 10 Z' fill='%23000' stroke='%23fff' stroke-width='1.1' stroke-linejoin='round' stroke-linecap='round'/><circle cx='15.5' cy='15.5' r='4' fill='%23000' stroke='%23fff' stroke-width='1.1'/><path d='M15.5 13.5 V17.5 M13.5 15.5 H17.5' stroke='%23fff' stroke-width='1.2' stroke-linecap='round'/></svg>") 3 2;
+  /* Figma "Move" (V) cursor — slim, angled black arrow with a thin white
+     outline. Hotspot is the very tip of the arrow (3, 2). Matches the
+     top-left cursor shown in the Figma cursor reference image. */
+  --cursor-default: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='20' height='20' viewBox='0 0 20 20'><path d='M3 2 L3 14.5 L6.2 11.5 L8 15.6 L9.8 14.8 L8 10.7 L12.2 10.7 Z' fill='%23000' stroke='%23fff' stroke-width='1.2' stroke-linejoin='round' stroke-linecap='round'/></svg>") 3 2;
+  /* Figma "insert / clickable" cursor — same arrow plus a GREEN circle with
+     a white plus, mirroring the bottom-left cursor in the reference image
+     (the affordance Figma shows when you can drop / interact with a node). */
+  --cursor-pointer: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='26' height='26' viewBox='0 0 26 26'><path d='M3 2 L3 14.5 L6.2 11.5 L8 15.6 L9.8 14.8 L8 10.7 L12.2 10.7 Z' fill='%23000' stroke='%23fff' stroke-width='1.2' stroke-linejoin='round' stroke-linecap='round'/><circle cx='18' cy='18' r='5.5' fill='%2322C55E' stroke='%23fff' stroke-width='1.4'/><path d='M18 15.2 V20.8 M15.2 18 H20.8' stroke='%23fff' stroke-width='1.6' stroke-linecap='round'/></svg>") 3 2;
 }
 
 html, body {
@@ -1212,20 +1214,34 @@ html {
   100% { opacity: 1; transform: scale(1); filter: blur(0); }
 }
 
-/* ── Memory Lane mobile layout ── */
+/* ── Memory Lane mobile layout ──
+   Desktop alternates cards left/right of a centered spine. On mobile that
+   pattern collapses to a single column to the right of a left-anchored
+   spine, so we override the alternating alignment that's set inline.
+   Dot column width and spine offset are tied together: spine sits at the
+   centre of the 32px dot column so the dots always land on the line. */
 @media (max-width: 720px) {
   .memory-lane-spine {
-    left: 18px !important;
+    /* Centre of the 32px dot col = column-left (0) + col-width/2 (16).
+       The dot col starts at the same x as the section's inner padding,
+       so the spine is also offset 16px from that inner edge. */
+    left: 16px !important;
     transform: none !important;
   }
   .memory-stop {
-    grid-template-columns: 36px 1fr !important;
-    gap: 12px !important;
-    margin-bottom: 28px !important;
+    grid-template-columns: 32px 1fr !important;
+    gap: 14px !important;
+    align-items: start !important;     /* anchor dot to card top */
+    margin-bottom: 22px !important;
   }
   .memory-dot-col {
     grid-column: 1 / 2 !important;
-    justify-content: flex-start !important;
+    /* Centre the dot horizontally inside its column so it sits ON the
+       spine line, not at the left edge. */
+    justify-content: center !important;
+    /* Nudge the dot down so it sits at the visual mid-line of the
+       card's header row (year + level + emoji), not the row top. */
+    padding-top: 26px !important;
   }
   .memory-card-slot[data-empty="true"] {
     display: none !important;
@@ -1236,10 +1252,7 @@ html {
     text-align: left !important;
     max-width: 100% !important;
     visibility: visible !important;
-    /* Mobile uses a vertical slide-up + blur reveal driven by the
-       parent's data-visible state. Overrides the horizontal slide
-       direction the JS sets for desktop. */
-    transform-origin: center top !important;
+    transform-origin: left top !important;
     transition:
       opacity 600ms cubic-bezier(0.22, 0.61, 0.36, 1),
       transform 700ms cubic-bezier(0.22, 0.61, 0.36, 1),
@@ -1247,13 +1260,35 @@ html {
   }
   .memory-stop[data-visible="false"] .memory-card-slot {
     opacity: 0 !important;
-    transform: translateY(28px) scale(0.95) !important;
+    transform: translateY(24px) scale(0.96) !important;
     filter: blur(4px) !important;
   }
   .memory-stop[data-visible="true"] .memory-card-slot {
     opacity: 1 !important;
     transform: translateY(0) scale(1) !important;
     filter: blur(0) !important;
+  }
+  /* Force every card's header row to read left-to-right on mobile,
+     regardless of the desktop "left/right side" assignment. */
+  .memory-card-head {
+    justify-content: flex-start !important;
+  }
+}
+
+/* ── Sign-Out Week lineup cards ──
+   Desktop: 260-340px flex items that centre when the row wraps.
+   Mobile (<=720px): force a strict two-column grid so the day cards
+   pair up cleanly on phone widths. */
+.lineup-card-slot {
+  flex: 1 1 260px;
+  min-width: 260px;
+  max-width: 340px;
+}
+@media (max-width: 720px) {
+  .lineup-card-slot {
+    flex: 0 0 calc(50% - 8px) !important;
+    min-width: 0 !important;
+    max-width: none !important;
   }
 }
 

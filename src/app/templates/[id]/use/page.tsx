@@ -35,6 +35,7 @@ import { useGoogleFonts } from "@/components/editor/useGoogleFonts";
 import { ImageUpload, inferFileMeta } from "@/components/forms/ImageUpload";
 import { PaymentModal } from "@/components/payment/PaymentModal";
 import { ProgressModal } from "@/components/ui/ProgressModal";
+import { CurtainOpen } from "@/components/ui/CurtainOpen";
 import { useSimulatedProgress } from "@/components/ui/useSimulatedProgress";
 import { fetchActiveGrant, recordDownload } from "@/lib/api/payments";
 import {
@@ -603,6 +604,8 @@ export default function UseTemplatePage({
 
   return (
     <div className="flex h-dvh min-w-0 flex-col bg-canvas dark:bg-canvas">
+      {/* Cinematic transition — plays once the workspace is ready */}
+      <CurtainOpen brand="WORKSPACE READY" />
       {/* Shared-with-you banner — only when ?via=share and dismissible */}
       {shareBannerOpen && (
         <div
@@ -1135,15 +1138,30 @@ export default function UseTemplatePage({
       </div>
 
       {mobileDetailsOpen ? (
-        <div className="fixed inset-0 z-40 lg:hidden" role="dialog" aria-modal="true">
+        <div
+          className="fixed inset-0 z-40 lg:hidden flex flex-col"
+          role="dialog"
+          aria-modal="true"
+          /* Use 100dvh so when the on-screen keyboard opens the visible
+             viewport shrinks and the sheet shrinks with it — keeping the
+             Back/Next buttons above the keyboard at all times. */
+          style={{ height: "100dvh" }}
+        >
           <button
             type="button"
             className="absolute inset-0 bg-black/40"
             aria-label="Close details"
             onClick={() => setMobileDetailsOpen(false)}
           />
-          <div className="absolute inset-x-0 bottom-0 max-h-[82dvh] overflow-hidden rounded-t-3xl border border-hairline bg-surface-1 shadow-2xl dark:border-hairline dark:bg-surface-1">
-            <div className="flex items-center justify-between gap-3 border-b border-hairline px-4 py-3 dark:border-hairline">
+          <div
+            className="relative mt-auto flex flex-col overflow-hidden rounded-t-3xl border border-hairline bg-surface-1 shadow-2xl dark:border-hairline dark:bg-surface-1"
+            /* Sheet fills up to ~88% of the *visible* viewport (which
+               excludes the keyboard on supporting browsers). The flex-col
+               layout ensures the bottom action bar stays anchored. */
+            style={{ maxHeight: "88dvh", minHeight: "240px" }}
+          >
+            {/* Header — shrink-0 so it doesn't get squeezed */}
+            <div className="flex shrink-0 items-center justify-between gap-3 border-b border-hairline px-4 py-3 dark:border-hairline">
               <div className="min-w-0">
                 <div className="flex items-center gap-2">
                   {currentMobileSection
@@ -1171,7 +1189,7 @@ export default function UseTemplatePage({
 
             {/* Section progress dots - tappable for direct jump. */}
             {mobileSectionCount > 1 ? (
-              <div className="flex items-center justify-center gap-1.5 border-b border-hairline px-4 py-2 dark:border-hairline">
+              <div className="flex shrink-0 items-center justify-center gap-1.5 border-b border-hairline px-4 py-2 dark:border-hairline">
                 {mobileSections.map((g, idx) => {
                   const active = idx === mobileFormPage;
                   return (
@@ -1197,9 +1215,13 @@ export default function UseTemplatePage({
               </div>
             ) : null}
 
+            {/* Scrollable form region — flex-1 fills remaining space.
+                Critical: this is what scrolls when keyboard pops up,
+                not the whole sheet. */}
             <div
               ref={mobileFormScrollRef}
-              className="max-h-[calc(82dvh-56px-56px)] overflow-y-auto px-4 py-4"
+              className="flex-1 min-h-0 overflow-y-auto overscroll-contain px-4 py-4"
+              style={{ WebkitOverflowScrolling: "touch" }}
             >
               <div className="space-y-3">
                 {(currentMobileSection?.fields ?? []).map((f) => (
@@ -1215,10 +1237,22 @@ export default function UseTemplatePage({
                     density="comfortable"
                   />
                 ))}
+                {/* Soft spacer so the last field can scroll above any
+                    floating focus rings without crowding the action bar. */}
+                <div aria-hidden style={{ height: 12 }} />
               </div>
             </div>
 
-            <div className="border-t border-hairline px-4 py-3 dark:border-hairline pb-[calc(env(safe-area-inset-bottom)+72px)]">
+            {/* Sticky action bar — anchored at the BOTTOM of the sheet
+                via flex layout, so the on-screen keyboard never covers
+                Back/Next. Safe-area padding accounts for iOS home bar. */}
+            <div
+              className="shrink-0 border-t border-hairline px-4 pt-3 dark:border-hairline"
+              style={{
+                paddingBottom: "calc(env(safe-area-inset-bottom) + 12px)",
+                background: "var(--surface-1)",
+              }}
+            >
               <div className="flex items-center gap-2">
                 <button
                   type="button"
@@ -1229,7 +1263,7 @@ export default function UseTemplatePage({
                       mobileFormScrollRef.current?.scrollTo({ top: 0, behavior: "smooth" })
                     );
                   }}
-                  className="inline-flex h-11 flex-1 items-center justify-center gap-2 rounded-2xl border border-hairline bg-surface-1 px-4 text-sm font-semibold text-ink hover:bg-canvas disabled:opacity-50 dark:border-hairline dark:bg-surface-1 dark:text-ink dark:hover:bg-surface-2"
+                  className="inline-flex h-12 flex-1 items-center justify-center gap-2 rounded-2xl border border-hairline bg-surface-1 px-4 text-sm font-semibold text-ink hover:bg-canvas disabled:opacity-50 dark:border-hairline dark:bg-surface-1 dark:text-ink dark:hover:bg-surface-2"
                 >
                   <ChevronLeft className="h-4 w-4" />
                   Back
@@ -1238,7 +1272,12 @@ export default function UseTemplatePage({
                   <button
                     type="button"
                     onClick={() => setMobileDetailsOpen(false)}
-                    className="inline-flex h-11 flex-1 items-center justify-center gap-2 rounded-2xl bg-surface-1 px-4 text-sm font-semibold text-white hover:bg-surface-2 dark:bg-surface-2 dark:text-ink dark:hover:bg-surface-1"
+                    className="inline-flex h-12 flex-1 items-center justify-center gap-2 rounded-2xl px-4 text-sm font-bold transition active:scale-95"
+                    style={{
+                      background: "#FFD700",
+                      color: "#000",
+                      boxShadow: "0 8px 22px rgba(255,180,0,0.3)",
+                    }}
                   >
                     Done
                   </button>
@@ -1251,15 +1290,17 @@ export default function UseTemplatePage({
                         mobileFormScrollRef.current?.scrollTo({ top: 0, behavior: "smooth" })
                       );
                     }}
-                    className="inline-flex h-11 flex-1 items-center justify-center gap-2 rounded-2xl bg-surface-1 px-4 text-sm font-semibold text-white hover:bg-surface-2 dark:bg-surface-2 dark:text-ink dark:hover:bg-surface-1"
+                    className="inline-flex h-12 flex-1 items-center justify-center gap-2 rounded-2xl px-4 text-sm font-bold transition active:scale-95"
+                    style={{
+                      background: "#FFD700",
+                      color: "#000",
+                      boxShadow: "0 8px 22px rgba(255,180,0,0.3)",
+                    }}
                   >
                     Next
                     <ChevronRight className="h-4 w-4" />
                   </button>
                 )}
-              </div>
-              <div className="mt-2 text-center text-[11px] text-ink-muted dark:text-ink-muted">
-                Tap dots above to jump between sections.
               </div>
             </div>
           </div>

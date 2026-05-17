@@ -7,6 +7,7 @@ import { getLockViewForTemplate } from "@/backend/services/templateLock.service"
 import { PreviewLockPanel } from "@/components/templates/PreviewLockPanel";
 import { ShareButton } from "@/components/templates/ShareButton";
 import { TopNav } from "@/components/ui/TopNav";
+import { CurtainOpen } from "@/components/ui/CurtainOpen";
 import { Card } from "@/components/ui/Card";
 import { ButtonLink } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
@@ -44,6 +45,7 @@ export default async function TemplatePreviewPage({
 
   return (
     <div className="min-h-dvh" style={{ background: "var(--canvas)", color: "var(--ink)" }}>
+      <CurtainOpen brand="PREVIEW" />
       <TopNav cta={undefined} />
 
       <header className="mx-auto flex w-full max-w-[1200px] items-center justify-between gap-3 px-5 sm:px-8 pt-8">

@@ -12,6 +12,7 @@ import {
 import { useTemplateChangeStream } from "@/lib/realtime/templatesStream";
 import { HeadEntryModal } from "@/components/templates/HeadEntryModal";
 import { TopNav } from "@/components/ui/TopNav";
+import { CurtainOpen } from "@/components/ui/CurtainOpen";
 import { useToast } from "@/components/ui/Toast";
 
 const jkt: CSSProperties = { fontFamily: "var(--font-plus-jakarta, var(--font-geist-sans)), sans-serif" };
@@ -111,6 +112,7 @@ export default function UserTemplatesPage() {
       className="relative min-h-dvh overflow-x-clip"
       style={{ background: "#050505", color: "#fff", ...jkt }}
     >
+      <CurtainOpen brand="THE STUDIO" />
       {/* Fixed fractal noise overlay (matches landing) */}
       <div
         aria-hidden

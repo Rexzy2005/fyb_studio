@@ -2,6 +2,7 @@ import Link from "next/link";
 import { GoogleSignInButton } from "@/components/auth/GoogleSignInButton";
 import { safeReturnPath } from "@/lib/auth/safeRedirect";
 import { SignInShowcase } from "./SignInShowcase";
+import { CurtainOpen } from "@/components/ui/CurtainOpen";
 
 export const metadata = {
   title: "Sign in - FYB Studio",
@@ -31,6 +32,7 @@ export default async function SignInPage({
         minHeight: "100dvh",
       }}
     >
+      <CurtainOpen brand="WELCOME BACK" />
       {/* Fractal noise overlay */}
       <div
         aria-hidden

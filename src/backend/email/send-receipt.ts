@@ -12,14 +12,14 @@ export type SendReceiptInput = {
 };
 
 /**
- * Fire-and-forget receipt email. SMTP failures log but never throw — we
+ * Fire-and-forget receipt email. SMTP failures log but never throw - we
  * don't want a flaky transport to break the payment confirmation flow.
  */
 export async function sendReceiptEmail(input: SendReceiptInput): Promise<void> {
   const transport = getMailTransport();
   if (!transport) {
     console.warn(
-      "[email] SMTP not configured — skipping receipt email for",
+      "[email] SMTP not configured - skipping receipt email for",
       input.email
     );
     return;

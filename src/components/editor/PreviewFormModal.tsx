@@ -23,7 +23,7 @@ type Props = {
  * Right-anchored slide-over showing the user-facing form so the admin can
  * fill it as a real user would and see the live design update behind it.
  *
- * Sections come from the field config — same grouping the user will see —
+ * Sections come from the field config - same grouping the user will see -
  * so the admin previews the exact end-user experience, not a stripped-down
  * configuration view. Skips admin-only design-asset images and disabled
  * colour fields (those slots aren't shown to users either).
@@ -53,21 +53,21 @@ export function PreviewFormModal({
 
   return (
     <div className="fixed inset-0 z-40">
-      {/* Backdrop — clicking closes the panel without committing anything (the
+      {/* Backdrop - clicking closes the panel without committing anything (the
           preview values live in the parent state regardless). */}
       <div className="absolute inset-0 bg-black/40" onClick={onClose} />
 
       <aside
         role="dialog"
         aria-label="Preview form"
-        className="absolute right-0 top-0 flex h-full w-full max-w-md flex-col border-l border-zinc-200 bg-white shadow-2xl dark:border-zinc-800 dark:bg-zinc-900 sm:w-[420px]"
+        className="absolute right-0 top-0 flex h-full w-full max-w-md flex-col border-l border-hairline bg-surface-1 shadow-2xl dark:border-hairline dark:bg-surface-1 sm:w-[420px]"
       >
-        <div className="flex items-center justify-between gap-3 border-b border-zinc-200 px-4 py-3 dark:border-zinc-800">
+        <div className="flex items-center justify-between gap-3 border-b border-hairline px-4 py-3 dark:border-hairline">
           <div className="min-w-0">
-            <div className="text-sm font-semibold text-zinc-950 dark:text-zinc-100">
+            <div className="text-sm font-semibold text-ink dark:text-ink">
               Preview form
             </div>
-            <div className="mt-0.5 text-xs text-zinc-600 dark:text-zinc-300">
+            <div className="mt-0.5 text-xs text-ink-muted dark:text-ink-muted">
               Fill it as your users will. The design updates live in the workspace.
             </div>
           </div>
@@ -75,7 +75,7 @@ export function PreviewFormModal({
             type="button"
             onClick={onClose}
             aria-label="Close preview"
-            className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-zinc-200 bg-white text-zinc-700 hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800"
+            className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-hairline bg-surface-1 text-ink-muted hover:bg-canvas dark:border-hairline dark:bg-surface-1 dark:text-ink dark:hover:bg-surface-2"
           >
             <X className="h-4 w-4" />
           </button>
@@ -83,7 +83,7 @@ export function PreviewFormModal({
 
         <div className="min-h-0 flex-1 overflow-y-auto p-4">
           {groups.length === 0 ? (
-            <div className="rounded-xl border border-dashed border-zinc-300 bg-zinc-50 p-4 text-xs text-zinc-700 dark:border-zinc-700 dark:bg-zinc-800/40 dark:text-zinc-300">
+            <div className="rounded-xl border border-dashed border-hairline bg-canvas p-4 text-xs text-ink-muted dark:border-hairline dark:bg-surface-2/40 dark:text-ink-muted">
               No editable fields yet. Configure fields in the right panel to
               see the preview here.
             </div>
@@ -95,18 +95,18 @@ export function PreviewFormModal({
                   <details
                     key={section.id}
                     open
-                    className="group rounded-2xl border border-zinc-200 bg-white open:shadow-sm dark:border-zinc-800 dark:bg-zinc-900"
+                    className="group rounded-2xl border border-hairline bg-surface-1 open:shadow-sm dark:border-hairline dark:bg-surface-1"
                   >
-                    <summary className="flex cursor-pointer items-center justify-between gap-2 px-3 py-2 text-xs font-semibold text-zinc-950 marker:hidden dark:text-zinc-100 [&::-webkit-details-marker]:hidden">
+                    <summary className="flex cursor-pointer items-center justify-between gap-2 px-3 py-2 text-xs font-semibold text-ink marker:hidden dark:text-ink [&::-webkit-details-marker]:hidden">
                       <span className="flex min-w-0 items-center gap-2">
-                        <Icon className="h-4 w-4 shrink-0 text-zinc-700 dark:text-zinc-300" />
+                        <Icon className="h-4 w-4 shrink-0 text-ink-muted dark:text-ink-muted" />
                         <span className="truncate">{section.label}</span>
                       </span>
-                      <span className="shrink-0 text-[11px] font-normal text-zinc-600 dark:text-zinc-400">
+                      <span className="shrink-0 text-[11px] font-normal text-ink-muted dark:text-ink-faint">
                         {fields.length}
                       </span>
                     </summary>
-                    <div className="space-y-2 border-t border-zinc-200 p-3 dark:border-zinc-800">
+                    <div className="space-y-2 border-t border-hairline p-3 dark:border-hairline">
                       {fields.map((f) => (
                         <FormField
                           key={f.id}

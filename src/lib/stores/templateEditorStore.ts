@@ -9,7 +9,7 @@ export type EditorViewportState = {
   /**
    * Atomic update of zoom + pan in a single store transaction. Prefer this
    * over separate `setZoom` + `setPan` calls during interactive gestures
-   * (wheel zoom, pinch zoom, programmatic fit) — it produces one render per
+   * (wheel zoom, pinch zoom, programmatic fit) - it produces one render per
    * frame instead of two, which eliminates the visible "shimmy" the user
    * sees when zoom and pan land on different commits.
    */

@@ -63,7 +63,6 @@ export type PublishPayload = {
   normalized: unknown;
   fieldConfig: unknown;
   coverFile: File;
-  assetFiles: Array<{ nodeId: string; file: File }>;
 };
 
 export async function publishTemplateToBackend(
@@ -78,13 +77,9 @@ export async function publishTemplateToBackend(
       designJson: payload.designJson,
       normalized: payload.normalized,
       fieldConfig: payload.fieldConfig,
-      assetNodeIds: payload.assetFiles.map((a) => a.nodeId),
     })
   );
   form.append("cover", payload.coverFile);
-  for (const a of payload.assetFiles) {
-    form.append(`asset:${a.nodeId}`, a.file);
-  }
 
   const res = await fetch(`/api/admin/templates`, {
     method: "POST",
@@ -103,8 +98,6 @@ export type UpdatePayload = {
   normalized?: unknown;
   fieldConfig?: unknown;
   replaceCoverFile?: File | null;
-  replaceAssetFiles?: Array<{ nodeId: string; file: File }>;
-  removeAssetNodeIds?: string[];
 };
 
 export async function updateTemplateOnBackend(
@@ -120,15 +113,10 @@ export async function updateTemplateOnBackend(
       normalized: payload.normalized,
       fieldConfig: payload.fieldConfig,
       replaceCover: Boolean(payload.replaceCoverFile),
-      replaceAssetNodeIds: (payload.replaceAssetFiles ?? []).map((a) => a.nodeId),
-      removeAssetNodeIds: payload.removeAssetNodeIds ?? [],
     })
   );
   if (payload.replaceCoverFile) {
     form.append("cover", payload.replaceCoverFile);
-  }
-  for (const a of payload.replaceAssetFiles ?? []) {
-    form.append(`asset:${a.nodeId}`, a.file);
   }
 
   const res = await fetch(`/api/admin/templates/${payload.templateId}`, {

@@ -66,7 +66,7 @@ export function RevenuePanel() {
 
   if (error) {
     return (
-      <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700 dark:border-red-900/40 dark:bg-red-950/40 dark:text-red-200">
+      <div className="rounded-xl border border-[rgba(239,68,68,0.28)] bg-[rgba(239,68,68,0.08)] p-4 text-sm text-danger dark:border-[rgba(239,68,68,0.28)] dark:bg-red-950/40 dark:text-danger">
         {error}
       </div>
     );
@@ -76,15 +76,15 @@ export function RevenuePanel() {
     <section className="space-y-4">
       <header className="flex items-end justify-between gap-3">
         <div>
-          <h2 className="text-base font-semibold tracking-tight text-zinc-950 dark:text-zinc-100">
+          <h2 className="text-base font-semibold tracking-tight text-ink dark:text-ink">
             Revenue & downloads
           </h2>
-          <p className="text-xs text-zinc-600 dark:text-zinc-400">
+          <p className="text-xs text-ink-muted dark:text-ink-faint">
             Paystack-confirmed earnings and customer download activity.
           </p>
         </div>
         {data ? (
-          <span className="text-[11px] uppercase tracking-wide text-zinc-500 dark:text-zinc-500">
+          <span className="text-[11px] uppercase tracking-wide text-ink-faint dark:text-ink-faint">
             Last 30 days · {formatNgn(data.summary.last30Days.revenueNgn)}
           </span>
         ) : null}
@@ -132,29 +132,29 @@ export function RevenuePanel() {
 
       {/* Daily chart + top templates side-by-side on wide screens */}
       <div className="grid gap-3 lg:grid-cols-3">
-        <div className="rounded-2xl border border-zinc-200 bg-white p-4 lg:col-span-2 dark:border-zinc-800 dark:bg-zinc-900">
+        <div className="rounded-2xl border border-hairline bg-surface-1 p-4 lg:col-span-2 dark:border-hairline dark:bg-surface-1">
           <div className="mb-3 flex items-center justify-between">
-            <div className="text-xs font-semibold uppercase tracking-wide text-zinc-700 dark:text-zinc-300">
+            <div className="text-xs font-semibold uppercase tracking-wide text-ink-muted dark:text-ink-muted">
               Last 30 days
             </div>
-            <div className="flex items-center gap-3 text-[11px] text-zinc-600 dark:text-zinc-400">
+            <div className="flex items-center gap-3 text-[11px] text-ink-muted dark:text-ink-faint">
               <span className="inline-flex items-center gap-1.5">
-                <span className="h-2 w-3 rounded-full bg-emerald-500" /> Revenue
+                <span className="h-2 w-3 rounded-full bg-[var(--accent-blue)]" /> Revenue
               </span>
               <span className="inline-flex items-center gap-1.5">
-                <span className="h-2 w-3 rounded-full bg-zinc-400" /> Downloads
+                <span className="h-2 w-3 rounded-full bg-ink-faint" /> Downloads
               </span>
             </div>
           </div>
           {loading || !data ? (
-            <div className="h-40 rounded-xl bg-zinc-50 dark:bg-zinc-800/40" />
+            <div className="h-40 rounded-xl bg-canvas dark:bg-surface-2/40" />
           ) : (
             <DailyChart buckets={data.daily} />
           )}
         </div>
 
-        <div className="rounded-2xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900">
-          <div className="mb-3 text-xs font-semibold uppercase tracking-wide text-zinc-700 dark:text-zinc-300">
+        <div className="rounded-2xl border border-hairline bg-surface-1 p-4 dark:border-hairline dark:bg-surface-1">
+          <div className="mb-3 text-xs font-semibold uppercase tracking-wide text-ink-muted dark:text-ink-muted">
             Top earners
           </div>
           {loading || !data ? (
@@ -164,23 +164,23 @@ export function RevenuePanel() {
               ))}
             </div>
           ) : data.topTemplates.length === 0 ? (
-            <div className="text-xs text-zinc-500 dark:text-zinc-400">No paid downloads yet.</div>
+            <div className="text-xs text-ink-faint dark:text-ink-faint">No paid downloads yet.</div>
           ) : (
             <ul className="space-y-2">
               {data.topTemplates.map((t) => (
                 <li
                   key={t.templateId}
-                  className="flex items-center justify-between gap-3 rounded-lg border border-zinc-100 px-3 py-2 dark:border-zinc-800"
+                  className="flex items-center justify-between gap-3 rounded-lg border border-hairline-soft px-3 py-2 dark:border-hairline"
                 >
                   <div className="min-w-0">
-                    <div className="truncate text-sm font-medium text-zinc-900 dark:text-zinc-100">
+                    <div className="truncate text-sm font-medium text-ink dark:text-ink">
                       {t.templateName}
                     </div>
-                    <div className="text-[11px] text-zinc-500 dark:text-zinc-400">
+                    <div className="text-[11px] text-ink-faint dark:text-ink-faint">
                       {t.payments.toLocaleString()} payments · {t.downloads.toLocaleString()} downloads
                     </div>
                   </div>
-                  <div className="text-sm font-semibold text-emerald-600 dark:text-emerald-400">
+                  <div className="text-sm font-semibold text-[var(--accent-blue)] dark:text-[var(--accent-blue)]">
                     {formatNgn(t.revenueNgn)}
                   </div>
                 </li>
@@ -191,9 +191,9 @@ export function RevenuePanel() {
       </div>
 
       {/* Recent payments table */}
-      <div className="rounded-2xl border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900">
-        <div className="border-b border-zinc-200 px-4 py-3 dark:border-zinc-800">
-          <div className="text-xs font-semibold uppercase tracking-wide text-zinc-700 dark:text-zinc-300">
+      <div className="rounded-2xl border border-hairline bg-surface-1 dark:border-hairline dark:bg-surface-1">
+        <div className="border-b border-hairline px-4 py-3 dark:border-hairline">
+          <div className="text-xs font-semibold uppercase tracking-wide text-ink-muted dark:text-ink-muted">
             Recent payments
           </div>
         </div>
@@ -204,14 +204,14 @@ export function RevenuePanel() {
             ))}
           </div>
         ) : data.recentPayments.length === 0 ? (
-          <div className="px-4 py-6 text-sm text-zinc-500 dark:text-zinc-400">
-            No payments yet — this fills in once your first user buys a download.
+          <div className="px-4 py-6 text-sm text-ink-faint dark:text-ink-faint">
+            No payments yet - this fills in once your first user buys a download.
           </div>
         ) : (
           <div className="overflow-x-auto">
             <table className="min-w-full divide-y divide-zinc-200 text-sm dark:divide-zinc-800">
               <thead>
-                <tr className="text-left text-[11px] uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+                <tr className="text-left text-[11px] uppercase tracking-wide text-ink-faint dark:text-ink-faint">
                   <th className="px-4 py-2">When</th>
                   <th className="px-4 py-2">User</th>
                   <th className="px-4 py-2">Template</th>
@@ -222,29 +222,29 @@ export function RevenuePanel() {
               </thead>
               <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800">
                 {data.recentPayments.map((p) => (
-                  <tr key={p.id} className="hover:bg-zinc-50/60 dark:hover:bg-zinc-800/30">
-                    <td className="px-4 py-2 text-xs text-zinc-600 dark:text-zinc-400">
+                  <tr key={p.id} className="hover:bg-canvas/60 dark:hover:bg-surface-2/30">
+                    <td className="px-4 py-2 text-xs text-ink-muted dark:text-ink-faint">
                       {formatDate(p.paidAt ?? p.createdAt)}
                     </td>
                     <td className="px-4 py-2">
-                      <div className="text-sm text-zinc-900 dark:text-zinc-100">
-                        {p.userName ?? "—"}
+                      <div className="text-sm text-ink dark:text-ink">
+                        {p.userName ?? "-"}
                       </div>
-                      <div className="text-[11px] text-zinc-500 dark:text-zinc-400">
+                      <div className="text-[11px] text-ink-faint dark:text-ink-faint">
                         {p.userEmail ?? ""}
                       </div>
                     </td>
-                    <td className="px-4 py-2 text-sm text-zinc-900 dark:text-zinc-100">
+                    <td className="px-4 py-2 text-sm text-ink dark:text-ink">
                       {p.templateName ?? "(deleted)"}
                     </td>
-                    <td className="px-4 py-2 font-medium text-zinc-900 dark:text-zinc-100">
+                    <td className="px-4 py-2 font-medium text-ink dark:text-ink">
                       {formatNgn(p.amountNgn)}
                     </td>
                     <td className="px-4 py-2">
                       <StatusPill status={p.status} />
                     </td>
                     <td className="px-4 py-2">
-                      <span className="font-mono text-[11px] text-zinc-500 dark:text-zinc-400">
+                      <span className="font-mono text-[11px] text-ink-faint dark:text-ink-faint">
                         {p.paystackReference}
                       </span>
                     </td>
@@ -269,15 +269,15 @@ function RevenueStat({
   sub: string;
 }) {
   return (
-    <div className="rounded-2xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900">
-      <div className="text-[11px] uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+    <div className="rounded-2xl border border-hairline bg-surface-1 p-4 dark:border-hairline dark:bg-surface-1">
+      <div className="text-[11px] uppercase tracking-wide text-ink-faint dark:text-ink-faint">
         {label}
       </div>
-      <div className="mt-1 text-xl font-semibold tracking-tight text-zinc-950 dark:text-zinc-100">
+      <div className="mt-1 text-xl font-semibold tracking-tight text-ink dark:text-ink">
         {value}
       </div>
       {sub ? (
-        <div className="mt-0.5 truncate text-[11px] text-zinc-500 dark:text-zinc-400">{sub}</div>
+        <div className="mt-0.5 truncate text-[11px] text-ink-faint dark:text-ink-faint">{sub}</div>
       ) : null}
     </div>
   );
@@ -286,13 +286,13 @@ function RevenueStat({
 function StatusPill({ status }: { status: RecentPaymentRow["status"] }) {
   const map: Record<RecentPaymentRow["status"], string> = {
     success:
-      "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900/40 dark:bg-emerald-950/30 dark:text-emerald-200",
+      "border-[rgba(0,153,255,0.28)] bg-[var(--accent-blue-soft)] text-[var(--accent-blue)] dark:border-[rgba(0,153,255,0.28)] dark:bg-[var(--accent-blue-soft)] dark:text-[var(--accent-blue)]",
     pending:
-      "border-amber-200 bg-amber-50 text-amber-800 dark:border-amber-900/40 dark:bg-amber-950/30 dark:text-amber-200",
+      "border-[rgba(245,158,11,0.28)] bg-[rgba(245,158,11,0.08)] text-warning dark:border-[rgba(245,158,11,0.28)] dark:bg-[rgba(245,158,11,0.12)] dark:text-warning",
     failed:
-      "border-red-200 bg-red-50 text-red-700 dark:border-red-900/40 dark:bg-red-950/30 dark:text-red-200",
+      "border-[rgba(239,68,68,0.28)] bg-[rgba(239,68,68,0.08)] text-danger dark:border-[rgba(239,68,68,0.28)] dark:bg-[rgba(239,68,68,0.12)] dark:text-danger",
     abandoned:
-      "border-zinc-200 bg-zinc-50 text-zinc-600 dark:border-zinc-800 dark:bg-zinc-900/30 dark:text-zinc-400",
+      "border-hairline bg-canvas text-ink-muted dark:border-hairline dark:bg-surface-1/30 dark:text-ink-faint",
   };
   return (
     <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10.5px] font-medium uppercase tracking-wide ${map[status]}`}>
@@ -302,7 +302,7 @@ function StatusPill({ status }: { status: RecentPaymentRow["status"] }) {
 }
 
 /**
- * Inline SVG bar+line chart — keeps the bundle small (no chart lib) and
+ * Inline SVG bar+line chart - keeps the bundle small (no chart lib) and
  * looks consistent with the rest of the admin UI. Bars = downloads, line =
  * revenue. Both axes share the X (date), but each metric is normalised to
  * its own max so the lines/bars don't drown each other out at low values.
@@ -357,7 +357,7 @@ function DailyChart({ buckets }: { buckets: RevenueDailyBucket[] }) {
         <polyline
           fill="none"
           strokeWidth={2}
-          className="stroke-emerald-500"
+          className="stroke-[var(--accent-blue)]"
           points={linePoints}
         />
         {/* Revenue points */}
@@ -370,12 +370,12 @@ function DailyChart({ buckets }: { buckets: RevenueDailyBucket[] }) {
               cx={x.toFixed(1)}
               cy={y.toFixed(1)}
               r={2.4}
-              className="fill-emerald-500"
+              className="fill-[var(--accent-blue)]"
             />
           );
         })}
       </svg>
-      <div className="mt-2 flex items-center justify-between text-[11px] text-zinc-500 dark:text-zinc-400">
+      <div className="mt-2 flex items-center justify-between text-[11px] text-ink-faint dark:text-ink-faint">
         <span>{buckets[0]?.date ?? ""}</span>
         <span>
           {totalDownloads.toLocaleString()} downloads · {formatNgn(totalRevenue)} earned

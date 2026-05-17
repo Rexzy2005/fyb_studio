@@ -8,7 +8,7 @@ type InnerShadow = Extract<NormalizedEffect, { kind: "inner-shadow" }>;
  *   2. Clip to the shape so painting is constrained inside.
  *   3. Set shadow API (offset/blur/color), set globalCompositeOperation to
  *      'source-atop' so the shadow only appears on top of the clipped fill.
- *   4. Stroke the path at large width with shadowBlur enabled — the blurred
+ *   4. Stroke the path at large width with shadowBlur enabled - the blurred
  *      stroke that lands inside the clip area renders the inner shadow.
  *   5. Restore.
  */

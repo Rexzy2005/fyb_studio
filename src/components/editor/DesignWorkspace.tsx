@@ -142,7 +142,7 @@ export function DesignWorkspace({
    *     `(viewport_center − canvasW/2, viewport_center − canvasH/2)`.
    *   - The design's `transform: translate(pan) scale(zoom)` uses
    *     `transformOrigin: 0 0`, so scaling expands from that top-left
-   *     corner — at zoom < 1 the visual bounds shrink toward the upper-left.
+   *     corner - at zoom < 1 the visual bounds shrink toward the upper-left.
    *
    * To re-center, we add a forward translation of `canvasW × (1 − zoom) / 2`
    * to nudge the scaled design back to the viewport center. At zoom = 1 the
@@ -196,7 +196,7 @@ export function DesignWorkspace({
     };
   }, [autoFitOnResize, canvasH, canvasW, fitToViewport]);
 
-  // Wheel zoom — Ctrl/Cmd + wheel (or pinch on trackpads, which browsers
+  // Wheel zoom - Ctrl/Cmd + wheel (or pinch on trackpads, which browsers
   // synthesize with ctrlKey: true). Trackpad-aware: each event applies an
   // exponential factor proportional to deltaY magnitude, so a fast trackpad
   // pinch zooms quickly while a tiny scroll-wheel notch zooms gently.
@@ -214,7 +214,7 @@ export function DesignWorkspace({
       e.preventDefault();
       userAdjustedViewRef.current = true;
 
-      // Smooth exponential factor — `Math.exp(deltaY * 0.005)` gives a gentle
+      // Smooth exponential factor - `Math.exp(deltaY * 0.005)` gives a gentle
       // ramp where small deltas (trackpad) produce small factors (~1.005)
       // and big deltas (mouse wheel notch ≈ 100) give noticeable ones (~1.65).
       // Inverted because positive deltaY means "zoom out" (scroll away).
@@ -303,7 +303,7 @@ export function DesignWorkspace({
     if (pts.length !== 2) return;
     const [a, b] = pts;
     const dist = Math.hypot(b.x - a.x, b.y - a.y);
-    // Floor on the start distance — fingers very close together would produce
+    // Floor on the start distance - fingers very close together would produce
     // wild factors on first move. 12 px is a comfortable minimum.
     if (!Number.isFinite(dist) || dist < 12) return;
 
@@ -312,7 +312,7 @@ export function DesignWorkspace({
     const rect = designRef.current?.getBoundingClientRect();
     if (!rect) return;
 
-    // Pivot in design-space (unscaled) — keeps content under fingers fixed
+    // Pivot in design-space (unscaled) - keeps content under fingers fixed
     // for the zoom component. Translation drift is handled separately via
     // startMidX/Y deltas in onPointerMove so the user can also "drag" while
     // pinching, like Maps and Figma.
@@ -385,14 +385,14 @@ export function DesignWorkspace({
     updatePointer(e);
 
     // Pinch zoom (two pointers active). All zoom + pan goes through one
-    // `setView` call so React commits the new view in a single render —
+    // `setView` call so React commits the new view in a single render -
     // eliminates the visible "shimmy" the user sees from separate commits.
     if (pinchRef.current && pointersRef.current.size === 2) {
       const pts = Array.from(pointersRef.current.values());
       const [a, b] = pts;
       const dist = Math.hypot(b.x - a.x, b.y - a.y);
       // Also track the pinch midpoint so the pivot drifts with the user's
-      // fingers — a more natural feeling than locking the pivot at gesture start.
+      // fingers - a more natural feeling than locking the pivot at gesture start.
       const midX = (a.x + b.x) / 2;
       const midY = (a.y + b.y) / 2;
       const start = pinchRef.current;
@@ -414,7 +414,7 @@ export function DesignWorkspace({
       return;
     }
 
-    // Drag pan — one finger or one mouse button.
+    // Drag pan - one finger or one mouse button.
     if (!panStartRef.current) return;
     const dx = e.clientX - panStartRef.current.x;
     const dy = e.clientY - panStartRef.current.y;
@@ -452,7 +452,7 @@ export function DesignWorkspace({
     setSelectedNodeId(hitId);
   }
 
-  // We pass raw view values straight to the CSS transform — no rounding /
+  // We pass raw view values straight to the CSS transform - no rounding /
   // pixel-snap. Snapping caused visible jitter during interactive zoom
   // because every gesture frame would round to a slightly different value.
   // The bitmap canvas is already DPR-scaled by `CanvasShapesLayer`, so
@@ -466,11 +466,11 @@ export function DesignWorkspace({
   };
 
   return (
-    <div className="flex h-full flex-col overflow-hidden rounded-2xl border border-zinc-200 bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-950">
-      {/* Toolbar — segmented control style with icon buttons. Single pill on the
+    <div className="flex h-full flex-col overflow-hidden rounded-2xl border border-hairline bg-canvas dark:border-hairline dark:bg-canvas">
+      {/* Toolbar - segmented control style with icon buttons. Single pill on the
           right keeps the row clean; the zoom level click-target doubles as a
           quick "click to fit" affordance. */}
-      <div className="flex items-center justify-between gap-3 border-b border-zinc-200/80 bg-white/95 px-3 py-2 backdrop-blur dark:border-zinc-800/80 dark:bg-zinc-900/80">
+      <div className="flex items-center justify-between gap-3 border-b border-hairline/80 bg-surface-1/95 px-3 py-2 backdrop-blur dark:border-hairline/80 dark:bg-surface-1/80">
         <button
           type="button"
           onClick={() => {
@@ -478,12 +478,12 @@ export function DesignWorkspace({
             fitToViewport();
           }}
           title="Click to fit (Ctrl/Cmd+0)"
-          className="rounded-md px-1.5 py-0.5 text-[11px] font-medium tabular-nums text-zinc-600 transition-colors hover:bg-zinc-100 hover:text-zinc-900 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-zinc-100"
+          className="rounded-md px-1.5 py-0.5 text-[11px] font-medium tabular-nums text-ink-muted transition-colors hover:bg-surface-2 hover:text-ink dark:text-ink-faint dark:hover:bg-surface-2 dark:hover:text-ink"
         >
           {Math.round(zoom * 100)}%
         </button>
 
-        <div className="inline-flex items-center overflow-hidden rounded-lg border border-zinc-200 bg-white shadow-xs dark:border-zinc-800 dark:bg-zinc-900">
+        <div className="inline-flex items-center overflow-hidden rounded-lg border border-hairline bg-surface-1 shadow-xs dark:border-hairline dark:bg-surface-1">
           <button
             type="button"
             onClick={() => {
@@ -492,12 +492,12 @@ export function DesignWorkspace({
             }}
             title="Zoom out (Ctrl/Cmd+−)"
             aria-label="Zoom out"
-            className="inline-flex h-8 w-8 items-center justify-center text-zinc-700 transition-colors hover:bg-zinc-50 active:bg-zinc-100 disabled:cursor-not-allowed disabled:opacity-40 dark:text-zinc-200 dark:hover:bg-zinc-800 dark:active:bg-zinc-700"
+            className="inline-flex h-8 w-8 items-center justify-center text-ink-muted transition-colors hover:bg-canvas active:bg-surface-2 disabled:cursor-not-allowed disabled:opacity-40 dark:text-ink dark:hover:bg-surface-2 dark:active:bg-surface-2"
             disabled={zoom <= ZOOM_MIN + 1e-6}
           >
             <Minus className="h-3.5 w-3.5" />
           </button>
-          <div className="h-5 w-px bg-zinc-200 dark:bg-zinc-800" aria-hidden />
+          <div className="h-5 w-px bg-surface-2 dark:bg-surface-2" aria-hidden />
           <button
             type="button"
             onClick={() => {
@@ -506,12 +506,12 @@ export function DesignWorkspace({
             }}
             title="Zoom in (Ctrl/Cmd+=)"
             aria-label="Zoom in"
-            className="inline-flex h-8 w-8 items-center justify-center text-zinc-700 transition-colors hover:bg-zinc-50 active:bg-zinc-100 disabled:cursor-not-allowed disabled:opacity-40 dark:text-zinc-200 dark:hover:bg-zinc-800 dark:active:bg-zinc-700"
+            className="inline-flex h-8 w-8 items-center justify-center text-ink-muted transition-colors hover:bg-canvas active:bg-surface-2 disabled:cursor-not-allowed disabled:opacity-40 dark:text-ink dark:hover:bg-surface-2 dark:active:bg-surface-2"
             disabled={zoom >= ZOOM_MAX - 1e-6}
           >
             <Plus className="h-3.5 w-3.5" />
           </button>
-          <div className="h-5 w-px bg-zinc-200 dark:bg-zinc-800" aria-hidden />
+          <div className="h-5 w-px bg-surface-2 dark:bg-surface-2" aria-hidden />
           <button
             type="button"
             onClick={() => {
@@ -520,7 +520,7 @@ export function DesignWorkspace({
             }}
             title="Fit to view (Ctrl/Cmd+0, double-click)"
             aria-label="Fit to view"
-            className="inline-flex h-8 w-8 items-center justify-center text-zinc-700 transition-colors hover:bg-zinc-50 active:bg-zinc-100 dark:text-zinc-200 dark:hover:bg-zinc-800 dark:active:bg-zinc-700"
+            className="inline-flex h-8 w-8 items-center justify-center text-ink-muted transition-colors hover:bg-canvas active:bg-surface-2 dark:text-ink dark:hover:bg-surface-2 dark:active:bg-surface-2"
           >
             <Maximize2 className="h-3.5 w-3.5" />
           </button>
@@ -539,7 +539,7 @@ export function DesignWorkspace({
         onClick={onClickSelect}
         onDoubleClick={() => {
           // Double-click anywhere in the workspace fits the design back into
-          // view — fastest "get me back" gesture when the user pans/zooms
+          // view - fastest "get me back" gesture when the user pans/zooms
           // somewhere unhelpful. Reset the user-adjusted flag so subsequent
           // resize events resume their auto-fit behaviour.
           userAdjustedViewRef.current = false;
@@ -547,7 +547,7 @@ export function DesignWorkspace({
         }}
       >
         {/* Subtle dotted backdrop. Lower opacity than before so it reads as
-            texture rather than pattern — the artboard remains the focal point.
+            texture rather than pattern - the artboard remains the focal point.
             Two layers (light/dark) so the contrast tracks the theme. */}
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_1px_1px,rgba(0,0,0,0.05)_1px,transparent_0)] bg-size-[18px_18px] dark:hidden" />
         <div className="absolute inset-0 hidden bg-[radial-gradient(circle_at_1px_1px,rgba(255,255,255,0.06)_1px,transparent_0)] bg-size-[18px_18px] dark:block" />
@@ -580,25 +580,25 @@ export function DesignWorkspace({
           </div>
         </div>
 
-        {/* Keyboard/mouse hint — desktop-only. On touch the gestures are
+        {/* Keyboard/mouse hint - desktop-only. On touch the gestures are
             self-evident and the chip would just take up screen real estate.
             Uses real <kbd> elements for semantic + visual key-cap feel. */}
-        <div className="pointer-events-none absolute bottom-3 left-3 hidden items-center gap-1.5 rounded-full border border-zinc-200/80 bg-white/85 px-2.5 py-1 text-[11px] text-zinc-600 shadow-xs backdrop-blur md:inline-flex dark:border-zinc-800/80 dark:bg-zinc-900/75 dark:text-zinc-300">
+        <div className="pointer-events-none absolute bottom-3 left-3 hidden items-center gap-1.5 rounded-full border border-hairline/80 bg-surface-1/85 px-2.5 py-1 text-[11px] text-ink-muted shadow-xs backdrop-blur md:inline-flex dark:border-hairline/80 dark:bg-surface-1/75 dark:text-ink-muted">
           <span>Pan</span>
           {enableSelection ? (
-            <kbd className="rounded border border-zinc-300 bg-white px-1 font-mono text-[10px] font-medium text-zinc-700 shadow-xs dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-200">
+            <kbd className="rounded border border-hairline bg-surface-1 px-1 font-mono text-[10px] font-medium text-ink-muted shadow-xs dark:border-hairline dark:bg-surface-2 dark:text-ink">
               Space
             </kbd>
           ) : (
-            <kbd className="rounded border border-zinc-300 bg-white px-1 font-mono text-[10px] font-medium text-zinc-700 shadow-xs dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-200">
+            <kbd className="rounded border border-hairline bg-surface-1 px-1 font-mono text-[10px] font-medium text-ink-muted shadow-xs dark:border-hairline dark:bg-surface-2 dark:text-ink">
               drag
             </kbd>
           )}
-          <span className="text-zinc-300 dark:text-zinc-600" aria-hidden>
+          <span className="text-ink-faint dark:text-ink-muted" aria-hidden>
             ·
           </span>
           <span>Zoom</span>
-          <kbd className="rounded border border-zinc-300 bg-white px-1 font-mono text-[10px] font-medium text-zinc-700 shadow-xs dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-200">
+          <kbd className="rounded border border-hairline bg-surface-1 px-1 font-mono text-[10px] font-medium text-ink-muted shadow-xs dark:border-hairline dark:bg-surface-2 dark:text-ink">
             ⌘ Wheel
           </kbd>
         </div>

@@ -194,13 +194,13 @@ export default function TemplateEditorPage({
   }, [id, repo]);
 
   // Dirty-store wiring. Declared HERE (above the early returns below) because
-  // hooks must be invoked unconditionally on every render — relocating them
+  // hooks must be invoked unconditionally on every render - relocating them
   // past `if (error) return …` would change the hook order between renders.
   const setDirty = useEditorDirty((s) => s.setDirty);
   const setFlushSave = useEditorDirty((s) => s.setFlushSave);
   const resetDirtyStore = useEditorDirty((s) => s.reset);
 
-  // Latest record snapshot — held in a ref so flushSave (registered once with
+  // Latest record snapshot - held in a ref so flushSave (registered once with
   // the dirty store) always sees the freshest state when invoked from the shell.
   const latestRecordRef = useRef<TemplateRecord | null>(null);
   useEffect(() => {
@@ -211,7 +211,7 @@ export default function TemplateEditorPage({
    * Synchronously flush any pending debounced save. Returns once the write
    * has landed in storage. Registered with the dirty store so the admin
    * shell can call it when the user picks "Save & continue" on the
-   * unsaved-changes prompt — guarantees no edits get lost on navigation.
+   * unsaved-changes prompt - guarantees no edits get lost on navigation.
    */
   const flushPendingSave = useCallback(async () => {
     const current = latestRecordRef.current;
@@ -240,14 +240,14 @@ export default function TemplateEditorPage({
   useEffect(() => {
     setFlushSave(mode === "draft" ? flushPendingSave : null);
     return () => {
-      // Only clear what we registered — the next mount will set its own.
+      // Only clear what we registered - the next mount will set its own.
       resetDirtyStore();
     };
   }, [mode, flushPendingSave, setFlushSave, resetDirtyStore]);
 
   if (error) {
     return (
-      <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700 dark:border-red-900/40 dark:bg-red-950/40 dark:text-red-200">
+      <div className="rounded-xl border border-[rgba(239,68,68,0.28)] bg-[rgba(239,68,68,0.08)] p-4 text-sm text-danger dark:border-[rgba(239,68,68,0.28)] dark:bg-red-950/40 dark:text-danger">
         {error}
       </div>
     );
@@ -255,7 +255,7 @@ export default function TemplateEditorPage({
 
   if (!record) {
     return (
-      <div className="min-h-dvh bg-zinc-50 dark:bg-zinc-950">
+      <div className="min-h-dvh bg-canvas dark:bg-canvas">
         <ProgressModal
           open
           title="Loading editor"
@@ -374,12 +374,6 @@ export default function TemplateEditorPage({
     setPublishing(true);
     setBusy(true);
     try {
-      const localAssets = await repo.listDesignAssets(record.id);
-      const assetFiles = localAssets.map((a) => ({
-        nodeId: a.nodeId,
-        file: new File([a.blob], `${a.nodeId}.bin`, { type: a.mime || "image/png" }),
-      }));
-
       await publishTemplateToBackend({
         name: record.name,
         category: categoryValue,
@@ -387,7 +381,6 @@ export default function TemplateEditorPage({
         normalized: record.normalized,
         fieldConfig: record.fieldConfig,
         coverFile: publishFile,
-        assetFiles,
       });
 
       await repo.delete(record.id);
@@ -511,7 +504,7 @@ export default function TemplateEditorPage({
    * Persist a draft snapshot to local storage with a 350ms debounce.
    * Trailing-edge: the most recent change wins, prior in-flight writes are
    * cancelled. Triggered by any editable field (name, fieldConfig). Published
-   * templates skip the debounced save — their edits are committed via the
+   * templates skip the debounced save - their edits are committed via the
    * explicit Update flow.
    *
    * Also flips the cross-cutting `dirty` flag so the admin shell can prompt
@@ -644,15 +637,15 @@ export default function TemplateEditorPage({
 
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <header className="flex flex-col gap-3 border-b border-zinc-200 bg-white px-4 py-3 sm:flex-row sm:items-center sm:justify-between dark:border-zinc-800 dark:bg-zinc-900">
+      <header className="flex flex-col gap-3 border-b border-hairline bg-surface-1 px-4 py-3 sm:flex-row sm:items-center sm:justify-between dark:border-hairline dark:bg-surface-1">
         <div className="flex min-w-0 flex-1 items-center gap-2">
           <Link
             href="/admin/templates"
-            className="shrink-0 text-sm font-medium text-zinc-600 hover:text-zinc-900 dark:text-zinc-300 dark:hover:text-zinc-50"
+            className="shrink-0 text-sm font-medium text-ink-muted hover:text-ink dark:text-ink-muted dark:hover:text-ink"
           >
             Templates
           </Link>
-          <span className="shrink-0 text-sm text-zinc-400 dark:text-zinc-500">/</span>
+          <span className="shrink-0 text-sm text-ink-faint dark:text-ink-faint">/</span>
           <input
             type="text"
             value={record.name}
@@ -660,13 +653,13 @@ export default function TemplateEditorPage({
             disabled={mode !== "draft"}
             placeholder="Untitled template"
             aria-label="Template name"
-            className="min-w-0 flex-1 rounded-lg border border-transparent bg-transparent px-2 py-1 text-lg font-semibold tracking-tight text-zinc-950 outline-none transition focus:border-zinc-300 hover:border-zinc-200 disabled:cursor-not-allowed disabled:hover:border-transparent dark:text-zinc-100 dark:hover:border-zinc-700 dark:focus:border-zinc-600"
+            className="min-w-0 flex-1 rounded-lg border border-transparent bg-transparent px-2 py-1 text-lg font-semibold tracking-tight text-ink outline-none transition focus:border-hairline hover:border-hairline disabled:cursor-not-allowed disabled:hover:border-transparent dark:text-ink dark:hover:border-hairline dark:focus:border-accent-blue"
           />
-          <span className="shrink-0 rounded-full bg-zinc-100 px-2 py-1 text-xs font-medium text-zinc-700 dark:bg-zinc-800 dark:text-zinc-200">
+          <span className="shrink-0 rounded-full bg-surface-2 px-2 py-1 text-xs font-medium text-ink-muted dark:bg-surface-2 dark:text-ink">
             {record.status}
           </span>
           {savingConfig ? (
-            <span className="shrink-0 rounded-full bg-zinc-100 px-2 py-1 text-[11px] font-medium text-zinc-700 dark:bg-zinc-800 dark:text-zinc-200">
+            <span className="shrink-0 rounded-full bg-surface-2 px-2 py-1 text-[11px] font-medium text-ink-muted dark:bg-surface-2 dark:text-ink">
               Saving…
             </span>
           ) : null}
@@ -677,7 +670,7 @@ export default function TemplateEditorPage({
             <button
               type="button"
               onClick={() => setWarningsModalOpen(true)}
-              className="inline-flex h-9 items-center justify-center rounded-xl border border-amber-200 bg-amber-50 px-3 text-xs font-medium text-amber-900 hover:bg-amber-100 dark:border-amber-900/40 dark:bg-amber-950/30 dark:text-amber-100 dark:hover:bg-amber-950/40"
+              className="inline-flex h-9 items-center justify-center rounded-xl border border-[rgba(245,158,11,0.28)] bg-[rgba(245,158,11,0.08)] px-3 text-xs font-medium text-warning hover:bg-[rgba(245,158,11,0.16)] dark:border-[rgba(245,158,11,0.28)] dark:bg-[rgba(245,158,11,0.12)] dark:text-warning dark:hover:bg-[rgba(245,158,11,0.16)]"
               title="View normalization warnings"
             >
               Warnings ({warnings.length})
@@ -689,7 +682,7 @@ export default function TemplateEditorPage({
               type="button"
               onClick={() => setPreviewModalOpen(true)}
               disabled={busy}
-              className="inline-flex h-9 items-center justify-center gap-1.5 rounded-xl border border-zinc-200 bg-white px-3 text-xs font-medium text-zinc-900 hover:bg-zinc-50 disabled:opacity-50 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-100 dark:hover:bg-zinc-800"
+              className="inline-flex h-9 items-center justify-center gap-1.5 rounded-xl border border-hairline bg-surface-1 px-3 text-xs font-medium text-ink hover:bg-canvas disabled:opacity-50 dark:border-hairline dark:bg-surface-1 dark:text-ink dark:hover:bg-surface-2"
               title="Open the preview form to test how users will fill it"
             >
               <Eye className="h-3.5 w-3.5" />
@@ -702,7 +695,7 @@ export default function TemplateEditorPage({
               type="button"
               onClick={normalizeNow}
               disabled={busy}
-              className="inline-flex h-9 items-center justify-center rounded-xl bg-zinc-900 px-3 text-xs font-medium text-white disabled:opacity-50"
+              className="inline-flex h-9 items-center justify-center rounded-xl bg-surface-1 px-3 text-xs font-medium text-white disabled:opacity-50"
             >
               {busy ? "Normalizing…" : "Normalize"}
             </button>
@@ -711,7 +704,7 @@ export default function TemplateEditorPage({
               type="button"
               onClick={normalizeNow}
               disabled={busy}
-              className="inline-flex h-9 items-center justify-center rounded-xl border border-zinc-200 bg-white px-3 text-xs font-medium text-zinc-900 hover:bg-zinc-50 disabled:opacity-50 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-100 dark:hover:bg-zinc-800"
+              className="inline-flex h-9 items-center justify-center rounded-xl border border-hairline bg-surface-1 px-3 text-xs font-medium text-ink hover:bg-canvas disabled:opacity-50 dark:border-hairline dark:bg-surface-1 dark:text-ink dark:hover:bg-surface-2"
               title="Re-run normalization (updates fonts/assets/bounds from design JSON)"
             >
               Re-normalize
@@ -724,7 +717,7 @@ export default function TemplateEditorPage({
                 type="button"
                 onClick={cancelAndStartOver}
                 disabled={busy}
-                className="inline-flex h-9 items-center justify-center rounded-xl border border-zinc-200 bg-white px-3 text-xs font-medium text-zinc-900 hover:bg-zinc-50 disabled:opacity-50 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-100 dark:hover:bg-zinc-800"
+                className="inline-flex h-9 items-center justify-center rounded-xl border border-hairline bg-surface-1 px-3 text-xs font-medium text-ink hover:bg-canvas disabled:opacity-50 dark:border-hairline dark:bg-surface-1 dark:text-ink dark:hover:bg-surface-2"
                 title="Discard this session and upload a new design"
               >
                 Cancel
@@ -733,7 +726,7 @@ export default function TemplateEditorPage({
                 type="button"
                 onClick={saveDraftAndExit}
                 disabled={busy || savingConfig}
-                className="inline-flex h-9 items-center justify-center rounded-xl border border-zinc-200 bg-white px-3 text-xs font-medium text-zinc-900 hover:bg-zinc-50 disabled:opacity-50 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-100 dark:hover:bg-zinc-800"
+                className="inline-flex h-9 items-center justify-center rounded-xl border border-hairline bg-surface-1 px-3 text-xs font-medium text-ink hover:bg-canvas disabled:opacity-50 dark:border-hairline dark:bg-surface-1 dark:text-ink dark:hover:bg-surface-2"
                 title="Save current state and return to the templates list"
               >
                 Save to draft
@@ -742,7 +735,7 @@ export default function TemplateEditorPage({
                 type="button"
                 onClick={openPublishModal}
                 disabled={busy || !normalized}
-                className="inline-flex h-9 items-center justify-center rounded-xl bg-emerald-600 px-3 text-xs font-medium text-white disabled:opacity-50"
+                className="inline-flex h-9 items-center justify-center rounded-xl bg-[var(--accent-blue)] px-3 text-xs font-medium text-white disabled:opacity-50"
                 title={!normalized ? "Normalize before publishing" : undefined}
               >
                 Publish
@@ -756,7 +749,7 @@ export default function TemplateEditorPage({
                 type="button"
                 onClick={openUpdateModal}
                 disabled={busy}
-                className="inline-flex h-9 items-center justify-center rounded-xl bg-emerald-600 px-3 text-xs font-medium text-white disabled:opacity-50"
+                className="inline-flex h-9 items-center justify-center rounded-xl bg-[var(--accent-blue)] px-3 text-xs font-medium text-white disabled:opacity-50"
               >
                 Update
               </button>
@@ -764,7 +757,7 @@ export default function TemplateEditorPage({
                 type="button"
                 onClick={openUnpublishModal}
                 disabled={busy}
-                className="inline-flex h-9 items-center justify-center rounded-xl border border-red-200 bg-red-50 px-3 text-xs font-medium text-red-700 hover:bg-red-100 disabled:opacity-50 dark:border-red-900/40 dark:bg-red-950/30 dark:text-red-200 dark:hover:bg-red-950/50"
+                className="inline-flex h-9 items-center justify-center rounded-xl border border-[rgba(239,68,68,0.28)] bg-[rgba(239,68,68,0.08)] px-3 text-xs font-medium text-danger hover:bg-[rgba(239,68,68,0.12)] disabled:opacity-50 dark:border-[rgba(239,68,68,0.28)] dark:bg-[rgba(239,68,68,0.12)] dark:text-danger dark:hover:bg-red-950/50"
               >
                 Unpublish
               </button>
@@ -774,14 +767,14 @@ export default function TemplateEditorPage({
       </header>
 
       {error ? (
-        <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700 dark:border-red-900/40 dark:bg-red-950/40 dark:text-red-200">
+        <div className="rounded-xl border border-[rgba(239,68,68,0.28)] bg-[rgba(239,68,68,0.08)] p-4 text-sm text-danger dark:border-[rgba(239,68,68,0.28)] dark:bg-red-950/40 dark:text-danger">
           {error}
         </div>
       ) : null}
 
       {!normalized ? (
         <div className="flex-1 p-6">
-          <div className="rounded-2xl border border-amber-200 bg-amber-50 p-6 text-sm text-amber-800 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-200">
+          <div className="rounded-2xl border border-[rgba(245,158,11,0.28)] bg-[rgba(245,158,11,0.08)] p-6 text-sm text-warning dark:border-[rgba(245,158,11,0.32)] dark:bg-[rgba(245,158,11,0.12)] dark:text-warning">
             <div className="font-medium">Normalization required</div>
             <div className="mt-1 text-xs">
               This template has raw design JSON but no normalized schema yet.
@@ -790,7 +783,7 @@ export default function TemplateEditorPage({
               type="button"
               onClick={normalizeNow}
               disabled={busy}
-              className="mt-3 inline-flex h-9 items-center justify-center rounded-xl bg-zinc-900 px-3 text-xs font-medium text-white hover:bg-zinc-800 disabled:opacity-50 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-white"
+              className="mt-3 inline-flex h-9 items-center justify-center rounded-xl bg-surface-1 px-3 text-xs font-medium text-white hover:bg-surface-2 disabled:opacity-50 dark:bg-surface-2 dark:text-ink dark:hover:bg-surface-1"
             >
               {busy ? "Normalizing…" : "Normalize now"}
             </button>
@@ -799,7 +792,7 @@ export default function TemplateEditorPage({
       ) : (
         <div className="flex min-h-0 flex-1 min-w-0">
           <div className="flex min-w-0 flex-1 flex-col overflow-hidden p-2 lg:basis-3/4 lg:max-w-[75%]">
-            <div className="h-full min-h-0 overflow-hidden rounded-2xl border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900">
+            <div className="h-full min-h-0 overflow-hidden rounded-2xl border border-hairline bg-surface-1 dark:border-hairline dark:bg-surface-1">
               <DesignWorkspace
                 design={normalized}
                 fieldConfig={record.fieldConfig}
@@ -811,7 +804,7 @@ export default function TemplateEditorPage({
             </div>
           </div>
 
-          <aside className="hidden h-full flex-col border-l border-zinc-200 bg-white lg:flex lg:basis-1/4 lg:max-w-[25%] dark:border-zinc-800 dark:bg-zinc-900">
+          <aside className="hidden h-full flex-col border-l border-hairline bg-surface-1 lg:flex lg:basis-1/4 lg:max-w-[25%] dark:border-hairline dark:bg-surface-1">
             <div className="h-full min-h-0 overflow-y-auto p-4">
               <FieldConfigPanel
                 design={normalized}
@@ -843,18 +836,18 @@ export default function TemplateEditorPage({
           />
 
           <div className="absolute inset-0 flex items-center justify-center p-4">
-            <div className="w-full max-w-xl overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-2xl dark:border-zinc-800 dark:bg-zinc-900">
-              <div className="border-b border-zinc-200 px-5 py-4 dark:border-zinc-800">
-                <div className="text-sm font-semibold text-zinc-950 dark:text-zinc-100">Upload Template Preview</div>
-                <div className="mt-1 text-xs text-zinc-600 dark:text-zinc-300">
+            <div className="w-full max-w-xl overflow-hidden rounded-2xl border border-hairline bg-surface-1 shadow-2xl dark:border-hairline dark:bg-surface-1">
+              <div className="border-b border-hairline px-5 py-4 dark:border-hairline">
+                <div className="text-sm font-semibold text-ink dark:text-ink">Upload Template Preview</div>
+                <div className="mt-1 text-xs text-ink-muted dark:text-ink-muted">
                   This image will be displayed to users on the Templates page.
                 </div>
               </div>
 
               <div className="space-y-4 px-5 py-4">
                 <div>
-                  <div className="text-xs font-semibold text-zinc-950 dark:text-zinc-100">Template type</div>
-                  <div className="mt-1 text-[11px] text-zinc-600 dark:text-zinc-300">
+                  <div className="text-xs font-semibold text-ink dark:text-ink">Template type</div>
+                  <div className="mt-1 text-[11px] text-ink-muted dark:text-ink-muted">
                     Used for labeling and filtering on the gallery.
                   </div>
                   <div className="mt-2 grid gap-2">
@@ -862,7 +855,7 @@ export default function TemplateEditorPage({
                       value={publishCategoryPreset}
                       onChange={(e) => setPublishCategoryPreset(e.target.value as TemplateCategoryPreset)}
                       disabled={publishing}
-                      className="h-10 w-full rounded-xl border border-zinc-200 bg-white px-3 text-sm text-zinc-900 shadow-sm outline-none transition focus-visible:ring-2 focus-visible:ring-emerald-500/40 disabled:opacity-50 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-100"
+                      className="h-10 w-full rounded-xl border border-hairline bg-surface-1 px-3 text-sm text-ink shadow-sm outline-none transition focus-visible:ring-2 focus-visible:ring-[var(--accent-blue-ring)] disabled:opacity-50 dark:border-hairline dark:bg-surface-1 dark:text-ink"
                     >
                       <option value="fyb">FYB</option>
                       <option value="signout">Sign-out</option>
@@ -875,7 +868,7 @@ export default function TemplateEditorPage({
                         onChange={(e) => setPublishCategoryOther(e.target.value)}
                         disabled={publishing}
                         placeholder="Enter custom type (e.g. Department Banner)"
-                        className="h-10 w-full rounded-xl border border-zinc-200 bg-white px-3 text-sm text-zinc-900 shadow-sm outline-none transition focus-visible:ring-2 focus-visible:ring-emerald-500/40 disabled:opacity-50 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-100"
+                        className="h-10 w-full rounded-xl border border-hairline bg-surface-1 px-3 text-sm text-ink shadow-sm outline-none transition focus-visible:ring-2 focus-visible:ring-[var(--accent-blue-ring)] disabled:opacity-50 dark:border-hairline dark:bg-surface-1 dark:text-ink"
                       />
                     ) : null}
                   </div>
@@ -903,9 +896,9 @@ export default function TemplateEditorPage({
                   }
                 />
 
-                <div className="rounded-2xl border border-zinc-200 bg-zinc-50 p-3 dark:border-zinc-800 dark:bg-zinc-800/30">
-                  <div className="text-xs font-semibold text-zinc-950 dark:text-zinc-100">Guidelines</div>
-                  <ul className="mt-2 space-y-1 text-[11px] leading-4 text-zinc-600 dark:text-zinc-300">
+                <div className="rounded-2xl border border-hairline bg-canvas p-3 dark:border-hairline dark:bg-surface-2/30">
+                  <div className="text-xs font-semibold text-ink dark:text-ink">Guidelines</div>
+                  <ul className="mt-2 space-y-1 text-[11px] leading-4 text-ink-muted dark:text-ink-muted">
                     <li>Recommended formats: PNG, JPG, WebP</li>
                     <li>Suggested aspect ratio: 4:5</li>
                     <li>Minimum resolution: 1200×1500</li>
@@ -914,18 +907,18 @@ export default function TemplateEditorPage({
                 </div>
 
                 {publishError ? (
-                  <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-xs text-red-700 dark:border-red-900/40 dark:bg-red-950/40 dark:text-red-200">
+                  <div className="rounded-xl border border-[rgba(239,68,68,0.28)] bg-[rgba(239,68,68,0.08)] p-3 text-xs text-danger dark:border-[rgba(239,68,68,0.28)] dark:bg-red-950/40 dark:text-danger">
                     {publishError}
                   </div>
                 ) : null}
               </div>
 
-              <div className="flex items-center justify-end gap-2 border-t border-zinc-200 px-5 py-4 dark:border-zinc-800">
+              <div className="flex items-center justify-end gap-2 border-t border-hairline px-5 py-4 dark:border-hairline">
                 <button
                   type="button"
                   onClick={closePublishModal}
                   disabled={publishing}
-                  className="inline-flex h-9 items-center justify-center rounded-xl border border-zinc-200 bg-white px-3 text-xs font-medium text-zinc-900 hover:bg-zinc-50 disabled:opacity-50 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-100 dark:hover:bg-zinc-800"
+                  className="inline-flex h-9 items-center justify-center rounded-xl border border-hairline bg-surface-1 px-3 text-xs font-medium text-ink hover:bg-canvas disabled:opacity-50 dark:border-hairline dark:bg-surface-1 dark:text-ink dark:hover:bg-surface-2"
                 >
                   Cancel
                 </button>
@@ -933,7 +926,7 @@ export default function TemplateEditorPage({
                   type="button"
                   onClick={confirmPublishWithPreview}
                   disabled={publishing || !publishFile || !resolveCategoryValue(publishCategoryPreset, publishCategoryOther)}
-                  className="inline-flex h-9 items-center justify-center rounded-xl bg-emerald-600 px-3 text-xs font-medium text-white disabled:opacity-50"
+                  className="inline-flex h-9 items-center justify-center rounded-xl bg-[var(--accent-blue)] px-3 text-xs font-medium text-white disabled:opacity-50"
                 >
                   {publishing ? "Publishing…" : "Publish"}
                 </button>
@@ -1003,12 +996,12 @@ export default function TemplateEditorPage({
             }}
           />
           <div className="absolute inset-0 flex items-center justify-center p-4">
-            <div className="w-full max-w-xl overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-2xl dark:border-zinc-800 dark:bg-zinc-900">
-              <div className="border-b border-zinc-200 px-5 py-4 dark:border-zinc-800">
-                <div className="text-sm font-semibold text-zinc-950 dark:text-zinc-100">
+            <div className="w-full max-w-xl overflow-hidden rounded-2xl border border-hairline bg-surface-1 shadow-2xl dark:border-hairline dark:bg-surface-1">
+              <div className="border-b border-hairline px-5 py-4 dark:border-hairline">
+                <div className="text-sm font-semibold text-ink dark:text-ink">
                   Update published template
                 </div>
-                <div className="mt-1 text-xs text-zinc-600 dark:text-zinc-300">
+                <div className="mt-1 text-xs text-ink-muted dark:text-ink-muted">
                   Replace the cover photo, or skip to keep the current one.
                 </div>
               </div>
@@ -1040,25 +1033,25 @@ export default function TemplateEditorPage({
                   }
                 />
 
-                <div className="rounded-2xl border border-zinc-200 bg-zinc-50 p-3 text-[11px] text-zinc-600 dark:border-zinc-800 dark:bg-zinc-800/30 dark:text-zinc-300">
+                <div className="rounded-2xl border border-hairline bg-canvas p-3 text-[11px] text-ink-muted dark:border-hairline dark:bg-surface-2/30 dark:text-ink-muted">
                   Updates push silently to all users in real time. Locked images
-                  cannot be replaced from this screen — unpublish and republish to
+                  cannot be replaced from this screen - unpublish and republish to
                   swap them.
                 </div>
 
                 {updateError ? (
-                  <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-xs text-red-700 dark:border-red-900/40 dark:bg-red-950/40 dark:text-red-200">
+                  <div className="rounded-xl border border-[rgba(239,68,68,0.28)] bg-[rgba(239,68,68,0.08)] p-3 text-xs text-danger dark:border-[rgba(239,68,68,0.28)] dark:bg-red-950/40 dark:text-danger">
                     {updateError}
                   </div>
                 ) : null}
               </div>
 
-              <div className="flex items-center justify-end gap-2 border-t border-zinc-200 px-5 py-4 dark:border-zinc-800">
+              <div className="flex items-center justify-end gap-2 border-t border-hairline px-5 py-4 dark:border-hairline">
                 <button
                   type="button"
                   onClick={closeUpdateModal}
                   disabled={updating}
-                  className="inline-flex h-9 items-center justify-center rounded-xl border border-zinc-200 bg-white px-3 text-xs font-medium text-zinc-900 hover:bg-zinc-50 disabled:opacity-50 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-100 dark:hover:bg-zinc-800"
+                  className="inline-flex h-9 items-center justify-center rounded-xl border border-hairline bg-surface-1 px-3 text-xs font-medium text-ink hover:bg-canvas disabled:opacity-50 dark:border-hairline dark:bg-surface-1 dark:text-ink dark:hover:bg-surface-2"
                 >
                   Cancel
                 </button>
@@ -1066,7 +1059,7 @@ export default function TemplateEditorPage({
                   type="button"
                   onClick={confirmUpdate}
                   disabled={updating}
-                  className="inline-flex h-9 items-center justify-center rounded-xl bg-emerald-600 px-3 text-xs font-medium text-white disabled:opacity-50"
+                  className="inline-flex h-9 items-center justify-center rounded-xl bg-[var(--accent-blue)] px-3 text-xs font-medium text-white disabled:opacity-50"
                 >
                   {updating
                     ? "Updating…"
@@ -1087,19 +1080,19 @@ export default function TemplateEditorPage({
             onClick={closeUnpublishModal}
           />
           <div className="absolute inset-0 flex items-center justify-center p-4">
-            <div className="w-full max-w-md overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-2xl dark:border-zinc-800 dark:bg-zinc-900">
-              <div className="border-b border-zinc-200 px-5 py-4 dark:border-zinc-800">
-                <div className="text-sm font-semibold text-red-700 dark:text-red-300">
+            <div className="w-full max-w-md overflow-hidden rounded-2xl border border-hairline bg-surface-1 shadow-2xl dark:border-hairline dark:bg-surface-1">
+              <div className="border-b border-hairline px-5 py-4 dark:border-hairline">
+                <div className="text-sm font-semibold text-danger dark:text-red-300">
                   Unpublish template
                 </div>
-                <div className="mt-1 text-xs text-zinc-600 dark:text-zinc-300">
+                <div className="mt-1 text-xs text-ink-muted dark:text-ink-muted">
                   This permanently deletes the template and all its assets from
                   Cloudinary. This action cannot be undone.
                 </div>
               </div>
 
               <div className="space-y-3 px-5 py-4">
-                <div className="text-xs text-zinc-700 dark:text-zinc-200">
+                <div className="text-xs text-ink-muted dark:text-ink">
                   Type <span className="font-semibold">{record?.name}</span> to confirm.
                 </div>
                 <input
@@ -1107,21 +1100,21 @@ export default function TemplateEditorPage({
                   onChange={(e) => setUnpublishConfirmInput(e.target.value)}
                   disabled={unpublishing}
                   placeholder={record?.name ?? ""}
-                  className="h-10 w-full rounded-xl border border-zinc-200 bg-white px-3 text-sm text-zinc-900 shadow-sm outline-none transition focus-visible:ring-2 focus-visible:ring-red-500/40 disabled:opacity-50 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-100"
+                  className="h-10 w-full rounded-xl border border-hairline bg-surface-1 px-3 text-sm text-ink shadow-sm outline-none transition focus-visible:ring-2 focus-visible:ring-red-500/40 disabled:opacity-50 dark:border-hairline dark:bg-surface-1 dark:text-ink"
                 />
                 {unpublishError ? (
-                  <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-xs text-red-700 dark:border-red-900/40 dark:bg-red-950/40 dark:text-red-200">
+                  <div className="rounded-xl border border-[rgba(239,68,68,0.28)] bg-[rgba(239,68,68,0.08)] p-3 text-xs text-danger dark:border-[rgba(239,68,68,0.28)] dark:bg-red-950/40 dark:text-danger">
                     {unpublishError}
                   </div>
                 ) : null}
               </div>
 
-              <div className="flex items-center justify-end gap-2 border-t border-zinc-200 px-5 py-4 dark:border-zinc-800">
+              <div className="flex items-center justify-end gap-2 border-t border-hairline px-5 py-4 dark:border-hairline">
                 <button
                   type="button"
                   onClick={closeUnpublishModal}
                   disabled={unpublishing}
-                  className="inline-flex h-9 items-center justify-center rounded-xl border border-zinc-200 bg-white px-3 text-xs font-medium text-zinc-900 hover:bg-zinc-50 disabled:opacity-50 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-100 dark:hover:bg-zinc-800"
+                  className="inline-flex h-9 items-center justify-center rounded-xl border border-hairline bg-surface-1 px-3 text-xs font-medium text-ink hover:bg-canvas disabled:opacity-50 dark:border-hairline dark:bg-surface-1 dark:text-ink dark:hover:bg-surface-2"
                 >
                   Cancel
                 </button>

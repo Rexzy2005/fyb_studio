@@ -125,7 +125,7 @@ export function SectionsManager({ config, onChange }: Props) {
   return (
     <div className="space-y-3">
       {sections.length === 0 ? (
-        <div className="rounded-xl border border-dashed border-zinc-300 bg-zinc-50 p-3 text-xs text-zinc-700 dark:border-zinc-700 dark:bg-zinc-800/40 dark:text-zinc-300">
+        <div className="rounded-xl border border-dashed border-hairline bg-canvas p-3 text-xs text-ink-muted dark:border-hairline dark:bg-surface-2/40 dark:text-ink-muted">
           No sections yet. The user form will show all fields under one
           &ldquo;Details&rdquo; group. Add sections below to break the form
           into more digestible groups.
@@ -138,9 +138,9 @@ export function SectionsManager({ config, onChange }: Props) {
             return (
               <li
                 key={s.id}
-                className="flex items-center gap-2 rounded-xl border border-zinc-200 bg-white px-2 py-1.5 dark:border-zinc-800 dark:bg-zinc-900"
+                className="flex items-center gap-2 rounded-xl border border-hairline bg-surface-1 px-2 py-1.5 dark:border-hairline dark:bg-surface-1"
               >
-                <Icon className="h-4 w-4 shrink-0 text-zinc-700 dark:text-zinc-300" />
+                <Icon className="h-4 w-4 shrink-0 text-ink-muted dark:text-ink-muted" />
                 {isEditing ? (
                   <input
                     autoFocus
@@ -151,13 +151,13 @@ export function SectionsManager({ config, onChange }: Props) {
                       if (e.key === "Enter") commitEdit();
                       if (e.key === "Escape") setEditingId(null);
                     }}
-                    className="h-7 min-w-0 flex-1 rounded-lg border border-zinc-300 bg-white px-2 text-xs text-zinc-900 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
+                    className="h-7 min-w-0 flex-1 rounded-lg border border-hairline bg-surface-1 px-2 text-xs text-ink dark:border-hairline dark:bg-surface-2 dark:text-ink"
                   />
                 ) : (
                   <button
                     type="button"
                     onClick={() => startEditing(s)}
-                    className="min-w-0 flex-1 truncate text-left text-xs font-medium text-zinc-900 hover:text-zinc-700 dark:text-zinc-100 dark:hover:text-zinc-300"
+                    className="min-w-0 flex-1 truncate text-left text-xs font-medium text-ink hover:text-ink-muted dark:text-ink dark:hover:text-ink-faint"
                   >
                     {s.label}
                   </button>
@@ -168,7 +168,7 @@ export function SectionsManager({ config, onChange }: Props) {
                     onClick={() => move(s.id, -1)}
                     title="Move up"
                     aria-label="Move up"
-                    className="inline-flex h-6 w-6 items-center justify-center rounded-md text-zinc-600 hover:bg-zinc-100 disabled:opacity-30 dark:text-zinc-400 dark:hover:bg-zinc-800"
+                    className="inline-flex h-6 w-6 items-center justify-center rounded-md text-ink-muted hover:bg-surface-2 disabled:opacity-30 dark:text-ink-faint dark:hover:bg-surface-2"
                   >
                     <ChevronUp className="h-3.5 w-3.5" />
                   </button>
@@ -177,7 +177,7 @@ export function SectionsManager({ config, onChange }: Props) {
                     onClick={() => move(s.id, 1)}
                     title="Move down"
                     aria-label="Move down"
-                    className="inline-flex h-6 w-6 items-center justify-center rounded-md text-zinc-600 hover:bg-zinc-100 disabled:opacity-30 dark:text-zinc-400 dark:hover:bg-zinc-800"
+                    className="inline-flex h-6 w-6 items-center justify-center rounded-md text-ink-muted hover:bg-surface-2 disabled:opacity-30 dark:text-ink-faint dark:hover:bg-surface-2"
                   >
                     <ChevronDown className="h-3.5 w-3.5" />
                   </button>
@@ -186,7 +186,7 @@ export function SectionsManager({ config, onChange }: Props) {
                     onClick={() => startEditing(s)}
                     title="Rename"
                     aria-label="Rename"
-                    className="inline-flex h-6 w-6 items-center justify-center rounded-md text-zinc-600 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-zinc-800"
+                    className="inline-flex h-6 w-6 items-center justify-center rounded-md text-ink-muted hover:bg-surface-2 dark:text-ink-faint dark:hover:bg-surface-2"
                   >
                     <Pencil className="h-3.5 w-3.5" />
                   </button>
@@ -195,7 +195,7 @@ export function SectionsManager({ config, onChange }: Props) {
                     onClick={() => deleteSection(s.id)}
                     title="Delete"
                     aria-label="Delete"
-                    className="inline-flex h-6 w-6 items-center justify-center rounded-md text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-950/40"
+                    className="inline-flex h-6 w-6 items-center justify-center rounded-md text-danger hover:bg-[rgba(239,68,68,0.08)] dark:text-red-400 dark:hover:bg-red-950/40"
                   >
                     <Trash2 className="h-3.5 w-3.5" />
                   </button>
@@ -208,7 +208,7 @@ export function SectionsManager({ config, onChange }: Props) {
 
       {presetSuggestions.length > 0 ? (
         <div>
-          <div className="text-[11px] font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+          <div className="text-[11px] font-medium uppercase tracking-wide text-ink-faint dark:text-ink-faint">
             Quick add
           </div>
           <div className="mt-1.5 flex flex-wrap gap-1.5">
@@ -219,7 +219,7 @@ export function SectionsManager({ config, onChange }: Props) {
                   key={p.label}
                   type="button"
                   onClick={() => addSection(p)}
-                  className="inline-flex items-center gap-1.5 rounded-full border border-zinc-200 bg-white px-2.5 py-1 text-xs text-zinc-800 hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800"
+                  className="inline-flex items-center gap-1.5 rounded-full border border-hairline bg-surface-1 px-2.5 py-1 text-xs text-ink hover:bg-canvas dark:border-hairline dark:bg-surface-1 dark:text-ink dark:hover:bg-surface-2"
                 >
                   <Icon className="h-3.5 w-3.5" />
                   {p.label}
@@ -238,13 +238,13 @@ export function SectionsManager({ config, onChange }: Props) {
             if (e.key === "Enter") addCustom();
           }}
           placeholder="Custom section name…"
-          className="h-8 min-w-0 flex-1 rounded-lg border border-zinc-200 bg-white px-2.5 text-xs text-zinc-900 placeholder:text-zinc-400 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-100"
+          className="h-8 min-w-0 flex-1 rounded-lg border border-hairline bg-surface-1 px-2.5 text-xs text-ink placeholder:text-ink-faint dark:border-hairline dark:bg-surface-1 dark:text-ink"
         />
         <button
           type="button"
           onClick={addCustom}
           disabled={!customLabel.trim()}
-          className="inline-flex h-8 items-center justify-center gap-1 rounded-lg bg-zinc-900 px-2.5 text-xs font-medium text-white disabled:opacity-50 dark:bg-zinc-100 dark:text-zinc-900"
+          className="inline-flex h-8 items-center justify-center gap-1 rounded-lg bg-surface-1 px-2.5 text-xs font-medium text-white disabled:opacity-50 dark:bg-surface-2 dark:text-ink"
         >
           <Plus className="h-3.5 w-3.5" />
           Add
@@ -276,7 +276,7 @@ export function FieldSectionPicker({
       onChange={(e) =>
         onChange(e.target.value === DEFAULT_SECTION_ID ? undefined : e.target.value)
       }
-      className="h-8 w-full rounded-lg border border-zinc-200 bg-white px-2 text-xs text-zinc-900 dark:border-zinc-800 dark:bg-zinc-950/30 dark:text-zinc-100"
+      className="h-8 w-full rounded-lg border border-hairline bg-surface-1 px-2 text-xs text-ink dark:border-hairline dark:bg-surface-1 dark:text-ink"
     >
       <option value={DEFAULT_SECTION_ID}>
         {sections.length ? "Other (no section)" : "Details (default)"}

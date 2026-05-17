@@ -6,7 +6,7 @@ export type TemplateLockClient = {
   departmentAbbreviation: string;
   lockedByUserId: string;
   isOwnerLock: boolean;
-  passcode: string | null;
+  passcode: null;
   createdAt: string;
   updatedAt: string;
 };
@@ -52,43 +52,11 @@ export async function lockTemplate(
   return data.lock;
 }
 
-export async function rotateTemplateLockPasscode(
-  templateId: string
-): Promise<TemplateLockClient> {
-  const res = await fetch(`/api/templates/${templateId}/lock`, {
-    method: "PATCH",
-  });
-  if (!res.ok) throw new Error(await readError(res));
-  const data = (await res.json()) as { lock: TemplateLockClient };
-  return data.lock;
-}
-
 export async function deleteTemplateLock(templateId: string): Promise<void> {
   const res = await fetch(`/api/templates/${templateId}/lock`, {
     method: "DELETE",
   });
   if (!res.ok) throw new Error(await readError(res));
-}
-
-export type VerifyResult =
-  | { ok: true; expiresAt: number }
-  | { ok: false; status: number; message: string };
-
-export async function verifyTemplateLockPasscode(
-  templateId: string,
-  passcode: string
-): Promise<VerifyResult> {
-  const res = await fetch(`/api/templates/${templateId}/lock/verify`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ passcode }),
-  });
-  if (res.ok) {
-    const data = (await res.json()) as { ok: true; expiresAt: number };
-    return data;
-  }
-  const message = await readError(res);
-  return { ok: false, status: res.status, message };
 }
 
 export async function fetchDepartmentLocks(): Promise<DepartmentLockListItemClient[]> {

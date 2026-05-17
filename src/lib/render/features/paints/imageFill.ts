@@ -44,9 +44,9 @@ export function applyImageFill(
   }
 
   // Resolve scale mode. Two override layers, in order of priority:
-  //   1. Editor preview override (`frame.objectFit`) — set by the editor when
+  //   1. Editor preview override (`frame.objectFit`) - set by the editor when
   //      a user has uploaded a replacement image and chose cover/contain.
-  //   2. A non-identity `imageTransform` on the original Figma paint — Figma
+  //   2. A non-identity `imageTransform` on the original Figma paint - Figma
   //      stores manual crop adjustments here even when scaleMode says "FILL".
   //      If the user nudged the crop in Figma, that intent lives in the matrix
   //      and we MUST honor it regardless of the declared scaleMode, otherwise
@@ -84,7 +84,7 @@ export function applyImageFill(
 }
 
 /**
- * The identity image transform `[[1,0,0],[0,1,0]]` means "no crop" — the
+ * The identity image transform `[[1,0,0],[0,1,0]]` means "no crop" - the
  * image fills naturally per scaleMode. Anything else is a custom crop.
  * Tolerance is generous because Figma serializes float matrices.
  */

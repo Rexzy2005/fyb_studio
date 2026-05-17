@@ -8,7 +8,7 @@ import { ImageUpload, inferFileMeta } from "@/components/forms/ImageUpload";
  *   - The user template-use page (mobile + desktop)
  *   - The admin preview modal (so admin sees exactly what the user will see)
  *
- * `density` controls input sizing only — not styling logic — so the same
+ * `density` controls input sizing only - not styling logic - so the same
  * field always renders consistently across surfaces.
  */
 export function FormField({
@@ -32,17 +32,18 @@ export function FormField({
 }) {
   const inputClass =
     density === "compact"
-      ? "h-9 rounded-xl border border-zinc-200 bg-white px-3 text-[13px] text-zinc-900 dark:border-zinc-800 dark:bg-zinc-950/30 dark:text-zinc-100"
-      : "h-11 rounded-2xl border border-zinc-200 bg-white px-3 text-sm text-zinc-900 dark:border-zinc-800 dark:bg-zinc-950/30 dark:text-zinc-100";
+      ? "h-9 rounded-xl border border-hairline bg-surface-1 px-3 text-[13px] text-ink dark:border-hairline dark:bg-surface-1 dark:text-ink"
+      : "h-11 rounded-2xl border border-hairline bg-surface-1 px-3 text-sm text-ink dark:border-hairline dark:bg-surface-1 dark:text-ink";
 
   if (field.kind === "text") {
     const value = previewTextByNodeId[field.nodeId] ?? "";
     return (
       <label className="grid gap-1">
-        <span className="text-xs font-medium text-zinc-900 dark:text-zinc-100">{field.label}</span>
+        <span className="text-xs font-medium text-ink dark:text-ink">{field.label}</span>
         <input
           value={value}
           maxLength={field.maxChars}
+          placeholder={field.placeholder ?? ""}
           onChange={(e) => onPreviewTextChange(field.nodeId, e.target.value)}
           className={inputClass}
         />
@@ -78,7 +79,7 @@ export function FormField({
     const value = previewColorByNodeId[field.nodeId] ?? (palette[0] ?? "#000000");
     return (
       <label className="grid gap-1">
-        <span className="text-xs font-medium text-zinc-900 dark:text-zinc-100">{field.label}</span>
+        <span className="text-xs font-medium text-ink dark:text-ink">{field.label}</span>
         {palette.length ? (
           <select
             value={value}
@@ -98,8 +99,8 @@ export function FormField({
             onChange={(e) => onPreviewColorChange(field.nodeId, e.target.value)}
             className={
               density === "compact"
-                ? "h-9 w-16 rounded-xl border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900"
-                : "h-11 w-24 rounded-2xl border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900"
+                ? "h-9 w-16 rounded-xl border border-hairline bg-surface-1 dark:border-hairline dark:bg-surface-1"
+                : "h-11 w-24 rounded-2xl border border-hairline bg-surface-1 dark:border-hairline dark:bg-surface-1"
             }
           />
         )}

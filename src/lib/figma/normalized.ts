@@ -57,7 +57,7 @@ export type NormalizedGradientFill = NormalizedFillBase & {
   gradientType: "linear" | "radial" | "angular" | "diamond";
   stops: Array<{ offset: number; colorCss: string }>;
   // Figma always exports 3 handles when present: [start, end, width].
-  // Some legacy exports only have 2 — we still accept that shape.
+  // Some legacy exports only have 2 - we still accept that shape.
   handlePositions?: Array<{ x: number; y: number }>;
   cssFallback: string;
 };
@@ -144,7 +144,7 @@ export type NormalizedNodeBase = {
   // Absolute transform from Figma export, normalized into design-canvas coordinates
   // (i.e. already offset by canvas.offsetX/Y).
   transform?: AffineMatrix;
-  // Relative transform (parent space) — useful for the coordinate-space classifier.
+  // Relative transform (parent space) - useful for the coordinate-space classifier.
   relativeTransform?: AffineMatrix;
   // Node-local size from the export (often differs from axis-aligned bounding box when rotated).
   size?: { width: number; height: number };
@@ -203,7 +203,7 @@ export type TextRun = {
 
 export type NormalizedTextNode = NormalizedNodeBase & {
   kind: "text";
-  // Text can carry strokes (stroke-around glyphs) — common for headline/logo styles.
+  // Text can carry strokes (stroke-around glyphs) - common for headline/logo styles.
   // Renderer maps to SVG `stroke` + `paint-order` to honor INSIDE/OUTSIDE alignment.
   strokes: NormalizedStroke[];
   text: {
@@ -233,7 +233,7 @@ export type NormalizedTextNode = NormalizedNodeBase & {
     textTruncation?: "DISABLED" | "ENDING";
     maxLines?: number;
     autoResize?: "NONE" | "WIDTH_AND_HEIGHT" | "HEIGHT" | "TRUNCATE";
-    // Original font family/style as Figma reported them — used by the editor
+    // Original font family/style as Figma reported them - used by the editor
     // when re-rendering after user edits, so the wrong font isn't substituted.
     originalFontName?: { family: string; style: string };
     // Whether the export marked this font as missing in the editor session;

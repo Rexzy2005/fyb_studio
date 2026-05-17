@@ -42,7 +42,7 @@ async function walk(
   if (!node.visible) return;
   const alpha = inheritedAlpha * Math.max(0, Math.min(1, node.opacity));
   if (alpha <= 0) return;
-  // Mask nodes are not painted directly — they're consumed by mask siblings.
+  // Mask nodes are not painted directly - they're consumed by mask siblings.
   if (node.isMask) return;
 
   backend.pushAlpha(alpha);
@@ -67,7 +67,7 @@ async function walk(
     await backend.drawContainer(node);
   }
 
-  // Walk children — handling sibling masks: a child with isMask=true clips all subsequent siblings.
+  // Walk children - handling sibling masks: a child with isMask=true clips all subsequent siblings.
   const childIds = design.childrenById[id] ?? [];
   await walkChildren(childIds, design, backend, opts, alpha);
 
@@ -97,7 +97,7 @@ async function walkChildren(
       activeMaskId = cid;
       // For ALPHA/LUMINANCE masks the renderer uses the mask node's frame as a
       // path-based clip. (Vector masks in arbitrary paths fall back to the
-      // node's bounding rect for now — a follow-up will route them through
+      // node's bounding rect for now - a follow-up will route them through
       // applyMask.ts when full alpha-channel masking lands.)
       if (node.kind !== "text") {
         backend.pushClip({ kind: "frame", node });

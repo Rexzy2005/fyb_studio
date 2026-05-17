@@ -9,7 +9,7 @@ import mongoose, { Schema, type InferSchemaType, type Model } from "mongoose";
  *   - The grant has its own lifecycle (download counter, expiry) that
  *     doesn't belong to the payment record.
  *   - Refund / chargeback flows set the payment to `refunded` but we may
- *     still want the grant history for analytics — keeping them apart lets
+ *     still want the grant history for analytics - keeping them apart lets
  *     us do that cleanly.
  */
 const downloadGrantSchema = new Schema(
@@ -36,18 +36,18 @@ const downloadGrantSchema = new Schema(
 
     issuedAt: { type: Date, default: () => new Date() },
     // Safety expiry: an unconsumed grant stays valid for `expiresAt`. Set
-    // generously (default 7 days) — this is "the user must come back and
+    // generously (default 7 days) - this is "the user must come back and
     // download by then", NOT a re-download window. Past `expiresAt`, the
     // grant is dead even if it was never used.
     expiresAt: { type: Date, required: true, index: true },
 
     // Single-use semantics: once `consumedAt` is set, the grant cannot be
-    // reused — the user must pay again for any future download. This
+    // reused - the user must pay again for any future download. This
     // replaces the prior 24-hour re-download grace.
     consumedAt: { type: Date, default: null, index: true },
 
     // Counter + last-download timestamp kept for analytics + abuse detection
-    // even with single-use grants — useful for flagging suspicious patterns
+    // even with single-use grants - useful for flagging suspicious patterns
     // (multiple confirmations, etc.) in the admin dashboard.
     downloadsUsed: { type: Number, default: 0 },
     lastDownloadAt: { type: Date, default: null },

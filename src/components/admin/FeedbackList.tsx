@@ -14,13 +14,13 @@ const STATUS_ORDER: Status[] = ["new", "reviewed", "actioned", "archived"];
 
 const STATUS_CLASSES: Record<Status, string> = {
   new:
-    "border-amber-200 bg-amber-50 text-amber-800 dark:border-amber-900/40 dark:bg-amber-950/30 dark:text-amber-200",
+    "border-[rgba(245,158,11,0.28)] bg-[rgba(245,158,11,0.08)] text-warning dark:border-[rgba(245,158,11,0.28)] dark:bg-[rgba(245,158,11,0.12)] dark:text-warning",
   reviewed:
     "border-sky-200 bg-sky-50 text-sky-800 dark:border-sky-900/40 dark:bg-sky-950/30 dark:text-sky-200",
   actioned:
-    "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900/40 dark:bg-emerald-950/30 dark:text-emerald-200",
+    "border-[rgba(0,153,255,0.28)] bg-[var(--accent-blue-soft)] text-[var(--accent-blue)] dark:border-[rgba(0,153,255,0.28)] dark:bg-[var(--accent-blue-soft)] dark:text-[var(--accent-blue)]",
   archived:
-    "border-zinc-200 bg-zinc-50 text-zinc-600 dark:border-zinc-800 dark:bg-zinc-900/30 dark:text-zinc-400",
+    "border-hairline bg-canvas text-ink-muted dark:border-hairline dark:bg-surface-1/30 dark:text-ink-faint",
 };
 
 type Props = {
@@ -42,7 +42,7 @@ export function FeedbackList({ rows, loading, onUpdated }: Props) {
 
   if (rows.length === 0) {
     return (
-      <div className="px-4 py-10 text-center text-sm text-zinc-500 dark:text-zinc-400">
+      <div className="px-4 py-10 text-center text-sm text-ink-faint dark:text-ink-faint">
         No feedback yet. Once users start submitting, their responses will land here.
       </div>
     );
@@ -104,7 +104,7 @@ function FeedbackItem({
           <div className="text-3xl leading-none" aria-hidden>
             {emojiForRating(row.rating)}
           </div>
-          <div className="text-[11px] font-semibold tracking-wide text-zinc-500 dark:text-zinc-400">
+          <div className="text-[11px] font-semibold tracking-wide text-ink-faint dark:text-ink-faint">
             {row.rating}/5
           </div>
         </div>
@@ -112,10 +112,10 @@ function FeedbackItem({
         <div className="min-w-0 flex-1 space-y-2">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div className="min-w-0">
-              <div className="truncate text-sm font-medium text-zinc-900 dark:text-zinc-100">
+              <div className="truncate text-sm font-medium text-ink dark:text-ink">
                 {row.user.name ?? row.user.email ?? "Unknown user"}
               </div>
-              <div className="text-[11px] text-zinc-500 dark:text-zinc-400">
+              <div className="text-[11px] text-ink-faint dark:text-ink-faint">
                 {row.user.email ?? ""}
                 {row.user.email && row.context.page ? " · " : ""}
                 {row.context.page ?? ""}
@@ -131,11 +131,11 @@ function FeedbackItem({
           </div>
 
           {row.message ? (
-            <p className="whitespace-pre-wrap text-sm text-zinc-700 dark:text-zinc-300">
+            <p className="whitespace-pre-wrap text-sm text-ink-muted dark:text-ink-muted">
               {row.message}
             </p>
           ) : (
-            <p className="text-sm italic text-zinc-400 dark:text-zinc-500">
+            <p className="text-sm italic text-ink-faint dark:text-ink-faint">
               No written comment.
             </p>
           )}
@@ -145,7 +145,7 @@ function FeedbackItem({
               {row.categories.map((c) => (
                 <span
                   key={c}
-                  className="inline-flex items-center rounded-full border border-zinc-200 bg-zinc-50 px-2 py-0.5 text-[11px] font-medium text-zinc-700 dark:border-zinc-800 dark:bg-zinc-950/30 dark:text-zinc-200"
+                  className="inline-flex items-center rounded-full border border-hairline bg-canvas px-2 py-0.5 text-[11px] font-medium text-ink-muted dark:border-hairline dark:bg-surface-1 dark:text-ink"
                 >
                   {FEEDBACK_CATEGORY_LABELS[c as FeedbackCategoryKey] ?? c}
                 </span>
@@ -168,7 +168,7 @@ function FeedbackItem({
                     "inline-flex h-7 items-center justify-center rounded-lg border px-2 text-[11px] font-medium transition disabled:cursor-not-allowed " +
                     (isCurrent
                       ? STATUS_CLASSES[s]
-                      : "border-zinc-200 bg-white text-zinc-600 hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-950/30 dark:text-zinc-300 dark:hover:bg-zinc-800")
+                      : "border-hairline bg-surface-1 text-ink-muted hover:bg-canvas dark:border-hairline dark:bg-surface-1 dark:text-ink-muted dark:hover:bg-surface-2")
                   }
                 >
                   {isSaving ? "…" : s}
@@ -185,7 +185,7 @@ function FeedbackItem({
                 onChange={(e) => setNotes(e.target.value.slice(0, 4000))}
                 rows={3}
                 placeholder="Internal notes…"
-                className="w-full resize-none rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-900 outline-none transition focus-visible:ring-2 focus-visible:ring-emerald-500/40 dark:border-zinc-800 dark:bg-zinc-950/30 dark:text-zinc-100"
+                className="w-full resize-none rounded-xl border border-hairline bg-surface-1 px-3 py-2 text-sm text-ink outline-none transition focus-visible:ring-2 focus-visible:ring-[var(--accent-blue-ring)] dark:border-hairline dark:bg-surface-1 dark:text-ink"
               />
               <div className="flex justify-end gap-2">
                 <button
@@ -195,7 +195,7 @@ function FeedbackItem({
                     setEditingNotes(false);
                   }}
                   disabled={savingNotes}
-                  className="inline-flex h-8 items-center rounded-lg border border-zinc-200 bg-white px-3 text-xs font-medium text-zinc-700 transition hover:bg-zinc-50 disabled:opacity-50 dark:border-zinc-800 dark:bg-zinc-950/30 dark:text-zinc-300"
+                  className="inline-flex h-8 items-center rounded-lg border border-hairline bg-surface-1 px-3 text-xs font-medium text-ink-muted transition hover:bg-canvas disabled:opacity-50 dark:border-hairline dark:bg-surface-1 dark:text-ink-muted"
                 >
                   Cancel
                 </button>
@@ -203,7 +203,7 @@ function FeedbackItem({
                   type="button"
                   onClick={() => update({ adminNotes: notes })}
                   disabled={savingNotes}
-                  className="inline-flex h-8 items-center rounded-lg bg-zinc-900 px-3 text-xs font-medium text-white transition hover:bg-zinc-800 disabled:opacity-60 dark:bg-emerald-600 dark:hover:bg-emerald-500"
+                  className="inline-flex h-8 items-center rounded-lg bg-surface-1 px-3 text-xs font-medium text-white transition hover:bg-surface-2 disabled:opacity-60 dark:bg-[var(--accent-blue)] dark:hover:bg-[var(--accent-blue)]"
                 >
                   {savingNotes ? "Saving…" : "Save notes"}
                 </button>
@@ -213,7 +213,7 @@ function FeedbackItem({
             <button
               type="button"
               onClick={() => setEditingNotes(true)}
-              className="block w-full rounded-xl border border-zinc-200 bg-zinc-50 p-2 text-left text-xs italic text-zinc-700 hover:border-zinc-300 dark:border-zinc-800 dark:bg-zinc-950/30 dark:text-zinc-300"
+              className="block w-full rounded-xl border border-hairline bg-canvas p-2 text-left text-xs italic text-ink-muted hover:border-hairline dark:border-hairline dark:bg-surface-1 dark:text-ink-muted"
             >
               <span className="not-italic font-semibold">Notes:</span> {row.adminNotes}
             </button>
@@ -221,14 +221,14 @@ function FeedbackItem({
             <button
               type="button"
               onClick={() => setEditingNotes(true)}
-              className="text-[11px] font-medium text-zinc-500 transition hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100"
+              className="text-[11px] font-medium text-ink-faint transition hover:text-ink dark:text-ink-faint dark:hover:text-ink"
             >
               + Add internal note
             </button>
           )}
 
           {error ? (
-            <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-1.5 text-xs text-red-700 dark:border-red-900/40 dark:bg-red-950/30 dark:text-red-200">
+            <div className="rounded-lg border border-[rgba(239,68,68,0.28)] bg-[rgba(239,68,68,0.08)] px-3 py-1.5 text-xs text-danger dark:border-[rgba(239,68,68,0.28)] dark:bg-[rgba(239,68,68,0.12)] dark:text-danger">
               {error}
             </div>
           ) : null}

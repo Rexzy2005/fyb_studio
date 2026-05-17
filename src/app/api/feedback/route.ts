@@ -12,7 +12,7 @@ export const runtime = "nodejs";
  *
  * Submit a feedback / survey response. Auth-required so we can attribute
  * each submission to a real user. We do NOT rate-limit hard at the API
- * layer — the UI throttles via "you already gave feedback recently"
+ * layer - the UI throttles via "you already gave feedback recently"
  * dismissal in localStorage; light spam tolerance is preferred over
  * blocking legitimate follow-up feedback.
  */

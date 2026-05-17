@@ -17,7 +17,7 @@ import { createLocalTemplateRepository } from "@/lib/storage/templateRepo";
  *   3. Encoding everything as base64 data URLs and stitching it into one
  *      `<style>` element to drop into the SVG defs.
  *
- * Returns the empty string when nothing could be resolved — the caller
+ * Returns the empty string when nothing could be resolved - the caller
  * falls back to whatever face the rasterizer can find (usually wrong, but
  * better than aborting).
  */
@@ -28,7 +28,7 @@ export async function buildEmbeddedFontFacesStyle(
   const families = normalizeGoogleFontFamilies(fontFamilies);
   if (families.length === 0) return "";
 
-  // Both lookups run in parallel — Google Fonts CSS via the network, custom
+  // Both lookups run in parallel - Google Fonts CSS via the network, custom
   // fonts via IndexedDB. Failures on either side are non-fatal.
   const [googleRules, customRules] = await Promise.all([
     fetchGoogleFontFaceRules(families).catch(() => ""),
@@ -60,7 +60,7 @@ async function fetchGoogleFontFaceRules(families: string[]): Promise<string> {
   // as-is in case the rasterizer prefers them.
   const blocks = css.split(/(?=@font-face)/g);
   const rewritten: string[] = [];
-  // Cache woff2 fetches by URL — Google ships the same URL for every weight
+  // Cache woff2 fetches by URL - Google ships the same URL for every weight
   // sometimes; skip refetching.
   const fetched = new Map<string, string | null>();
 
@@ -90,7 +90,7 @@ async function fetchGoogleFontFaceRules(families: string[]): Promise<string> {
       }
     }
     if (!dataUrl) {
-      // Drop the block — better to omit it than to leave a network reference
+      // Drop the block - better to omit it than to leave a network reference
       // that the SVG's `<img>` document can't resolve.
       continue;
     }

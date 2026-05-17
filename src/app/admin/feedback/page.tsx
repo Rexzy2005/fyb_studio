@@ -86,13 +86,13 @@ export default function AdminFeedbackPage() {
   }
 
   return (
-    <div className="h-full overflow-y-auto bg-zinc-50/40 dark:bg-zinc-950/40">
+    <div className="h-full overflow-y-auto bg-canvas/40 dark:bg-canvas/40">
       <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
         <header className="mb-6">
-          <h1 className="text-2xl font-semibold tracking-tight text-zinc-950 dark:text-zinc-100">
+          <h1 className="text-2xl font-semibold tracking-tight text-ink dark:text-ink">
             User feedback
           </h1>
-          <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
+          <p className="mt-1 text-sm text-ink-muted dark:text-ink-faint">
             Surveys + free-text feedback collected from across the product. Use the
             stats to spot trends, then triage individual replies in the table below.
           </p>
@@ -100,13 +100,13 @@ export default function AdminFeedbackPage() {
 
         <FeedbackStatsPanel />
 
-        <section className="mt-6 rounded-2xl border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900">
-          <header className="flex flex-col gap-3 border-b border-zinc-200 px-4 py-3 sm:flex-row sm:items-center sm:justify-between dark:border-zinc-800">
+        <section className="mt-6 rounded-2xl border border-hairline bg-surface-1 dark:border-hairline dark:bg-surface-1">
+          <header className="flex flex-col gap-3 border-b border-hairline px-4 py-3 sm:flex-row sm:items-center sm:justify-between dark:border-hairline">
             <div>
-              <div className="text-sm font-semibold text-zinc-950 dark:text-zinc-100">
+              <div className="text-sm font-semibold text-ink dark:text-ink">
                 All feedback
               </div>
-              <div className="text-xs text-zinc-600 dark:text-zinc-400">
+              <div className="text-xs text-ink-muted dark:text-ink-faint">
                 {rows.length.toLocaleString()} loaded · cursor-paginated
               </div>
             </div>
@@ -151,13 +151,13 @@ export default function AdminFeedbackPage() {
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 placeholder="Search messages…"
-                className="h-9 w-44 rounded-xl border border-zinc-200 bg-white px-3 text-sm outline-none transition focus-visible:ring-2 focus-visible:ring-emerald-500/40 dark:border-zinc-800 dark:bg-zinc-950/30"
+                className="h-9 w-44 rounded-xl border border-hairline bg-surface-1 px-3 text-sm outline-none transition focus-visible:ring-2 focus-visible:ring-[var(--accent-blue-ring)] dark:border-hairline dark:bg-surface-1"
               />
             </div>
           </header>
 
           {error ? (
-            <div className="m-4 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700 dark:border-red-900/40 dark:bg-red-950/30 dark:text-red-200">
+            <div className="m-4 rounded-xl border border-[rgba(239,68,68,0.28)] bg-[rgba(239,68,68,0.08)] px-3 py-2 text-sm text-danger dark:border-[rgba(239,68,68,0.28)] dark:bg-[rgba(239,68,68,0.12)] dark:text-danger">
               {error}
             </div>
           ) : null}
@@ -169,12 +169,12 @@ export default function AdminFeedbackPage() {
           />
 
           {nextCursor && !loading ? (
-            <div className="border-t border-zinc-200 px-4 py-3 text-center dark:border-zinc-800">
+            <div className="border-t border-hairline px-4 py-3 text-center dark:border-hairline">
               <button
                 type="button"
                 onClick={() => load(nextCursor)}
                 disabled={loadingMore}
-                className="inline-flex h-9 items-center justify-center rounded-xl border border-zinc-200 bg-white px-4 text-sm font-medium text-zinc-900 transition hover:bg-zinc-50 disabled:opacity-50 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-100"
+                className="inline-flex h-9 items-center justify-center rounded-xl border border-hairline bg-surface-1 px-4 text-sm font-medium text-ink transition hover:bg-canvas disabled:opacity-50 dark:border-hairline dark:bg-surface-1 dark:text-ink"
               >
                 {loadingMore ? "Loading…" : "Load more"}
               </button>
@@ -199,7 +199,7 @@ function Select({
     <select
       value={value}
       onChange={(e) => onChange(e.target.value)}
-      className="h-9 rounded-xl border border-zinc-200 bg-white px-3 text-sm outline-none transition focus-visible:ring-2 focus-visible:ring-emerald-500/40 dark:border-zinc-800 dark:bg-zinc-950/30"
+      className="h-9 rounded-xl border border-hairline bg-surface-1 px-3 text-sm outline-none transition focus-visible:ring-2 focus-visible:ring-[var(--accent-blue-ring)] dark:border-hairline dark:bg-surface-1"
     >
       {options.map((o) => (
         <option key={o.value} value={o.value}>

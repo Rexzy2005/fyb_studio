@@ -2,13 +2,16 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
+import { BookmarkX, ShieldCheck } from "lucide-react";
 
 import {
   deleteTemplateLock,
   fetchDepartmentLocks,
-  rotateTemplateLockPasscode,
   type DepartmentLockListItemClient,
 } from "@/lib/api/templateLocks";
+import { Skeleton } from "@/components/ui/Skeleton";
+import { SectionHeader } from "@/components/dashboard/SectionHeader";
+import { bodyMd, bodySm, caption, micro } from "@/lib/ui/typography";
 
 export function DepartmentLocks({ departmentName }: { departmentName: string }) {
   const [locks, setLocks] = useState<DepartmentLockListItemClient[]>([]);
@@ -21,7 +24,7 @@ export function DepartmentLocks({ departmentName }: { departmentName: string }) 
       const next = await fetchDepartmentLocks();
       setLocks(next);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load locks");
+      setError(err instanceof Error ? err.message : "Failed to load reservations");
     } finally {
       setLoading(false);
     }
@@ -31,37 +34,59 @@ export function DepartmentLocks({ departmentName }: { departmentName: string }) 
     refresh();
   }, [refresh]);
 
-  if (loading) {
-    return (
-      <section className="rounded-3xl border border-zinc-200 bg-white p-6 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
-        <Header departmentName={departmentName} />
-        <div className="mt-4 grid gap-3 sm:grid-cols-2">
-          <SkeletonCard />
-          <SkeletonCard />
-        </div>
-      </section>
-    );
-  }
-
   return (
-    <section className="rounded-3xl border border-zinc-200 bg-white p-6 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
-      <Header departmentName={departmentName} />
+    <section className="flex flex-col gap-7">
+      <SectionHeader
+        eyebrow="Reserved"
+        title="Reserved designs"
+        description={`Designs you have reserved exclusively for ${departmentName}. Members get automatic access — no passcode needed.`}
+        count={loading ? null : locks.length}
+      />
 
       {error ? (
-        <div className="mt-4 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-700 dark:border-rose-900/40 dark:bg-rose-900/20 dark:text-rose-300">
+        <div
+          className="px-4 py-3"
+          style={{
+            background: "rgba(239, 68, 68, 0.08)",
+            border: "1px solid rgba(239, 68, 68, 0.28)",
+            color: "var(--semantic-danger)",
+            borderRadius: 10,
+            ...bodySm,
+          }}
+        >
           {error}
         </div>
       ) : null}
 
-      {locks.length === 0 ? (
-        <div className="mt-4 rounded-2xl border border-dashed border-zinc-200 p-6 text-sm text-zinc-600 dark:border-zinc-800 dark:text-zinc-300">
-          You haven&apos;t locked any designs yet. Open a template, choose
-          &ldquo;Preview & lock&rdquo;, and reserve it for your department.
+      {loading ? (
+        <div className="grid gap-3 sm:grid-cols-2">
+          <Skeleton height={140} radius={15} />
+          <Skeleton height={140} radius={15} />
+        </div>
+      ) : locks.length === 0 ? (
+        <div
+          className="px-7 py-9"
+          style={{
+            background: "var(--surface-1)",
+            border: "1px solid var(--hairline)",
+            borderRadius: 20,
+          }}
+        >
+          <span style={{ ...bodyMd, color: "var(--ink)", fontWeight: 500 }}>
+            No reserved designs yet
+          </span>
+          <p
+            className="mt-1.5 max-w-[480px]"
+            style={{ ...bodySm, color: "var(--ink-muted)", fontWeight: 400 }}
+          >
+            Open a template, choose &ldquo;Preview &amp; reserve&rdquo;, and reserve it for{" "}
+            {departmentName}. Members get automatic access — no passcode sharing required.
+          </p>
         </div>
       ) : (
-        <div className="mt-4 grid gap-3 sm:grid-cols-2">
+        <div className="grid gap-3 sm:grid-cols-2">
           {locks.map((l) => (
-            <LockCard key={l.id} lock={l} onChanged={refresh} />
+            <ReserveCard key={l.id} lock={l} onChanged={refresh} />
           ))}
         </div>
       )}
@@ -69,61 +94,21 @@ export function DepartmentLocks({ departmentName }: { departmentName: string }) 
   );
 }
 
-function Header({ departmentName }: { departmentName: string }) {
-  return (
-    <div className="flex items-start justify-between gap-4">
-      <div>
-        <div className="inline-flex items-center gap-2 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-[11px] font-semibold text-emerald-700 dark:border-emerald-900/40 dark:bg-emerald-900/20 dark:text-emerald-300">
-          Department head
-        </div>
-        <h2 className="mt-2 text-lg font-semibold tracking-tight text-zinc-950 dark:text-zinc-100">
-          Locked designs
-        </h2>
-        <p className="mt-0.5 text-xs text-zinc-500 dark:text-zinc-400">
-          Designs you have reserved for {departmentName}.
-        </p>
-      </div>
-    </div>
-  );
-}
-
-function SkeletonCard() {
-  return <div className="fyb-skeleton h-44 rounded-2xl" />;
-}
-
-function LockCard({
+function ReserveCard({
   lock,
   onChanged,
 }: {
   lock: DepartmentLockListItemClient;
   onChanged: () => Promise<void> | void;
 }) {
-  const [reveal, setReveal] = useState(false);
-  const [working, setWorking] = useState<"rotate" | "delete" | null>(null);
-  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [working, setWorking] = useState<"free" | null>(null);
+  const [confirmFree, setConfirmFree] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [localPasscode, setLocalPasscode] = useState<string | null>(lock.passcode);
 
-  async function onRotate() {
+  async function onFree() {
     if (working) return;
     setError(null);
-    setWorking("rotate");
-    try {
-      const next = await rotateTemplateLockPasscode(lock.templateId);
-      setLocalPasscode(next.passcode);
-      setReveal(true);
-      await onChanged();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not rotate passcode");
-    } finally {
-      setWorking(null);
-    }
-  }
-
-  async function onDelete() {
-    if (working) return;
-    setError(null);
-    setWorking("delete");
+    setWorking("free");
     try {
       await deleteTemplateLock(lock.templateId);
       await onChanged();
@@ -134,143 +119,149 @@ function LockCard({
   }
 
   return (
-    <div className="overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+    <div
+      className="overflow-hidden"
+      style={{
+        background: "var(--surface-1)",
+        border: "1px solid var(--hairline)",
+        borderRadius: 16,
+      }}
+    >
+      {/* Reserve status bar */}
+      <div
+        className="flex items-center gap-2 px-4 py-2"
+        style={{
+          background: "rgba(34,197,94,0.06)",
+          borderBottom: "1px solid rgba(34,197,94,0.15)",
+        }}
+      >
+        <ShieldCheck size={13} className="shrink-0 text-[#22c55e]" />
+        <span style={{ ...micro, color: "#22c55e", fontWeight: 600, letterSpacing: "0.04em" }}>
+          RESERVED · {lock.departmentName} only
+        </span>
+      </div>
+
       <div className="flex items-start gap-3 p-4">
-        <div className="grid h-14 w-14 flex-none place-items-center overflow-hidden rounded-xl border border-zinc-200 bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-800/60">
+        <div
+          className="grid h-14 w-14 flex-none place-items-center overflow-hidden rounded-[10px]"
+          style={{ background: "var(--surface-2)", border: "1px solid var(--hairline)" }}
+        >
           {lock.templateCoverUrl ? (
             // eslint-disable-next-line @next/next/no-img-element
-            <img
-              src={lock.templateCoverUrl}
-              alt=""
-              className="h-full w-full object-contain p-1"
-            />
+            <img src={lock.templateCoverUrl} alt="" className="h-full w-full object-contain p-1" />
           ) : (
-            <span className="text-[10px] text-zinc-500">No cover</span>
+            <span style={{ ...micro, color: "var(--ink-faint)" }}>No cover</span>
           )}
         </div>
         <div className="min-w-0 flex-1">
-          <div className="truncate text-sm font-semibold text-zinc-950 dark:text-zinc-100">
+          <div className="truncate" style={{ ...bodySm, color: "var(--ink)", fontWeight: 600 }}>
             {lock.templateName}
           </div>
-          <div className="mt-0.5 text-[11px] text-zinc-500 dark:text-zinc-400">
-            Locked {new Date(lock.createdAt).toLocaleDateString()}
+          <div className="mt-0.5" style={{ ...micro, color: "var(--ink-muted)" }}>
+            Reserved{" "}
+            {new Date(lock.createdAt).toLocaleDateString("en-NG", {
+              day: "numeric",
+              month: "short",
+              year: "numeric",
+            })}
+          </div>
+          <div className="mt-1" style={{ ...micro, color: "var(--ink-faint)" }}>
+            Members access automatically — no code needed
           </div>
         </div>
       </div>
 
-      <div className="px-4 pb-4">
-        <div className="flex items-center gap-2">
-          <div className="flex-1 rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-2 font-mono text-sm tracking-[0.18em] text-zinc-950 dark:border-zinc-800 dark:bg-zinc-800/60 dark:text-zinc-100">
-            {reveal && localPasscode ? localPasscode : "••••••"}
-          </div>
-          {localPasscode ? (
+      {error ? (
+        <div
+          className="mx-4 mb-2 rounded-[8px] px-2 py-1.5"
+          style={{
+            background: "rgba(239, 68, 68, 0.08)",
+            border: "1px solid rgba(239, 68, 68, 0.28)",
+            color: "var(--semantic-danger)",
+            fontSize: 11,
+          }}
+        >
+          {error}
+        </div>
+      ) : null}
+
+      <div className="flex gap-2 px-4 pb-4">
+        <Link
+          href={`/templates/${lock.templateId}/preview`}
+          className="inline-flex h-9 flex-1 items-center justify-center rounded-full transition"
+          style={{
+            ...caption,
+            fontSize: 12,
+            background: "var(--surface-2)",
+            color: "var(--ink)",
+            border: "1px solid var(--hairline)",
+          }}
+        >
+          Open
+        </Link>
+        <button
+          type="button"
+          onClick={() => setConfirmFree(true)}
+          disabled={working !== null}
+          className="inline-flex h-9 flex-1 items-center justify-center gap-1.5 rounded-full transition disabled:opacity-60"
+          style={{
+            ...caption,
+            fontSize: 12,
+            background: "transparent",
+            color: "var(--semantic-danger)",
+            border: "1px solid rgba(239, 68, 68, 0.35)",
+          }}
+        >
+          <BookmarkX size={13} />
+          Free
+        </button>
+      </div>
+
+      {confirmFree ? (
+        <div
+          className="mx-4 mb-4 rounded-[10px] p-3"
+          style={{
+            background: "rgba(239, 68, 68, 0.08)",
+            border: "1px solid rgba(239, 68, 68, 0.28)",
+          }}
+        >
+          <p style={{ ...caption, color: "var(--semantic-danger)" }}>
+            Free this design for all departments? Reservation will be removed.
+          </p>
+          <div className="mt-2 flex items-center justify-end gap-2">
             <button
               type="button"
-              onClick={() => setReveal((v) => !v)}
-              aria-label={reveal ? "Hide passcode" : "Show passcode"}
-              className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-zinc-200 bg-white text-zinc-700 shadow-sm transition hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800"
+              onClick={() => setConfirmFree(false)}
+              className="inline-flex h-8 items-center justify-center rounded-full"
+              style={{
+                ...caption,
+                fontSize: 11,
+                padding: "0 12px",
+                background: "var(--surface-1)",
+                color: "var(--ink)",
+                border: "1px solid var(--hairline)",
+              }}
             >
-              {reveal ? <EyeOffIcon /> : <EyeIcon />}
+              Cancel
             </button>
-          ) : null}
-        </div>
-
-        {error ? (
-          <div className="mt-2 rounded-lg border border-rose-200 bg-rose-50 px-2 py-1.5 text-[11px] text-rose-700 dark:border-rose-900/40 dark:bg-rose-900/20 dark:text-rose-300">
-            {error}
+            <button
+              type="button"
+              onClick={onFree}
+              disabled={working === "free"}
+              className="inline-flex h-8 items-center justify-center rounded-full"
+              style={{
+                ...caption,
+                fontSize: 11,
+                padding: "0 12px",
+                background: "var(--semantic-danger)",
+                color: "#fff",
+              }}
+            >
+              {working === "free" ? "Freeing…" : "Free it"}
+            </button>
           </div>
-        ) : null}
-
-        <div className="mt-3 grid grid-cols-3 gap-1.5">
-          <Link
-            href={`/templates/${lock.templateId}/preview`}
-            className="inline-flex h-9 items-center justify-center rounded-lg border border-zinc-200 bg-white px-2 text-[11px] font-medium text-zinc-700 shadow-sm transition hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800"
-          >
-            Open
-          </Link>
-          <button
-            type="button"
-            onClick={onRotate}
-            disabled={working !== null}
-            className="inline-flex h-9 items-center justify-center rounded-lg border border-zinc-200 bg-white px-2 text-[11px] font-medium text-zinc-700 shadow-sm transition hover:bg-zinc-50 disabled:cursor-not-allowed disabled:opacity-60 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800"
-          >
-            {working === "rotate" ? "…" : "Rotate"}
-          </button>
-          <button
-            type="button"
-            onClick={() => setConfirmDelete(true)}
-            disabled={working !== null}
-            className="inline-flex h-9 items-center justify-center rounded-lg border border-rose-200 bg-white px-2 text-[11px] font-medium text-rose-700 shadow-sm transition hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-60 dark:border-rose-900/40 dark:bg-zinc-900 dark:text-rose-300 dark:hover:bg-rose-900/10"
-          >
-            Free
-          </button>
         </div>
-
-        {confirmDelete ? (
-          <div className="mt-3 rounded-xl border border-rose-200 bg-rose-50 p-3 dark:border-rose-900/40 dark:bg-rose-900/15">
-            <p className="text-[12px] text-rose-800 dark:text-rose-200">
-              Free this design for everyone? Your passcode stops working.
-            </p>
-            <div className="mt-2 flex items-center justify-end gap-2">
-              <button
-                type="button"
-                onClick={() => setConfirmDelete(false)}
-                className="inline-flex h-8 items-center justify-center rounded-lg border border-zinc-200 bg-white px-2 text-[11px] font-medium text-zinc-700 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-200"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                onClick={onDelete}
-                disabled={working === "delete"}
-                className="inline-flex h-8 items-center justify-center rounded-lg bg-rose-600 px-2 text-[11px] font-medium text-white"
-              >
-                {working === "delete" ? "Freeing…" : "Free"}
-              </button>
-            </div>
-          </div>
-        ) : null}
-      </div>
+      ) : null}
     </div>
-  );
-}
-
-function EyeIcon() {
-  return (
-    <svg
-      width="14"
-      height="14"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden
-    >
-      <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Z" />
-      <circle cx="12" cy="12" r="3" />
-    </svg>
-  );
-}
-
-function EyeOffIcon() {
-  return (
-    <svg
-      width="14"
-      height="14"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden
-    >
-      <path d="M17.94 17.94A10.94 10.94 0 0 1 12 19c-7 0-10-7-10-7a18.45 18.45 0 0 1 5.06-5.94" />
-      <path d="M9.9 4.24A10.94 10.94 0 0 1 12 4c7 0 10 7 10 7a18.5 18.5 0 0 1-3.18 4.24" />
-      <path d="M14.12 14.12A3 3 0 1 1 9.88 9.88" />
-      <line x1="2" y1="2" x2="22" y2="22" />
-    </svg>
   );
 }

@@ -11,9 +11,9 @@ type ApiResponse =
   | { error: { code: string; message: string } };
 
 function formatDate(iso: string | null): string {
-  if (!iso) return "—";
+  if (!iso) return "-";
   const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return "—";
+  if (Number.isNaN(d.getTime())) return "-";
   return d.toLocaleDateString(undefined, {
     year: "numeric",
     month: "short",
@@ -87,23 +87,23 @@ export default function AdminUsersPage() {
       <div className="space-y-6">
         <header className="flex flex-wrap items-end justify-between gap-3">
           <div>
-            <h1 className="text-xl font-semibold tracking-tight text-zinc-950 dark:text-zinc-100">
+            <h1 className="text-xl font-semibold tracking-tight text-ink dark:text-ink">
               Users
             </h1>
-            <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-300">
+            <p className="mt-1 text-sm text-ink-muted dark:text-ink-muted">
               All registered students across the platform.
             </p>
           </div>
-          <div className="flex items-center gap-3 text-xs text-zinc-600 dark:text-zinc-300">
+          <div className="flex items-center gap-3 text-xs text-ink-muted dark:text-ink-muted">
             <span>
-              <span className="font-semibold text-zinc-900 dark:text-zinc-100">
+              <span className="font-semibold text-ink dark:text-ink">
                 {users.length}
               </span>{" "}
               total
             </span>
             <span>·</span>
             <span>
-              <span className="font-semibold text-zinc-900 dark:text-zinc-100">
+              <span className="font-semibold text-ink dark:text-ink">
                 {onboardedCount}
               </span>{" "}
               onboarded
@@ -112,26 +112,26 @@ export default function AdminUsersPage() {
         </header>
 
         <div className="relative max-w-md">
-          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-500" />
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-faint" />
           <input
             type="search"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Search by name, email, username, department"
-            className="w-full rounded-xl border border-zinc-200 bg-white py-2 pl-9 pr-3 text-sm text-zinc-900 placeholder:text-zinc-500 focus:border-zinc-400 focus:outline-none dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-100 dark:placeholder:text-zinc-500"
+            className="w-full rounded-xl border border-hairline bg-surface-1 py-2 pl-9 pr-3 text-sm text-ink placeholder:text-ink-faint focus:border-accent-blue focus:outline-none dark:border-hairline dark:bg-surface-1 dark:text-ink dark:placeholder:text-ink-faint"
           />
         </div>
 
         {error ? (
-          <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700 dark:border-red-900/40 dark:bg-red-950/40 dark:text-red-200">
+          <div className="rounded-xl border border-[rgba(239,68,68,0.28)] bg-[rgba(239,68,68,0.08)] p-4 text-sm text-danger dark:border-[rgba(239,68,68,0.28)] dark:bg-red-950/40 dark:text-danger">
             {error}
           </div>
         ) : null}
 
-        <div className="overflow-hidden rounded-2xl border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900">
+        <div className="overflow-hidden rounded-2xl border border-hairline bg-surface-1 dark:border-hairline dark:bg-surface-1">
           <div className="overflow-x-auto">
             <table className="w-full text-left text-sm">
-              <thead className="border-b border-zinc-200 bg-zinc-50 text-xs uppercase tracking-wider text-zinc-500 dark:border-zinc-800 dark:bg-zinc-900/60 dark:text-zinc-400">
+              <thead className="border-b border-hairline bg-canvas text-xs uppercase tracking-wider text-ink-faint dark:border-hairline dark:bg-surface-1/60 dark:text-ink-faint">
                 <tr>
                   <th className="px-4 py-3 font-medium">User</th>
                   <th className="px-4 py-3 font-medium">Username</th>
@@ -146,7 +146,7 @@ export default function AdminUsersPage() {
                   <tr>
                     <td
                       colSpan={6}
-                      className="px-4 py-6 text-center text-zinc-600 dark:text-zinc-300"
+                      className="px-4 py-6 text-center text-ink-muted dark:text-ink-muted"
                     >
                       Loading users…
                     </td>
@@ -155,7 +155,7 @@ export default function AdminUsersPage() {
                   <tr>
                     <td
                       colSpan={6}
-                      className="px-4 py-6 text-center text-zinc-600 dark:text-zinc-300"
+                      className="px-4 py-6 text-center text-ink-muted dark:text-ink-muted"
                     >
                       {users.length === 0
                         ? "No users yet."
@@ -166,44 +166,44 @@ export default function AdminUsersPage() {
                   filtered.map((u) => (
                     <tr
                       key={u.id}
-                      className="hover:bg-zinc-50 dark:hover:bg-zinc-800/40"
+                      className="hover:bg-canvas dark:hover:bg-surface-2/40"
                     >
                       <td className="px-4 py-3">
                         <div className="flex items-center gap-3">
                           <Avatar src={u.avatar} name={u.name} />
                           <div className="min-w-0">
-                            <div className="truncate font-medium text-zinc-950 dark:text-zinc-100">
+                            <div className="truncate font-medium text-ink dark:text-ink">
                               {u.name}
                             </div>
                             {u.isDepartmentHead ? (
-                              <div className="text-[11px] font-medium uppercase tracking-wider text-amber-600 dark:text-amber-400">
+                              <div className="text-[11px] font-medium uppercase tracking-wider text-warning dark:text-warning">
                                 Dept. Head
                               </div>
                             ) : null}
                           </div>
                         </div>
                       </td>
-                      <td className="px-4 py-3 text-zinc-700 dark:text-zinc-200">
-                        {u.username ? `@${u.username}` : <span className="text-zinc-400">—</span>}
+                      <td className="px-4 py-3 text-ink-muted dark:text-ink">
+                        {u.username ? `@${u.username}` : <span className="text-ink-faint">-</span>}
                       </td>
-                      <td className="px-4 py-3 text-zinc-700 dark:text-zinc-200">
+                      <td className="px-4 py-3 text-ink-muted dark:text-ink">
                         {u.email}
                       </td>
-                      <td className="px-4 py-3 text-zinc-700 dark:text-zinc-200">
-                        {u.department?.name ?? <span className="text-zinc-400">—</span>}
+                      <td className="px-4 py-3 text-ink-muted dark:text-ink">
+                        {u.department?.name ?? <span className="text-ink-faint">-</span>}
                       </td>
                       <td className="px-4 py-3">
                         {u.isOnboarded ? (
-                          <span className="inline-flex items-center rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300">
+                          <span className="inline-flex items-center rounded-full bg-[var(--accent-blue-soft)] px-2 py-0.5 text-xs font-medium text-[var(--accent-blue)] dark:bg-[var(--accent-blue-soft)] dark:text-[var(--accent-blue)]">
                             Onboarded
                           </span>
                         ) : (
-                          <span className="inline-flex items-center rounded-full bg-zinc-100 px-2 py-0.5 text-xs font-medium text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300">
+                          <span className="inline-flex items-center rounded-full bg-surface-2 px-2 py-0.5 text-xs font-medium text-ink-muted dark:bg-surface-2 dark:text-ink-muted">
                             Pending
                           </span>
                         )}
                       </td>
-                      <td className="px-4 py-3 text-zinc-600 dark:text-zinc-300">
+                      <td className="px-4 py-3 text-ink-muted dark:text-ink-muted">
                         {formatDate(u.lastLoginAt)}
                       </td>
                     </tr>
@@ -232,7 +232,7 @@ function Avatar({ src, name }: { src: string | null; name: string }) {
     );
   }
   return (
-    <div className="flex h-9 w-9 items-center justify-center rounded-full bg-zinc-200 text-xs font-semibold text-zinc-700 dark:bg-zinc-800 dark:text-zinc-200">
+    <div className="flex h-9 w-9 items-center justify-center rounded-full bg-surface-2 text-xs font-semibold text-ink-muted dark:bg-surface-2 dark:text-ink">
       {initials(name) || "?"}
     </div>
   );

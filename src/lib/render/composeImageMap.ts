@@ -11,10 +11,10 @@ function fitForField(field: ImageField): "cover" | "contain" {
 /**
  * Merges layered image sources for the renderer, in precedence order:
  *
- *   1. `base` (highest)        — per-render-session user uploads
- *   2. `designAssets`          — admin-uploaded blobs (only when the field's
+ *   1. `base` (highest)        - per-render-session user uploads
+ *   2. `designAssets`          - admin-uploaded blobs (only when the field's
  *                                `imageSource === "design_asset"`)
- *   3. `pluginOriginals`       — original image bytes embedded by the FYB
+ *   3. `pluginOriginals`       - original image bytes embedded by the FYB
  *                                Extractor plugin (FigmaDesignV1.assets.images)
  *
  * Rules:

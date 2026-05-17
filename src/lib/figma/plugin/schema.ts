@@ -1,11 +1,11 @@
 /**
- * FigmaDesignV1 — the JSON contract emitted by the FYB Extractor plugin.
+ * FigmaDesignV1 - the JSON contract emitted by the FYB Extractor plugin.
  *
  * Vendored from `fyb_studio_figma_to_json_plugin/src/code/ir/schema.ts`.
  * Keep this file in sync; both the plugin and the renderer must agree on the
  * shape of the JSON that flows between them.
  *
- * Self-contained — no imports — so it loads identically in both runtimes.
+ * Self-contained - no imports - so it loads identically in both runtimes.
  */
 
 export type SchemaVersion = 1;
@@ -234,7 +234,7 @@ interface BasePluginNode {
   fills?: Paint[];
   fillStyleId?: string | null;
   strokes?: Stroke[];
-  // Per-side stroke weights — Figma emits these on every node that can carry
+  // Per-side stroke weights - Figma emits these on every node that can carry
   // strokes (rectangles, frames, vectors, …). When all four agree, the stroke
   // is uniform; when they differ, the renderer needs to honor each side.
   strokeTopWeight?: number;
@@ -418,7 +418,7 @@ export interface FigmaDesignV1 {
   };
 }
 
-/** Type guard — distinguishes plugin output from legacy / Figma REST shapes. */
+/** Type guard - distinguishes plugin output from legacy / Figma REST shapes. */
 export function isFigmaDesignV1(input: unknown): input is FigmaDesignV1 {
   if (!input || typeof input !== "object") return false;
   const o = input as { schemaVersion?: unknown; pages?: unknown; globals?: unknown };

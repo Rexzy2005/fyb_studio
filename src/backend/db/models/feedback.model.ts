@@ -3,7 +3,7 @@ import mongoose, { Schema, type InferSchemaType, type Model } from "mongoose";
 /**
  * User feedback / survey submissions.
  *
- * One row per submission. Users can submit multiple times — the dashboard
+ * One row per submission. Users can submit multiple times - the dashboard
  * de-duplicates by user when it makes sense (e.g. "unique respondents")
  * but raw events are preserved so trends over time stay measurable.
  *
@@ -46,7 +46,7 @@ const feedbackSchema = new Schema(
     // anyway and add no signal.
     rating: { type: Number, required: true, min: 1, max: 5 },
 
-    // Multi-select chips — kept as a controlled enum so the dashboard's
+    // Multi-select chips - kept as a controlled enum so the dashboard's
     // category breakdown chart can rely on a stable label set.
     categories: {
       type: [{ type: String, enum: FEEDBACK_CATEGORIES }],
@@ -65,7 +65,7 @@ const feedbackSchema = new Schema(
       required: true,
     },
 
-    // Optional context — page they were on, template they had open, etc.
+    // Optional context - page they were on, template they had open, etc.
     // Lets us connect a frustrated 1-star to "Editor: Template X" without
     // forcing the user to type that in.
     context: {

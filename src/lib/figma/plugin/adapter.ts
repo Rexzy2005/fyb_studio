@@ -33,7 +33,7 @@ import { rgbaCss } from "../normalize/shared/color";
 
 /**
  * Plugin-image attachment carried alongside the IR. The renderer reads this
- * to render the *original* design's image fills pixel-perfect — without
+ * to render the *original* design's image fills pixel-perfect - without
  * waiting for an admin upload.
  *
  * Attached as `__pluginImages` on the design so the existing IR shape is
@@ -76,7 +76,7 @@ export function adaptFigmaDesignV1(input: FigmaDesignV1): AdaptedDesign {
   if (input.pages.length > 1) {
     warnings.push({
       code: "multiple_pages",
-      message: `${input.pages.length} pages in plugin export — using the first one ("${page.name}").`,
+      message: `${input.pages.length} pages in plugin export - using the first one ("${page.name}").`,
     });
   }
 
@@ -97,7 +97,7 @@ export function adaptFigmaDesignV1(input: FigmaDesignV1): AdaptedDesign {
     walk(child, ctx);
   }
 
-  // Emit just the family names — that's what the Google Fonts loader resolves
+  // Emit just the family names - that's what the Google Fonts loader resolves
   // against and what stylesheets reference. Per-text-node `fontStyleName`,
   // `fontWeight`, and `originalFontName` retain the (family, style) pair the
   // editor needs to re-apply the exact face when a user starts editing.
@@ -107,7 +107,7 @@ export function adaptFigmaDesignV1(input: FigmaDesignV1): AdaptedDesign {
   // also walk the tree to collect node→hash bindings for the renderer.
   const pluginImages = buildPluginImageMap(input, page.children);
 
-  // Page background — first SOLID becomes `background.css`.
+  // Page background - first SOLID becomes `background.css`.
   const pageBackgrounds = page.backgrounds.map((p) => paintToFill(p, ctx)).filter(Boolean) as NormalizedFill[];
   const firstSolid = pageBackgrounds.find((f): f is NormalizedSolidFill => f.kind === "solid");
 
@@ -262,7 +262,7 @@ function walk(node: SceneNode, ctx: AdaptCtx): void {
       };
       ctx.nodesById[node.id] = doc;
 
-      // BOOLEAN_OPERATION carries children — preserve them so masks/selection stay coherent.
+      // BOOLEAN_OPERATION carries children - preserve them so masks/selection stay coherent.
       if (node.type === "BOOLEAN_OPERATION" && "children" in node && node.children) {
         ctx.childrenById[node.id] = node.children.map((c) => c.id);
         for (const c of node.children) walk(c, ctx);
@@ -274,7 +274,7 @@ function walk(node: SceneNode, ctx: AdaptCtx): void {
       const t = node as TextNodeV1;
       // Prefer the uniform font name when every run agrees. When runs disagree
       // (mixed-font text), fall back to the first run's font so an editor can
-      // still render the input with a representative typeface — a system-ui
+      // still render the input with a representative typeface - a system-ui
       // fallback would visibly shift the layout the moment a user starts typing.
       const baseFontName =
         (uniformValue(t.fontName) as FontName | undefined) ?? t.runs[0]?.fontName;
@@ -303,7 +303,7 @@ function walk(node: SceneNode, ctx: AdaptCtx): void {
 
       // Outline paths bundle every glyph into a single SVG path with one fill.
       // If the runs disagree on color, the bundled outline can't carry that
-      // variation — surface it as a warning so callers know color fidelity is
+      // variation - surface it as a warning so callers know color fidelity is
       // reduced for this node.
       if (t.outlinePaths.length > 0 && runs.length > 1) {
         const fillKeys = new Set(
@@ -327,7 +327,7 @@ function walk(node: SceneNode, ctx: AdaptCtx): void {
       // first run's value. The fallback exists so that when a user starts
       // editing a mixed-style text node, the rendered glyphs adopt a real,
       // close-to-original font/size/weight instead of the renderer's hardcoded
-      // defaults — which is the difference between "the layout shifts a few
+      // defaults - which is the difference between "the layout shifts a few
       // pixels" and "the layout breaks visibly". Per-run detail is still
       // preserved on `runs[]` for the original (non-edited) render path.
       const firstRun = t.runs[0];
@@ -495,10 +495,10 @@ function paintToFill(paint: Paint, ctx: AdaptCtx): NormalizedFill | null {
   ) {
     // Stops carry their own per-stop alpha; the paint's overall opacity acts
     // as a multiplier applied to *every* stop. The legacy REST normalizer
-    // does the same — see paints.ts:138. Keeping the math here is what makes
+    // does the same - see paints.ts:138. Keeping the math here is what makes
     // a gradient with `opacity: 0.5` actually fade.
     const paintOpacity = typeof paint.opacity === "number" ? paint.opacity : 1;
-    // Sort stops by offset — Figma usually emits them in order, but the spec
+    // Sort stops by offset - Figma usually emits them in order, but the spec
     // doesn't promise it, and an out-of-order stop would confuse the canvas
     // gradient API.
     const sortedStops = [...paint.gradientStops].sort((a, b) => a.position - b.position);
@@ -656,7 +656,7 @@ function strokeToNormalized(s: Stroke, node: SceneNode, ctx: AdaptCtx): Normaliz
   const dashPattern = Array.from(s.dashPattern ?? []);
 
   // Figma strokes can carry multiple paints (e.g. solid + image overlay).
-  // Our renderer expects one stroke per NormalizedStroke entry — fan them out.
+  // Our renderer expects one stroke per NormalizedStroke entry - fan them out.
   const out: NormalizedStroke[] = [];
   for (const p of s.paints) {
     const paint = paintToFill(p, ctx);
@@ -860,7 +860,7 @@ function unionBounds(roots: SceneNode[]): { minX: number; minY: number; maxX: nu
       if (bb.x + bb.width > acc.maxX) acc.maxX = bb.x + bb.width;
       if (bb.y + bb.height > acc.maxY) acc.maxY = bb.y + bb.height;
     }
-    // If the node clips its content, don't recurse into children for bounds —
+    // If the node clips its content, don't recurse into children for bounds -
     // rotated descendants overflowing the clip would inflate the canvas.
     if ("clipsContent" in n && n.clipsContent) return;
     const children = (n as { children?: SceneNode[] }).children;

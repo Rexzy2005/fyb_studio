@@ -13,11 +13,11 @@ const SUBMITTED_KEY = "fyb:feedback:submittedAt";
 /**
  * Two complementary feedback surfaces, both designed to be ignorable:
  *
- *   1. **Dashboard CTA card** — a clean, professional "Share feedback"
+ *   1. **Dashboard CTA card** - a clean, professional "Share feedback"
  *      tile near the top of the page. Visible until the user dismisses it
  *      OR submits feedback within the last 60 days.
  *
- *   2. **Floating circular button** — bottom-right of the dashboard only,
+ *   2. **Floating circular button** - bottom-right of the dashboard only,
  *      always available. Stays visible even after the card is dismissed
  *      so power users can still volunteer feedback whenever they want.
  *
@@ -90,25 +90,25 @@ export function FeedbackLauncher() {
   return (
     <>
       {showCard ? (
-        <section className="relative overflow-hidden rounded-2xl border border-zinc-200 bg-linear-to-br from-white via-zinc-50 to-emerald-50/40 p-4 shadow-xs dark:border-zinc-800 dark:from-zinc-950 dark:via-zinc-900 dark:to-emerald-950/15">
+        <section className="relative overflow-hidden rounded-2xl border border-hairline bg-linear-to-br from-surface-1 via-canvas to-[rgba(0,153,255,0.06)] p-4 shadow-xs dark:border-hairline dark:from-canvas dark:via-surface-1 dark:to-[rgba(0,153,255,0.05)]">
           <button
             type="button"
             onClick={dismissCard}
             aria-label="Hide feedback request"
-            className="absolute right-2 top-2 inline-flex h-7 w-7 items-center justify-center rounded-full text-zinc-500 transition hover:bg-zinc-100 hover:text-zinc-900 dark:hover:bg-zinc-800 dark:hover:text-zinc-100"
+            className="absolute right-2 top-2 inline-flex h-7 w-7 items-center justify-center rounded-full text-ink-faint transition hover:bg-surface-2 hover:text-ink dark:hover:bg-surface-2 dark:hover:text-ink"
           >
             <X className="h-3.5 w-3.5" />
           </button>
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
             <div className="flex items-start gap-3">
-              <div className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-emerald-100 text-emerald-600 dark:bg-emerald-950/40 dark:text-emerald-300">
+              <div className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-[var(--accent-blue-soft)] text-[var(--accent-blue)] dark:bg-[var(--accent-blue-soft)] dark:text-[var(--accent-blue)]">
                 <Sparkles className="h-4 w-4" />
               </div>
               <div>
-                <div className="text-sm font-semibold text-zinc-950 dark:text-zinc-100">
+                <div className="text-sm font-semibold text-ink dark:text-ink">
                   How&apos;s your experience?
                 </div>
-                <div className="mt-0.5 text-xs text-zinc-700 dark:text-zinc-300">
+                <div className="mt-0.5 text-xs text-ink-muted dark:text-ink-muted">
                   Help us shape what we build next. 30 seconds, totally optional.
                 </div>
               </div>
@@ -116,7 +116,7 @@ export function FeedbackLauncher() {
             <button
               type="button"
               onClick={() => openModal("dashboard_card")}
-              className="inline-flex h-9 shrink-0 items-center justify-center rounded-xl bg-zinc-900 px-4 text-xs font-semibold text-white transition hover:bg-zinc-800 dark:bg-emerald-600 dark:hover:bg-emerald-500"
+              className="inline-flex h-9 shrink-0 items-center justify-center rounded-xl bg-surface-1 px-4 text-xs font-semibold text-white transition hover:bg-surface-2 dark:bg-[var(--accent-blue)] dark:hover:bg-[var(--accent-blue)]"
             >
               Share feedback
             </button>
@@ -124,7 +124,7 @@ export function FeedbackLauncher() {
         </section>
       ) : null}
 
-      {/* Floating button — bottom-right of the viewport, dashboard only.
+      {/* Floating button - bottom-right of the viewport, dashboard only.
           Stays visible even when the card is dismissed so users always have
           a way in. Doesn't follow the user across the editor / templates
           pages where it would compete with the existing action UI. */}
@@ -133,7 +133,7 @@ export function FeedbackLauncher() {
         onClick={() => openModal("floating_button")}
         aria-label="Share feedback"
         title="Share feedback"
-        className="fixed bottom-5 right-5 z-40 inline-flex h-12 items-center gap-2 rounded-full border border-zinc-200 bg-white px-4 text-sm font-semibold text-zinc-900 shadow-lg transition hover:-translate-y-0.5 hover:bg-zinc-50 hover:shadow-xl dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100 dark:hover:bg-zinc-800"
+        className="fixed bottom-5 right-5 z-40 inline-flex h-12 items-center gap-2 rounded-full border border-hairline bg-surface-1 px-4 text-sm font-semibold text-ink shadow-lg transition hover:-translate-y-0.5 hover:bg-canvas hover:shadow-xl dark:border-hairline dark:bg-surface-1 dark:text-ink dark:hover:bg-surface-2"
       >
         <MessageSquareText className="h-4 w-4" />
         <span className="hidden sm:inline">Feedback</span>

@@ -173,7 +173,7 @@ type PaystackPopCtor = new () => PaystackPopHandle;
  * Opens the Paystack popup. Resolves when the user pays (with the reference
  * Paystack handed back), rejects when they cancel.
  *
- * Uses the v2 constructor (`new PaystackPop()`) — the older `.setup({})`
+ * Uses the v2 constructor (`new PaystackPop()`) - the older `.setup({})`
  * helper still works but logs a deprecation warning in the browser console.
  */
 export async function openPaystackPopup(args: PaystackPopupArgs): Promise<string> {

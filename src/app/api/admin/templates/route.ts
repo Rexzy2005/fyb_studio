@@ -34,23 +34,6 @@ export const POST = withErrorHandler(async (req) => {
   }
   const coverBuffer = Buffer.from(await coverEntry.arrayBuffer());
 
-  const assetFiles: Array<{ nodeId: string; buffer: Buffer; mime: string }> = [];
-  for (const nodeId of meta.assetNodeIds) {
-    const file = form.get(`asset:${nodeId}`);
-    if (!(file instanceof File)) {
-      throw new AppError(
-        "VALIDATION_ERROR",
-        `Missing asset file for node '${nodeId}'`,
-        422
-      );
-    }
-    assetFiles.push({
-      nodeId,
-      buffer: Buffer.from(await file.arrayBuffer()),
-      mime: file.type || "image/png",
-    });
-  }
-
   const created = await publishTemplate({
     createdByUserId: session.user.id!,
     name: meta.name,
@@ -59,7 +42,6 @@ export const POST = withErrorHandler(async (req) => {
     normalized: meta.normalized ?? null,
     fieldConfig: meta.fieldConfig,
     coverFile: { buffer: coverBuffer, mime: coverEntry.type || "image/png" },
-    assetFiles,
   });
 
   return NextResponse.json({ template: created }, { status: 201 });

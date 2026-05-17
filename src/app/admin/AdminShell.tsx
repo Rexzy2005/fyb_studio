@@ -26,7 +26,7 @@ type NavItem = {
 };
 
 // Icons appear in collapsed mode; labels appear when expanded. Keep this list
-// short and structurally stable — adding/removing items only requires editing
+// short and structurally stable - adding/removing items only requires editing
 // this array (the renderer below is data-driven).
 const NAV: NavItem[] = [
   { href: "/admin", label: "Dashboard", icon: LayoutDashboard },
@@ -127,33 +127,33 @@ export default function AdminShell({ children }: { children: ReactNode }) {
   }
 
   return (
-    <div className="h-screen bg-zinc-50 dark:bg-zinc-950">
+    <div className="h-screen bg-canvas dark:bg-canvas">
       <div className="flex h-full min-w-0">
         <aside
           className={
-            "flex h-full flex-col border-r border-zinc-200 bg-white transition-[width] duration-150 ease-out dark:border-zinc-800 dark:bg-zinc-900 " +
+            "flex h-full flex-col border-r border-hairline bg-surface-1 transition-[width] duration-150 ease-out dark:border-hairline dark:bg-surface-1 " +
             (collapsed ? "w-16" : "w-55")
           }
         >
           {/* Brand + collapse toggle. The toggle stays visible in both modes. */}
           <div
             className={
-              "flex items-center border-b border-zinc-200 px-3 py-3 dark:border-zinc-800 " +
+              "flex items-center border-b border-hairline px-3 py-3 dark:border-hairline " +
               (collapsed ? "justify-center" : "justify-between gap-2")
             }
           >
             {!collapsed ? (
               <div className="min-w-0">
-                <div className="truncate text-sm font-semibold text-zinc-950 dark:text-zinc-100">
+                <div className="truncate text-sm font-semibold text-ink dark:text-ink">
                   FYB Studio
                 </div>
-                <div className="truncate text-xs text-zinc-600 dark:text-zinc-300">Admin</div>
+                <div className="truncate text-xs text-ink-muted dark:text-ink-muted">Admin</div>
               </div>
             ) : null}
             <button
               type="button"
               onClick={toggle}
-              className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-zinc-200 bg-white text-zinc-900 hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-100 dark:hover:bg-zinc-800"
+              className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-hairline bg-surface-1 text-ink hover:bg-canvas dark:border-hairline dark:bg-surface-1 dark:text-ink dark:hover:bg-surface-2"
               title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
               aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
             >
@@ -181,8 +181,8 @@ export default function AdminShell({ children }: { children: ReactNode }) {
                     "flex items-center gap-3 rounded-xl px-3 py-2 transition-colors " +
                     (collapsed ? "justify-center " : "") +
                     (active
-                      ? "bg-zinc-100 text-zinc-950 dark:bg-zinc-800 dark:text-zinc-50"
-                      : "text-zinc-700 hover:bg-zinc-50 dark:text-zinc-200 dark:hover:bg-zinc-800/60")
+                      ? "bg-surface-2 text-ink dark:bg-surface-2 dark:text-ink"
+                      : "text-ink-muted hover:bg-canvas dark:text-ink dark:hover:bg-surface-2/60")
                   }
                 >
                   <Icon className="h-5 w-5 shrink-0" />
@@ -192,9 +192,9 @@ export default function AdminShell({ children }: { children: ReactNode }) {
             })}
 
             {!collapsed ? (
-              <div className="mt-3 rounded-xl bg-zinc-50 p-3 dark:bg-zinc-800/40">
-                <div className="text-xs font-medium text-zinc-900 dark:text-zinc-100">Shortcuts</div>
-                <div className="mt-1 text-xs text-zinc-600 dark:text-zinc-300">Ctrl+0 resets view</div>
+              <div className="mt-3 rounded-xl bg-canvas p-3 dark:bg-surface-2/40">
+                <div className="text-xs font-medium text-ink dark:text-ink">Shortcuts</div>
+                <div className="mt-1 text-xs text-ink-muted dark:text-ink-muted">Ctrl+0 resets view</div>
               </div>
             ) : null}
           </nav>
@@ -202,12 +202,12 @@ export default function AdminShell({ children }: { children: ReactNode }) {
 
         <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
           {!hideHeader ? (
-            <header className="flex items-center justify-between border-b border-zinc-200 bg-white px-4 py-3 dark:border-zinc-800 dark:bg-zinc-900">
-              <div className="text-sm font-semibold text-zinc-950 dark:text-zinc-100">Admin Dashboard</div>
+            <header className="flex items-center justify-between border-b border-hairline bg-surface-1 px-4 py-3 dark:border-hairline dark:bg-surface-1">
+              <div className="text-sm font-semibold text-ink dark:text-ink">Admin Dashboard</div>
               <div className="flex items-center gap-3">
                 <Link
                   href="/templates"
-                  className="text-sm font-medium text-zinc-700 hover:text-zinc-900 dark:text-zinc-200 dark:hover:text-zinc-50"
+                  className="text-sm font-medium text-ink-muted hover:text-ink dark:text-ink dark:hover:text-ink"
                 >
                   View site
                 </Link>
@@ -227,22 +227,22 @@ export default function AdminShell({ children }: { children: ReactNode }) {
               setPendingNavHref(null);
             }}
           />
-          <div className="relative w-full max-w-md overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-2xl dark:border-zinc-800 dark:bg-zinc-900">
-            <div className="border-b border-zinc-200 px-5 py-4 dark:border-zinc-800">
-              <div className="text-sm font-semibold text-zinc-950 dark:text-zinc-100">
+          <div className="relative w-full max-w-md overflow-hidden rounded-2xl border border-hairline bg-surface-1 shadow-2xl dark:border-hairline dark:bg-surface-1">
+            <div className="border-b border-hairline px-5 py-4 dark:border-hairline">
+              <div className="text-sm font-semibold text-ink dark:text-ink">
                 Unsaved changes
               </div>
-              <div className="mt-1 text-xs text-zinc-600 dark:text-zinc-300">
+              <div className="mt-1 text-xs text-ink-muted dark:text-ink-muted">
                 You have edits in progress. Save them as a draft before
                 leaving the workspace?
               </div>
             </div>
-            <div className="flex items-center justify-end gap-2 border-t border-zinc-200 bg-zinc-50 px-5 py-3 dark:border-zinc-800 dark:bg-zinc-800/40">
+            <div className="flex items-center justify-end gap-2 border-t border-hairline bg-canvas px-5 py-3 dark:border-hairline dark:bg-surface-2/40">
               <button
                 type="button"
                 onClick={() => setPendingNavHref(null)}
                 disabled={savingFromPrompt}
-                className="inline-flex h-9 items-center justify-center rounded-xl border border-zinc-200 bg-white px-3 text-xs font-medium text-zinc-900 hover:bg-zinc-50 disabled:opacity-50 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-100 dark:hover:bg-zinc-800"
+                className="inline-flex h-9 items-center justify-center rounded-xl border border-hairline bg-surface-1 px-3 text-xs font-medium text-ink hover:bg-canvas disabled:opacity-50 dark:border-hairline dark:bg-surface-1 dark:text-ink dark:hover:bg-surface-2"
               >
                 Cancel
               </button>
@@ -250,7 +250,7 @@ export default function AdminShell({ children }: { children: ReactNode }) {
                 type="button"
                 onClick={discardAndContinue}
                 disabled={savingFromPrompt}
-                className="inline-flex h-9 items-center justify-center rounded-xl border border-red-200 bg-white px-3 text-xs font-medium text-red-700 hover:bg-red-50 disabled:opacity-50 dark:border-red-900/40 dark:bg-zinc-900 dark:text-red-300 dark:hover:bg-red-950/40"
+                className="inline-flex h-9 items-center justify-center rounded-xl border border-[rgba(239,68,68,0.28)] bg-surface-1 px-3 text-xs font-medium text-danger hover:bg-[rgba(239,68,68,0.08)] disabled:opacity-50 dark:border-[rgba(239,68,68,0.28)] dark:bg-surface-1 dark:text-red-300 dark:hover:bg-red-950/40"
               >
                 Discard
               </button>
@@ -258,7 +258,7 @@ export default function AdminShell({ children }: { children: ReactNode }) {
                 type="button"
                 onClick={confirmSaveAndContinue}
                 disabled={savingFromPrompt}
-                className="inline-flex h-9 items-center justify-center rounded-xl bg-zinc-900 px-3 text-xs font-medium text-white hover:bg-zinc-800 disabled:opacity-50 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-white"
+                className="inline-flex h-9 items-center justify-center rounded-xl bg-surface-1 px-3 text-xs font-medium text-white hover:bg-surface-2 disabled:opacity-50 dark:bg-surface-2 dark:text-ink dark:hover:bg-surface-1"
               >
                 {savingFromPrompt ? "Saving…" : "Save & continue"}
               </button>

@@ -1,7 +1,10 @@
 "use client";
 
-import { useEffect, useRef } from "react";
 import Link from "next/link";
+import { Modal } from "@/components/ui/Modal";
+import { Button } from "@/components/ui/Button";
+import { Badge } from "@/components/ui/Badge";
+import { bodySm, caption } from "@/lib/ui/typography";
 
 export type HeadEntryModalProps = {
   open: boolean;
@@ -16,118 +19,95 @@ export function HeadEntryModal({
   templateName,
   onClose,
 }: HeadEntryModalProps) {
-  const dialogRef = useRef<HTMLDivElement | null>(null);
-
-  useEffect(() => {
-    if (!open) return;
-    function onKey(e: KeyboardEvent) {
-      if (e.key === "Escape") onClose();
-    }
-    document.addEventListener("keydown", onKey);
-    return () => document.removeEventListener("keydown", onKey);
-  }, [open, onClose]);
-
-  if (!open) return null;
-
   return (
-    <div
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="head-entry-title"
-      className="fixed inset-0 z-50 flex items-center justify-center p-4"
+    <Modal
+      open={open}
+      onClose={onClose}
+      size="md"
+      title="What would you like to do with this design?"
+      description={templateName}
+      footer={
+        <Button variant="secondary" size="sm" onClick={onClose}>
+          Cancel
+        </Button>
+      }
     >
-      <button
-        type="button"
-        aria-label="Close"
-        onClick={onClose}
-        className="absolute inset-0 bg-zinc-950/40 backdrop-blur-sm fyb-modal-overlay-in"
-      />
+      <div className="mt-2 mb-1">
+        <Badge tone="accent">Department head</Badge>
+      </div>
+
+      <div className="mt-4 grid gap-3">
+        <ActionRow
+          href={`/templates/${templateId}/preview`}
+          onClick={onClose}
+          icon={<PreviewIcon />}
+          title="Preview & reserve"
+          body="See the cover and reserve this design for your department only."
+        />
+        <ActionRow
+          href={`/templates/${templateId}/use`}
+          onClick={onClose}
+          icon={<UseIcon />}
+          title="Use design"
+          body="Personalize this template and export your version."
+          accent
+        />
+      </div>
+    </Modal>
+  );
+}
+
+function ActionRow({
+  href,
+  onClick,
+  icon,
+  title,
+  body,
+  accent,
+}: {
+  href: string;
+  onClick: () => void;
+  icon: React.ReactNode;
+  title: string;
+  body: string;
+  accent?: boolean;
+}) {
+  return (
+    <Link
+      href={href}
+      onClick={onClick}
+      className="group flex items-start gap-3 transition"
+      style={{
+        background: "var(--surface-2)",
+        border: "1px solid var(--hairline)",
+        borderRadius: 12,
+        padding: 14,
+      }}
+      onMouseEnter={(e) => (e.currentTarget.style.borderColor = "var(--accent-blue)")}
+      onMouseLeave={(e) => (e.currentTarget.style.borderColor = "var(--hairline)")}
+    >
       <div
-        ref={dialogRef}
-        className="relative w-full max-w-md overflow-hidden rounded-3xl border border-zinc-200 bg-white shadow-2xl ring-1 ring-black/5 fyb-modal-card-in dark:border-zinc-800 dark:bg-zinc-900 dark:ring-white/5"
+        className="mt-0.5 grid h-9 w-9 flex-none place-items-center rounded-[10px]"
+        style={{
+          background: accent ? "var(--accent-blue-soft)" : "var(--surface-3)",
+          color: accent ? "var(--accent-blue)" : "var(--ink)",
+        }}
       >
-        <div className="px-6 pt-6">
-          <div className="inline-flex items-center gap-2 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-[11px] font-semibold text-emerald-700 dark:border-emerald-900/40 dark:bg-emerald-900/20 dark:text-emerald-300">
-            Department head
-          </div>
-          <h2
-            id="head-entry-title"
-            className="mt-3 text-xl font-semibold tracking-tight text-zinc-950 dark:text-zinc-100"
-          >
-            What would you like to do with this design?
-          </h2>
-          <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-300">
-            <span className="font-medium text-zinc-900 dark:text-zinc-100">
-              {templateName}
-            </span>
-          </p>
-        </div>
-
-        <div className="grid gap-3 p-6">
-          <Link
-            href={`/templates/${templateId}/preview`}
-            onClick={onClose}
-            className="group flex items-start gap-3 rounded-2xl border border-zinc-200 bg-white p-4 text-left transition hover:border-zinc-300 hover:bg-zinc-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/40 dark:border-zinc-800 dark:bg-zinc-900 dark:hover:border-zinc-700 dark:hover:bg-zinc-800/60"
-          >
-            <div className="mt-0.5 grid h-9 w-9 flex-none place-items-center rounded-xl bg-zinc-100 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-200">
-              <PreviewIcon />
-            </div>
-            <div>
-              <div className="text-sm font-semibold text-zinc-950 dark:text-zinc-100">
-                Preview & lock
-              </div>
-              <div className="mt-0.5 text-[12px] text-zinc-600 dark:text-zinc-300">
-                See the cover and lock this design for your department.
-              </div>
-            </div>
-          </Link>
-
-          <Link
-            href={`/templates/${templateId}/use`}
-            onClick={onClose}
-            className="group flex items-start gap-3 rounded-2xl border border-zinc-200 bg-white p-4 text-left transition hover:border-zinc-300 hover:bg-zinc-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/40 dark:border-zinc-800 dark:bg-zinc-900 dark:hover:border-zinc-700 dark:hover:bg-zinc-800/60"
-          >
-            <div className="mt-0.5 grid h-9 w-9 flex-none place-items-center rounded-xl bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300">
-              <UseIcon />
-            </div>
-            <div>
-              <div className="text-sm font-semibold text-zinc-950 dark:text-zinc-100">
-                Use design
-              </div>
-              <div className="mt-0.5 text-[12px] text-zinc-600 dark:text-zinc-300">
-                Personalize this template and export your version.
-              </div>
-            </div>
-          </Link>
-        </div>
-
-        <div className="flex items-center justify-end border-t border-zinc-100 px-6 py-3 dark:border-zinc-800">
-          <button
-            type="button"
-            onClick={onClose}
-            className="inline-flex h-9 items-center justify-center rounded-xl border border-zinc-200 bg-white px-3 text-xs font-medium text-zinc-700 shadow-sm transition hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800"
-          >
-            Cancel
-          </button>
+        {icon}
+      </div>
+      <div>
+        <div style={{ ...bodySm, color: "var(--ink)", fontWeight: 600 }}>{title}</div>
+        <div className="mt-0.5" style={{ ...caption, color: "var(--ink-muted)" }}>
+          {body}
         </div>
       </div>
-    </div>
+    </Link>
   );
 }
 
 function PreviewIcon() {
   return (
-    <svg
-      width="18"
-      height="18"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden
-    >
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
       <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Z" />
       <circle cx="12" cy="12" r="3" />
     </svg>
@@ -136,17 +116,7 @@ function PreviewIcon() {
 
 function UseIcon() {
   return (
-    <svg
-      width="18"
-      height="18"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden
-    >
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
       <path d="M12 20h9" />
       <path d="M16.5 3.5a2.121 2.121 0 1 1 3 3L7 19l-4 1 1-4 12.5-12.5Z" />
     </svg>

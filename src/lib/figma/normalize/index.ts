@@ -18,7 +18,7 @@ const FigmaExportSchema = z
   .passthrough();
 
 export function normalizeFigmaExport(input: unknown): NormalizedDesignV1 {
-  // FYB Extractor plugin output — detect and route through the dedicated
+  // FYB Extractor plugin output - detect and route through the dedicated
   // adapter. Output is the same `NormalizedDesignV1` shape with richer data
   // (real fonts, mixed text runs, embedded image bytes, full effects).
   if (isFigmaDesignV1(input)) {
@@ -79,7 +79,7 @@ export function normalizeFigmaExport(input: unknown): NormalizedDesignV1 {
   const width = Number.isFinite(acc.maxX - acc.minX) ? Math.max(0, acc.maxX - acc.minX) : 0;
   const height = Number.isFinite(acc.maxY - acc.minY) ? Math.max(0, acc.maxY - acc.minY) : 0;
 
-  // Page background — capture all paints (any kind), and keep the first SOLID
+  // Page background - capture all paints (any kind), and keep the first SOLID
   // as the convenience `background.css` field for the legacy renderer.
   let backgroundCss: string | undefined;
   let backgrounds: NormalizedFill[] = [];

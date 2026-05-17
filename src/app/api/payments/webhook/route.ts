@@ -12,17 +12,17 @@ export const runtime = "nodejs";
  * POST /api/payments/webhook
  *
  * Paystack's at-least-once delivery channel for transaction events. We use
- * it as the safety net behind the popup-callback verify — if a user closes
+ * it as the safety net behind the popup-callback verify - if a user closes
  * the browser between paying and the popup callback firing, this still
  * promotes the payment to `success` and issues the grant.
  *
- * Always returns 200 (even on internal errors) UNLESS the signature is bad —
+ * Always returns 200 (even on internal errors) UNLESS the signature is bad -
  * Paystack disables the webhook after several non-200 responses, and most of
  * the "errors" we'd encounter (e.g. unknown reference for a different
  * environment's payment) are not worth burning the webhook over.
  */
 export const POST = withErrorHandler(async (req) => {
-  // Read the raw body BEFORE parsing — signature is over the bytes Paystack
+  // Read the raw body BEFORE parsing - signature is over the bytes Paystack
   // sent us, not over a re-serialised JSON.
   const raw = await req.text();
   const sig = req.headers.get("x-paystack-signature");
@@ -54,7 +54,7 @@ export const POST = withErrorHandler(async (req) => {
   try {
     await confirmPaymentByReference(reference);
   } catch (err) {
-    // Swallow — Paystack will retry forever otherwise. The original error is
+    // Swallow - Paystack will retry forever otherwise. The original error is
     // logged for ops; downstream `/verify` calls will surface the right state
     // to the user.
     console.error("[paystack-webhook] confirm failed", { reference, err });

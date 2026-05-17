@@ -8,7 +8,7 @@ import type { FieldConfig } from "@/lib/storage/types";
  * Build a font-family stack from the resolved family + the original Figma
  * family. Quoted because Figma family names often contain spaces ("Helvetica
  * Neue") which CSS requires to be quoted. Both names are emitted so the
- * browser walks them in order — useful when font-loading normalisation aliased
+ * browser walks them in order - useful when font-loading normalisation aliased
  * the family to a Google Fonts equivalent but the original name is what's
  * actually installed on the user's system.
  */
@@ -42,7 +42,7 @@ export type BuildTextSvgInput = {
  * The canvas backend handles fills/strokes/effects on shape and container
  * nodes; this builder emits TEXT nodes (and pre-baked text outline geometry)
  * as SVG <text>/<g> elements. Both the editor preview and the PNG exporter
- * call into this — see `engine/renderTree.ts` for the unified flow.
+ * call into this - see `engine/renderTree.ts` for the unified flow.
  */
 export function buildTextSvg(input: BuildTextSvgInput): string {
   const { design, fieldConfig, previewTextByNodeId, includeGuides } = input;
@@ -145,10 +145,20 @@ export function buildTextSvg(input: BuildTextSvgInput): string {
     const clipId = `clip-${node.id}`;
     clipIdByNodeId.set(node.id, clipId);
     const r = node.cornerRadius;
-    const rx = r ? Math.max(r.tl, r.tr, r.bl, r.br) : 0;
-    defs.push(
-      `<clipPath id="${escapeAttr(clipId)}"><rect x="${node.frame.x}" y="${node.frame.y}" width="${node.frame.width}" height="${node.frame.height}" rx="${rx}" ry="${rx}" /></clipPath>`,
-    );
+    const { x, y, width: w, height: h } = node.frame;
+    let shape: string;
+    if (!r || (r.tl === 0 && r.tr === 0 && r.bl === 0 && r.br === 0)) {
+      shape = `<rect x="${x}" y="${y}" width="${w}" height="${h}" />`;
+    } else {
+      // Build an SVG path with individual corner radii - SVG <rect rx/ry> only
+      // supports uniform corners, so we need an explicit path for asymmetric radii.
+      const tl = Math.min(r.tl, w / 2, h / 2);
+      const tr = Math.min(r.tr, w / 2, h / 2);
+      const br = Math.min(r.br, w / 2, h / 2);
+      const bl = Math.min(r.bl, w / 2, h / 2);
+      shape = `<path d="M${x + tl},${y} H${x + w - tr} Q${x + w},${y} ${x + w},${y + tr} V${y + h - br} Q${x + w},${y + h} ${x + w - br},${y + h} H${x + bl} Q${x},${y + h} ${x},${y + h - bl} V${y + tl} Q${x},${y} ${x + tl},${y} Z" />`;
+    }
+    defs.push(`<clipPath id="${escapeAttr(clipId)}">${shape}</clipPath>`);
     return clipId;
   }
 
@@ -184,7 +194,7 @@ export function buildTextSvg(input: BuildTextSvgInput): string {
    * empty string when the node has no visible shadows).
    *
    * Why this lives here: shape/container shadows are painted by the canvas
-   * backend, but text glyphs render in the SVG layer — so the SVG layer needs
+   * backend, but text glyphs render in the SVG layer - so the SVG layer needs
    * its own shadow path. SVG's <feDropShadow> is GPU-accelerated and matches
    * the Figma sigma → radius mapping at radius/2.
    */
@@ -309,20 +319,57 @@ export function buildTextSvg(input: BuildTextSvgInput): string {
     return next;
   }
 
+  /**
+   * Resolve a node fill into an SVG fill attribute value. For solid fills,
+   * returns the CSS color string directly. For linear/radial gradient fills,
+   * registers a <linearGradient> or <radialGradient> def and returns
+   * `url(#id)`. Falls back to `#000` when no usable fill is found.
+   *
+   * The gradient uses `gradientUnits="objectBoundingBox"` so handle positions
+   * in the [0,1] unit-square map correctly onto the text element's bbox.
+   */
+  function resolveTextFill(fills: NormalizedTextNode["fills"], nodeId: string): string {
+    const fill = fills.find((f) => f.visible);
+    if (!fill) return "#000";
+    if (fill.kind === "solid") return fill.css;
+    if (fill.kind === "gradient") {
+      const gradId = `text-grad-${nodeId}`;
+      const stops = fill.stops
+        .map((s) => `<stop offset="${s.offset}" stop-color="${escapeAttr(s.colorCss)}" />`)
+        .join("");
+      if (fill.gradientType === "linear") {
+        const h0 = fill.handlePositions?.[0] ?? { x: 0, y: 0.5 };
+        const h1 = fill.handlePositions?.[1] ?? { x: 1, y: 0.5 };
+        defs.push(
+          `<linearGradient id="${escapeAttr(gradId)}" x1="${h0.x}" y1="${h0.y}" x2="${h1.x}" y2="${h1.y}" gradientUnits="objectBoundingBox">${stops}</linearGradient>`,
+        );
+        return `url(#${escapeAttr(gradId)})`;
+      }
+      if (fill.gradientType === "radial") {
+        const h0 = fill.handlePositions?.[0] ?? { x: 0.5, y: 0.5 };
+        const h1 = fill.handlePositions?.[1] ?? { x: 1, y: 0.5 };
+        const r = Math.hypot(h1.x - h0.x, h1.y - h0.y);
+        defs.push(
+          `<radialGradient id="${escapeAttr(gradId)}" cx="${h0.x}" cy="${h0.y}" r="${r}" fx="${h0.x}" fy="${h0.y}" gradientUnits="objectBoundingBox">${stops}</radialGradient>`,
+        );
+        return `url(#${escapeAttr(gradId)})`;
+      }
+      // Angular/diamond: use first-stop color as best approximation
+      return fill.stops[0]?.colorCss ?? "#000";
+    }
+    return "#000";
+  }
+
   function renderTextNode(node: NormalizedTextNode) {
-    // Resolve the dominant solid fill: prefer node.fills, fall back to the
-    // first run's solid fill (covers the case where the plugin reports a
-    // mixed node-level fill but per-run fills are uniform), and finally to
-    // black. Done this way so outline-path rendering picks the most faithful
-    // color even when adapter heuristics couldn't.
-    const fill = node.fills[0];
-    const runFill = node.text.runs?.[0]?.fills?.[0];
-    const fillCss =
-      fill?.kind === "solid"
-        ? fill.css
-        : runFill?.kind === "solid"
-          ? runFill.css
-          : "#000";
+    // Resolve the dominant fill: prefer node.fills, fall back to the first
+    // run's fill, then black. Gradient fills are promoted to SVG gradient defs.
+    const fillCss = (() => {
+      const nodeFill = node.fills.find((f) => f.visible);
+      if (nodeFill) return resolveTextFill([nodeFill], node.id);
+      const runFill = node.text.runs?.[0]?.fills?.find((f) => f.visible);
+      if (runFill?.kind === "solid") return runFill.css;
+      return "#000";
+    })();
 
     const field = configured.get(node.id);
     const override = previewTextByNodeId[node.id];
@@ -378,7 +425,7 @@ export function buildTextSvg(input: BuildTextSvgInput): string {
       // The font-family stack: prefer the resolved family, then the original
       // family Figma reported (matters when normalisation simplified the
       // name), and finally a generic fallback. Browsers walk the stack in
-      // order, picking the first installed face — exactly what we want for
+      // order, picking the first installed face - exactly what we want for
       // an edited text node so the design retains its typeface even when
       // the family alias has been refined.
       fontFamily:
@@ -394,10 +441,12 @@ export function buildTextSvg(input: BuildTextSvgInput): string {
       paragraphSpacing: node.text.paragraphSpacing ?? 0,
       paragraphIndent: node.text.paragraphIndent ?? 0,
       // `leadingTrim: "CAP_HEIGHT"` (Figma's "Vertical trim" toggle) means
-      // the bbox top sits flush with the cap-top of the first line — no
+      // the bbox top sits flush with the cap-top of the first line - no
       // leading above. Renderer must skip the half-leading offset for this
       // case, otherwise the text drops below where Figma painted it.
       leadingTrim: node.text.leadingTrim ?? "NONE",
+      textTruncation: node.text.textTruncation,
+      maxLines: node.text.maxLines,
     };
 
     const effectiveTextCase = resolveEffectiveTextCase(
@@ -467,6 +516,18 @@ export function buildTextSvg(input: BuildTextSvgInput): string {
       layout = best;
     }
 
+    // Apply maxLines + textTruncation: when the design specifies a line cap,
+    // trim and append an ellipsis so overflow doesn't just bleed past the box.
+    const maxLines = resolvedText.maxLines;
+    const isTruncating = resolvedText.textTruncation === "ENDING" || (typeof maxLines === "number" && maxLines > 0);
+    if (isTruncating && typeof maxLines === "number" && maxLines > 0 && layout.lines.length > maxLines) {
+      const truncated = layout.lines.slice(0, maxLines);
+      // Append ellipsis to the last visible line
+      const lastLine = truncated[truncated.length - 1] ?? "";
+      truncated[truncated.length - 1] = lastLine.trimEnd() + "…";
+      layout = { ...layout, lines: truncated, h: truncated.length * layout.lineHeightPx };
+    }
+
     const textBlockHeight = layout.lines.length * layout.lineHeightPx;
     const baseY = useMatrixForOverriddenText
       ? resolvedText.textAlignVertical === "CENTER"
@@ -499,7 +560,7 @@ export function buildTextSvg(input: BuildTextSvgInput): string {
           ? node.frame.x + node.frame.width
           : node.frame.x;
 
-    // Vertical alignment — match Figma's box-top → em-box-top math precisely.
+    // Vertical alignment - match Figma's box-top → em-box-top math precisely.
     // Two cases:
     //
     //   leadingTrim: "NONE" (default)
@@ -508,7 +569,7 @@ export function buildTextSvg(input: BuildTextSvgInput): string {
     //     add half the leading so the em-box sits where Figma placed it.
     //
     //   leadingTrim: "CAP_HEIGHT"
-    //     The bbox top IS the cap-top — no leading above. Adding the half-
+    //     The bbox top IS the cap-top - no leading above. Adding the half-
     //     leading would push text DOWN. Skip the offset so the em-box top
     //     lands as close as possible to the cap-top (still slightly off by
     //     ~10% of fontSize, the em-top-to-cap-top gap, but visually right).
@@ -529,7 +590,7 @@ export function buildTextSvg(input: BuildTextSvgInput): string {
     // Paragraphs add `paragraphSpacing` between them (extra px of vertical
     // gap) and apply `paragraphIndent` to the first line of each paragraph
     // (horizontal x offset). Lines INSIDE a paragraph (from word-wrap) get
-    // neither — they're continuation lines.
+    // neither - they're continuation lines.
     //
     // We track which `displayed` line is a paragraph-start via the source
     // characters. Without an explicit `\n` count, every line is its own

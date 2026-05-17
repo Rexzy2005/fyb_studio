@@ -43,7 +43,7 @@ export function makeSection(
 /**
  * Resolve the effective sections list for a config. Returns a list ordered
  * by `order` ascending, plus the default "Details" section appended when
- * any field has no sectionId — that way fields without an assignment still
+ * any field has no sectionId - that way fields without an assignment still
  * render in a labeled group instead of disappearing.
  */
 export function resolveSections(

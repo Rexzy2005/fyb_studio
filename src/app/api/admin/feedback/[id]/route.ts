@@ -10,7 +10,7 @@ export const runtime = "nodejs";
 /**
  * PATCH /api/admin/feedback/[id]
  *
- * Updates triage status and/or admin notes on a feedback row. Idempotent —
+ * Updates triage status and/or admin notes on a feedback row. Idempotent -
  * resending the same body is fine.
  */
 export const PATCH = withErrorHandler(async (req, ctx) => {

@@ -7,7 +7,7 @@ import { asNumber, type AnyRecord } from "./coerce";
  * CSS Color Level 4 lets `rgba()` accept floating-point R/G/B in all
  * evergreen browsers and in Canvg, so a value like `0.003921568859368563`
  * makes it through as `0.9999999091389836` rather than being rounded to
- * the nearest 8-bit step. Clamping to the legal [0..1] range stays — that's
+ * the nearest 8-bit step. Clamping to the legal [0..1] range stays - that's
  * a validity guarantee for the colour space, not a value modification.
  */
 export function rgbaCss(input: { r?: number; g?: number; b?: number; a?: number }): string {

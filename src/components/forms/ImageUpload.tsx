@@ -51,7 +51,7 @@ export function ImageUpload({
   return (
     <div className="grid w-full min-w-0 gap-1">
       <div className="flex flex-wrap items-baseline justify-between gap-3">
-        <label htmlFor={inputId} className="min-w-0 text-xs font-medium text-zinc-900 dark:text-zinc-100">
+        <label htmlFor={inputId} className="min-w-0 text-xs font-medium text-ink dark:text-ink">
           {label}
         </label>
         {valueUrl && onClear ? (
@@ -62,7 +62,7 @@ export function ImageUpload({
               if (inputRef.current) inputRef.current.value = "";
             }}
             disabled={disabled}
-            className="shrink-0 text-xs font-medium text-zinc-600 hover:text-zinc-900 disabled:opacity-50 dark:text-zinc-300 dark:hover:text-zinc-50"
+            className="shrink-0 text-xs font-medium text-ink-muted hover:text-ink disabled:opacity-50 dark:text-ink-muted dark:hover:text-ink"
           >
             Remove
           </button>
@@ -73,7 +73,7 @@ export function ImageUpload({
         <div
           id={helpId}
           title={description}
-          className="min-w-0 break-words text-[11px] leading-4 text-zinc-600 dark:text-zinc-300"
+          className="min-w-0 break-words text-[11px] leading-4 text-ink-muted dark:text-ink-muted"
         >
           {description}
         </div>
@@ -120,13 +120,13 @@ export function ImageUpload({
         className={
           "flex w-full min-w-0 items-center gap-3 rounded-2xl border border-dashed p-3 outline-none transition " +
           (disabled
-            ? "cursor-not-allowed border-zinc-200 bg-zinc-50 opacity-70 dark:border-zinc-800 dark:bg-zinc-900"
+            ? "cursor-not-allowed border-hairline bg-canvas opacity-70 dark:border-hairline dark:bg-surface-1"
             : dragOver
-              ? "cursor-pointer border-zinc-900 bg-zinc-50 dark:border-zinc-100 dark:bg-zinc-800/60"
-              : "cursor-pointer border-zinc-300 bg-white hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-950/30 dark:hover:bg-zinc-800/40")
+              ? "cursor-pointer border-ink bg-canvas dark:border-hairline-soft dark:bg-surface-2/60"
+              : "cursor-pointer border-hairline bg-surface-1 hover:bg-canvas dark:border-hairline dark:bg-surface-1 dark:hover:bg-surface-2/40")
         }
       >
-        <div className="grid h-12 w-12 place-items-center overflow-hidden rounded-xl border border-zinc-200 bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-900">
+        <div className="grid h-12 w-12 place-items-center overflow-hidden rounded-xl border border-hairline bg-canvas dark:border-hairline dark:bg-surface-1">
           {valueUrl ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img
@@ -138,21 +138,21 @@ export function ImageUpload({
               }
             />
           ) : (
-            <div className="text-xs font-semibold text-zinc-600 dark:text-zinc-300">IMG</div>
+            <div className="text-xs font-semibold text-ink-muted dark:text-ink-muted">IMG</div>
           )}
         </div>
 
         <div className="min-w-0 flex-1">
-          <div className="min-w-0 break-words text-xs font-medium leading-4 text-zinc-900 dark:text-zinc-100">
+          <div className="min-w-0 break-words text-xs font-medium leading-4 text-ink dark:text-ink">
             {valueName ? valueName : valueUrl ? "Selected image" : "Upload an image"}
           </div>
-          <div className="mt-0.5 text-[11px] text-zinc-600 dark:text-zinc-300">
+          <div className="mt-0.5 text-[11px] text-ink-muted dark:text-ink-muted">
             {disabled ? "This image is locked by the template." : dragOver ? "Drop to upload" : "Click or drag & drop"}
           </div>
         </div>
 
         {!disabled ? (
-          <span className="shrink-0 rounded-xl border border-zinc-200 bg-white px-2 py-1 text-[11px] font-medium text-zinc-700 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-200">
+          <span className="shrink-0 rounded-xl border border-hairline bg-surface-1 px-2 py-1 text-[11px] font-medium text-ink-muted dark:border-hairline dark:bg-surface-1 dark:text-ink">
             Choose
           </span>
         ) : null}

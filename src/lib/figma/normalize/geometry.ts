@@ -134,7 +134,7 @@ export function collectBounds(
   }
 
   // If this node clips its content, anything sticking out of its AABB is
-  // cropped at render time — so descendants must not be allowed to grow the
+  // cropped at render time - so descendants must not be allowed to grow the
   // canvas beyond what we already contributed for this node. (We only honor
   // the clip when we actually captured this node's own bounds; otherwise the
   // entire subtree would silently disappear from the canvas calculation.)

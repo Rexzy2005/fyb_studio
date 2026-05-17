@@ -33,7 +33,7 @@ export async function exportTemplatePng({
   await ensureGoogleFontsLoaded(design.assets?.fonts ?? []);
   await ensureCustomFontsLoaded(design.assets?.fonts ?? []);
 
-  // Design dimensions stay exact — we never round Figma's source values.
+  // Design dimensions stay exact - we never round Figma's source values.
   // Only the bitmap target is rounded (canvases must have integer pixel sizes).
   // The transform is computed as bitmap/design so design coords map onto the
   // bitmap exactly, with no sub-pixel drift introduced by independent rounding.
@@ -46,7 +46,7 @@ export async function exportTemplatePng({
 
   // sRGB canvas (the universal standard for PNG output). Wider color spaces
   // like display-p3 produced PNGs with embedded color profiles that some
-  // viewers and social platforms rendered incorrectly — we choose maximum
+  // viewers and social platforms rendered incorrectly - we choose maximum
   // compatibility over a slightly wider gamut.
   // `alpha: true` keeps the canvas backed by RGBA so transparent regions
   // export with proper alpha.
@@ -72,13 +72,40 @@ export async function exportTemplatePng({
 
   // Decode user-uploaded image overrides into ImageBitmaps once, so the
   // backend can synchronously hand them to the image-fill renderer.
+  // Falls back to an HTMLImageElement path on browsers (e.g. older iOS Safari)
+  // where createImageBitmap is unavailable or throws on certain Blob types.
   const imageOverrides = new Map<string, { source: ImageBitmap; objectFit: "cover" | "contain" }>();
   for (const [nodeId, entry] of Object.entries(previewImageByNodeId)) {
     try {
-      const bmp = await createImageBitmap(entry.blob);
+      let bmp: ImageBitmap;
+      if (typeof createImageBitmap === "function") {
+        bmp = await createImageBitmap(entry.blob);
+      } else {
+        // iOS Safari ≤ 14 polyfill: decode via HTMLImageElement and
+        // drawImage to an offscreen canvas, then read back as ImageBitmap.
+        bmp = await new Promise<ImageBitmap>((resolve, reject) => {
+          const url = URL.createObjectURL(entry.blob);
+          const img = new Image();
+          img.onload = () => {
+            URL.revokeObjectURL(url);
+            const oc = document.createElement("canvas");
+            oc.width = img.naturalWidth;
+            oc.height = img.naturalHeight;
+            const octx = oc.getContext("2d");
+            if (!octx) { reject(new Error("no 2d ctx")); return; }
+            octx.drawImage(img, 0, 0);
+            oc.toBlob((b) => {
+              if (!b) { reject(new Error("toBlob failed")); return; }
+              createImageBitmap(b).then(resolve, reject);
+            });
+          };
+          img.onerror = () => { URL.revokeObjectURL(url); reject(new Error("img load failed")); };
+          img.src = url;
+        });
+      }
       imageOverrides.set(nodeId, { source: bmp, objectFit: entry.objectFit });
     } catch {
-      // Ignore — backend will draw a placeholder instead.
+      // Ignore - backend will draw a placeholder instead.
     }
   }
 
@@ -110,11 +137,25 @@ export async function exportTemplatePng({
 
   // Final touch: paint a subtle "design by fybstudio.art" signature at the
   // bottom-right corner. Renders in design coordinates so the size is
-  // proportional to the design — never overpowering, never disappearing.
+  // proportional to the design - never overpowering, never disappearing.
   drawBrandSignature(ctx, designWidth, designHeight, sx, sy);
 
+  // `canvas.toBlob` is async and null-safe; fall back to `toDataURL` on the
+  // rare iOS WebKit versions that return null from `toBlob` for large canvases.
   const blob = await new Promise<Blob>((resolve, reject) => {
-    canvas.toBlob((b) => (b ? resolve(b) : reject(new Error("Failed to export PNG"))), "image/png");
+    canvas.toBlob((b) => {
+      if (b) { resolve(b); return; }
+      // Fallback: toDataURL is synchronous and works on all iOS versions.
+      try {
+        const dataUrl = canvas.toDataURL("image/png");
+        const [, base64] = dataUrl.split(",");
+        if (!base64) { reject(new Error("Failed to export PNG")); return; }
+        const bytes = Uint8Array.from(atob(base64), (c) => c.charCodeAt(0));
+        resolve(new Blob([bytes], { type: "image/png" }));
+      } catch (err) {
+        reject(err instanceof Error ? err : new Error("Failed to export PNG"));
+      }
+    }, "image/png");
   });
 
   return { blob, width: canvas.width, height: canvas.height };
@@ -122,7 +163,7 @@ export async function exportTemplatePng({
 
 /**
  * Paint a subtle "design by fybstudio.art" signature at the bottom-right of
- * the export. Designed to be a small mark — not a watermark — that survives
+ * the export. Designed to be a small mark - not a watermark - that survives
  * heavy social-media compression while remaining unobtrusive on the design.
  *
  * Rendering choices:
@@ -142,30 +183,58 @@ function drawBrandSignature(
   sy: number,
 ): void {
   ctx.save();
-  // Render in design coordinates so the math is independent of bitmap pixels.
   ctx.setTransform(sx, 0, 0, sy, 0, 0);
 
   const text = "design by fybstudio.art";
-  // 0.85% of the design's smaller dimension, clamped to a comfortable range.
   const fontSize = Math.max(9, Math.min(14, Math.min(designWidth, designHeight) * 0.0085));
-  // 1.6× the font size of breathing room from the canvas edges.
   const padding = fontSize * 1.6;
 
   ctx.font = `500 ${fontSize}px system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif`;
   ctx.textAlign = "right";
   ctx.textBaseline = "alphabetic";
 
-  // Soft halo so the mark stays readable on any background colour.
-  ctx.shadowColor = "rgba(0, 0, 0, 0.45)";
-  ctx.shadowBlur = 1.5;
-  ctx.shadowOffsetX = 0;
-  ctx.shadowOffsetY = 0.5;
+  // Sample background luminance at the bottom-right region to pick a
+  // contrasting text color. We sample in bitmap coordinates.
+  const canvasW = ctx.canvas.width;
+  const canvasH = ctx.canvas.height;
+  const sampleW = Math.min(Math.round(160 * sx), canvasW);
+  const sampleH = Math.min(Math.round(28 * sy), canvasH);
+  const bx = Math.max(0, Math.round((designWidth - padding) * sx) - sampleW);
+  const by = Math.max(0, Math.round((designHeight - padding - fontSize) * sy));
+  let isDark = true;
+  try {
+    const pixel = ctx.getImageData(bx, by, Math.max(1, sampleW), Math.max(1, sampleH));
+    let rSum = 0, gSum = 0, bSum = 0, count = 0;
+    for (let i = 0; i < pixel.data.length; i += 4) {
+      rSum += pixel.data[i];
+      gSum += pixel.data[i + 1];
+      bSum += pixel.data[i + 2];
+      count++;
+    }
+    if (count > 0) {
+      const luminance = (0.299 * (rSum / count) + 0.587 * (gSum / count) + 0.114 * (bSum / count)) / 255;
+      isDark = luminance < 0.55;
+    }
+  } catch {
+    // getImageData can throw in some environments; fall back to dark assumption
+  }
 
-  ctx.fillStyle = "rgba(255, 255, 255, 0.82)";
+  if (isDark) {
+    ctx.shadowColor = "rgba(0,0,0,0.35)";
+    ctx.shadowBlur = 1.5;
+    ctx.shadowOffsetY = 0.5;
+    ctx.fillStyle = "rgba(255,255,255,0.80)";
+  } else {
+    ctx.shadowColor = "rgba(255,255,255,0.3)";
+    ctx.shadowBlur = 1;
+    ctx.shadowOffsetY = 0.3;
+    ctx.fillStyle = "rgba(0,0,0,0.65)";
+  }
+
   ctx.fillText(text, designWidth - padding, designHeight - padding);
-
   ctx.restore();
 }
+
 
 /**
  * Rasterize the SVG text layer onto the export canvas using the browser's
@@ -178,7 +247,7 @@ function drawBrandSignature(
  *      resolve the same typefaces the editor used. Without this, edited text
  *      drops to the system font.
  *   3. Wrap it in a Blob URL.
- *   4. Decode it as an `<img>` — this triggers the browser's full SVG parser.
+ *   4. Decode it as an `<img>` - this triggers the browser's full SVG parser.
  *   5. `drawImage` it onto the canvas at full bitmap dimensions; the SVG's
  *      viewBox handles the design→pixel scaling.
  */
@@ -197,7 +266,7 @@ async function drawSvgOntoCanvas(
 
   // HD trick: override the SVG's declared width/height with the BITMAP pixel
   // size while keeping its `viewBox` at design coordinates. The browser will
-  // then rasterize the SVG natively at full target resolution — no bilinear
+  // then rasterize the SVG natively at full target resolution - no bilinear
   // scaling on `drawImage`, so text and outlines stay pixel-sharp.
   //
   // Without this override the SVG defaults to design dimensions (e.g. 1024 ×

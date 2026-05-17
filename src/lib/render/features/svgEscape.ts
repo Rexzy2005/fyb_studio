@@ -1,6 +1,6 @@
 /**
  * Escape characters that are unsafe in SVG text content / attribute values.
- * Order matters — `&` must run first so we don't double-escape entities.
+ * Order matters - `&` must run first so we don't double-escape entities.
  */
 export function escapeText(s: string): string {
   return s

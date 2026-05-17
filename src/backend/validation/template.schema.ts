@@ -11,7 +11,6 @@ export const publishTemplateMetaSchema = z.object({
   designJson: z.unknown(),
   normalized: z.unknown().optional().nullable(),
   fieldConfig: fieldConfigSchema,
-  assetNodeIds: z.array(z.string().min(1)).default([]),
 });
 export type PublishTemplateMeta = z.infer<typeof publishTemplateMetaSchema>;
 
@@ -21,8 +20,6 @@ export const updateTemplateMetaSchema = z.object({
   designJson: z.unknown().optional(),
   normalized: z.unknown().optional().nullable(),
   fieldConfig: fieldConfigSchema.optional(),
-  replaceAssetNodeIds: z.array(z.string().min(1)).default([]),
-  removeAssetNodeIds: z.array(z.string().min(1)).default([]),
   replaceCover: z.boolean().default(false),
 });
 export type UpdateTemplateMeta = z.infer<typeof updateTemplateMetaSchema>;

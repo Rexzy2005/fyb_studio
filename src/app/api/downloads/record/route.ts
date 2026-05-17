@@ -22,11 +22,11 @@ const bodySchema = z.object({
  * Authoritative server-side record of a download. The client calls this
  * AFTER it has rendered + downloaded the PNG; we use it to:
  *   1. Reject the download if the user doesn't have an active grant (defense
- *      in depth — the client also gates, but trust is server-side).
+ *      in depth - the client also gates, but trust is server-side).
  *   2. Increment the grant counter + write a DownloadEvent row for the admin
  *      revenue dashboard.
  *
- * If the grant check fails, the client's already shown the user the file —
+ * If the grant check fails, the client's already shown the user the file -
  * but the response is a clear PAYMENT_REQUIRED that the editor can use to
  * lock subsequent downloads down. We don't try to "unsend" the file.
  */

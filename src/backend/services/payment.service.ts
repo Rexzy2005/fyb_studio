@@ -87,7 +87,7 @@ export type PendingGrantRow = {
 };
 
 /**
- * All active grants for a user — used by the dashboard to surface "you've
+ * All active grants for a user - used by the dashboard to surface "you've
  * paid but haven't downloaded yet" entries so a refresh / network drop in
  * the middle of an export can be resumed without losing the payment.
  */
@@ -221,7 +221,7 @@ export type ConfirmedPayment = {
  * Idempotency: safe to call multiple times for the same reference. Re-runs
  * either return the existing success row or correct an out-of-date status.
  * Callers (popup-callback handler AND webhook) MUST handle the case where
- * another caller wins the race — we use Mongo's unique reference index to
+ * another caller wins the race - we use Mongo's unique reference index to
  * make that race serialised.
  */
 export async function confirmPaymentByReference(
@@ -238,7 +238,7 @@ export async function confirmPaymentByReference(
     );
   }
 
-  // Already finalized — return the existing grant (or refuse if it failed).
+  // Already finalized - return the existing grant (or refuse if it failed).
   if (payment.status === "success") {
     const grant = await DownloadGrant.findOne({ paymentId: payment._id });
     if (!grant) {
@@ -296,7 +296,7 @@ export async function confirmPaymentByReference(
 
   const grant = await issueGrantForPayment(payment);
 
-  // Receipt email — fire-and-forget, never throws. We look up the user and
+  // Receipt email - fire-and-forget, never throws. We look up the user and
   // template here (and not at the route layer) so both the popup-callback
   // verify and the webhook path send the receipt without duplicating logic.
   // Idempotency: confirmPaymentByReference returns early on already-success
@@ -386,7 +386,7 @@ export async function requireActiveGrant(opts: {
 /**
  * Consume a grant: marks it `consumedAt`, increments analytics counters,
  * appends a DownloadEvent. Atomic on the grant doc via `findOneAndUpdate`
- * with `consumedAt: null` filter — if two requests race, only one wins;
+ * with `consumedAt: null` filter - if two requests race, only one wins;
  * the loser sees a 404 and the client can ignore (the file already shipped).
  */
 export async function recordDownload(opts: {

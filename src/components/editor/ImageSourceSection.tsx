@@ -162,9 +162,9 @@ export function ImageSourceSection({ templateId, field, onChange, onAssetChange 
   }, []);
 
   return (
-    <div className="rounded-2xl border border-zinc-200 bg-zinc-50 p-3 dark:border-zinc-800 dark:bg-zinc-800/30">
-      <div className="text-xs font-semibold text-zinc-950 dark:text-zinc-100">Image source</div>
-      <div className="mt-1 text-[11px] text-zinc-600 dark:text-zinc-300">
+    <div className="rounded-2xl border border-hairline bg-canvas p-3 dark:border-hairline dark:bg-surface-2/30">
+      <div className="text-xs font-semibold text-ink dark:text-ink">Image source</div>
+      <div className="mt-1 text-[11px] text-ink-muted dark:text-ink-muted">
         Choose who provides the image for this slot.
       </div>
 
@@ -198,15 +198,15 @@ export function ImageSourceSection({ templateId, field, onChange, onAssetChange 
             }}
           />
 
-          <div className="flex items-center gap-3 rounded-xl border border-zinc-200 bg-white p-2 dark:border-zinc-800 dark:bg-zinc-950/30">
-            <div className="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-zinc-200 bg-zinc-100 dark:border-zinc-800 dark:bg-zinc-900">
+          <div className="flex items-center gap-3 rounded-xl border border-hairline bg-surface-1 p-2 dark:border-hairline dark:bg-surface-1">
+            <div className="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-hairline bg-surface-2 dark:border-hairline dark:bg-surface-1">
               {loading ? (
-                <span className="text-[10px] text-zinc-500 dark:text-zinc-400">…</span>
+                <span className="text-[10px] text-ink-faint dark:text-ink-faint">…</span>
               ) : previewUrl ? (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img src={previewUrl} alt="" className="h-full w-full object-contain" />
               ) : (
-                <span className="text-[10px] text-zinc-500 dark:text-zinc-400">No image</span>
+                <span className="text-[10px] text-ink-faint dark:text-ink-faint">No image</span>
               )}
             </div>
 
@@ -216,7 +216,7 @@ export function ImageSourceSection({ templateId, field, onChange, onAssetChange 
                   type="button"
                   onClick={openFilePicker}
                   disabled={busy || !templateId}
-                  className="inline-flex h-8 items-center justify-center rounded-xl bg-zinc-900 px-3 text-[11px] font-medium text-white shadow-sm transition hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-white"
+                  className="inline-flex h-8 items-center justify-center rounded-xl bg-surface-1 px-3 text-[11px] font-medium text-white shadow-sm transition hover:bg-surface-2 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-surface-2 dark:text-ink dark:hover:bg-surface-1"
                 >
                   {hasAsset ? "Replace" : "Upload"}
                 </button>
@@ -225,13 +225,13 @@ export function ImageSourceSection({ templateId, field, onChange, onAssetChange 
                     type="button"
                     onClick={() => void handleRemove()}
                     disabled={busy}
-                    className="inline-flex h-8 items-center justify-center rounded-xl border border-zinc-200 bg-white px-3 text-[11px] font-medium text-zinc-900 shadow-sm transition hover:bg-zinc-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-100 dark:hover:bg-zinc-800"
+                    className="inline-flex h-8 items-center justify-center rounded-xl border border-hairline bg-surface-1 px-3 text-[11px] font-medium text-ink shadow-sm transition hover:bg-canvas disabled:cursor-not-allowed disabled:opacity-50 dark:border-hairline dark:bg-surface-1 dark:text-ink dark:hover:bg-surface-2"
                   >
                     Remove
                   </button>
                 ) : null}
               </div>
-              <div className="text-[10px] text-zinc-600 dark:text-zinc-300">
+              <div className="text-[10px] text-ink-muted dark:text-ink-muted">
                 {hasAsset
                   ? "Saved. Renders for all users; not editable on user side."
                   : "PNG, JPG, WebP, GIF, or SVG. Max 8 MB."}
@@ -240,7 +240,7 @@ export function ImageSourceSection({ templateId, field, onChange, onAssetChange 
           </div>
 
           {error ? (
-            <div className="rounded-lg border border-red-200 bg-red-50 px-2 py-1 text-[11px] text-red-900 dark:border-red-900/40 dark:bg-red-950/30 dark:text-red-200">
+            <div className="rounded-lg border border-[rgba(239,68,68,0.28)] bg-[rgba(239,68,68,0.08)] px-2 py-1 text-[11px] text-red-900 dark:border-[rgba(239,68,68,0.28)] dark:bg-[rgba(239,68,68,0.12)] dark:text-danger">
               {error}
             </div>
           ) : null}
@@ -269,12 +269,12 @@ function SourceOption({
       className={
         "flex flex-col items-start gap-0.5 rounded-xl border px-3 py-2 text-left transition " +
         (checked
-          ? "border-emerald-500 bg-emerald-50 dark:border-emerald-400/60 dark:bg-emerald-950/30"
-          : "border-zinc-200 bg-white hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-950/30 dark:hover:bg-zinc-900")
+          ? "border-[var(--accent-blue)] bg-[var(--accent-blue-soft)] dark:border-[rgba(0,153,255,0.4)] dark:bg-[var(--accent-blue-soft)]"
+          : "border-hairline bg-surface-1 hover:bg-canvas dark:border-hairline dark:bg-surface-1 dark:hover:bg-surface-1")
       }
     >
-      <span className="text-xs font-medium text-zinc-950 dark:text-zinc-100">{label}</span>
-      <span className="text-[10px] leading-snug text-zinc-600 dark:text-zinc-300">{description}</span>
+      <span className="text-xs font-medium text-ink dark:text-ink">{label}</span>
+      <span className="text-[10px] leading-snug text-ink-muted dark:text-ink-muted">{description}</span>
     </button>
   );
 }

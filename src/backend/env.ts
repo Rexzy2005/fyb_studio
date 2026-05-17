@@ -33,7 +33,7 @@ const schema = z.object({
   // Defaults to 1000 NGN per the product spec.
   PAYMENT_DOWNLOAD_PRICE_NGN: z.coerce.number().int().positive().default(1000),
   // Hours after payment within which the user MUST come back and finish
-  // their download. Grants are single-use — this is a safety net for
+  // their download. Grants are single-use - this is a safety net for
   // unredeemed grants, NOT a re-download window. Default 7 days.
   PAYMENT_GRANT_EXPIRY_HOURS: z.coerce.number().int().positive().default(168),
 });
@@ -47,7 +47,7 @@ if (!parsed.success) {
     .join("; ");
   console.error("[env] Invalid environment variables:", fieldErrors);
   throw new Error(
-    `Invalid environment variables — ${summary || "see server logs"}`
+    `Invalid environment variables - ${summary || "see server logs"}`
   );
 }
 

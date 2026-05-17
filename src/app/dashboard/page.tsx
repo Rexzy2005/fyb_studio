@@ -1,19 +1,22 @@
 import Link from "next/link";
+import { BookmarkCheck, GraduationCap, ImageIcon, LayoutTemplate } from "lucide-react";
+
 import { auth } from "@/backend/auth/config";
 import { getUserProfile } from "@/backend/services/user.service";
-import { SignOutButton } from "@/components/auth/SignOutButton";
 import { RecentDownloads } from "@/components/dashboard/RecentDownloads";
 import { DepartmentLocks } from "@/components/dashboard/DepartmentLocks";
 import { PendingDownloads } from "@/components/dashboard/PendingDownloads";
 import { FeedbackLauncher } from "@/components/feedback/FeedbackLauncher";
+import { TopNav } from "@/components/ui/TopNav";
+import { ButtonLink } from "@/components/ui/Button";
+import { bodySm, caption, micro } from "@/lib/ui/typography";
 
 export const metadata = {
-  title: "Dashboard — FYB Studio",
+  title: "Dashboard · FYB Studio",
 };
 
-// Nigerian academic sessions wrap mid-year. From August onward the current
-// finalists graduate the next calendar year; before that the current calendar
-// year is the graduating class.
+export const dynamic = "force-dynamic";
+
 function getClassYear(): number {
   const now = new Date();
   return now.getMonth() >= 7 ? now.getFullYear() + 1 : now.getFullYear();
@@ -21,13 +24,16 @@ function getClassYear(): number {
 
 export default async function DashboardPage() {
   const session = await auth();
-  const profile = session?.user?.id ? await getUserProfile(session.user.id) : null;
+  const profile = session?.user?.id
+    ? await getUserProfile(session.user.id)
+    : null;
 
   if (!profile) {
     return (
-      <div className="min-h-dvh bg-zinc-50 dark:bg-zinc-950">
-        <main className="mx-auto w-full max-w-3xl px-4 py-12">
-          <p className="text-sm text-zinc-600 dark:text-zinc-300">
+      <div className="min-h-dvh" style={{ background: "var(--canvas)", color: "var(--ink)" }}>
+        <TopNav showAuth={false} cta={undefined} />
+        <main className="mx-auto w-full max-w-3xl px-5 py-12">
+          <p style={{ ...bodySm, color: "var(--ink-muted)" }}>
             We couldn&apos;t load your profile. Try signing out and back in.
           </p>
         </main>
@@ -36,198 +42,273 @@ export default async function DashboardPage() {
   }
 
   const classYear = getClassYear();
-  const username =
-    profile.username?.trim() ||
-    profile.name.split(" ")[0]?.toLowerCase() ||
-    "finalist";
-  const initial = username.charAt(0).toUpperCase();
+  const firstName = profile.name.split(" ")[0] || profile.username?.trim() || "Finalist";
+  const initial = firstName.charAt(0).toUpperCase();
 
   return (
-    <div className="min-h-dvh bg-zinc-50 dark:bg-zinc-950">
-      <header className="mx-auto flex w-full max-w-5xl items-center justify-between gap-4 px-4 py-5 sm:py-6">
-        <Link href="/" className="flex items-center gap-2.5">
-          <div className="grid h-9 w-9 place-items-center rounded-xl border border-zinc-200 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
-            <div className="h-3.5 w-3.5 rounded-full bg-zinc-900 dark:bg-zinc-100" />
-          </div>
-          <div className="hidden sm:block">
-            <div className="text-sm font-semibold tracking-tight text-zinc-950 dark:text-zinc-100">
-              FYB Studio
-            </div>
-            <div className="text-[11px] text-zinc-600 dark:text-zinc-300">Dashboard</div>
-          </div>
-        </Link>
+    <div className="min-h-dvh" style={{ background: "var(--canvas)", color: "var(--ink)" }}>
+      <TopNav cta={{ label: "Browse templates", href: "/templates" }} />
 
-        <SignOutButton />
-      </header>
+      {/* ─── HERO ──────────────────────────────────────────── */}
+      <section
+        className="relative overflow-hidden"
+        style={{
+          background: "linear-gradient(160deg,rgba(255,215,0,0.04) 0%,transparent 60%)",
+          borderBottom: "1px solid var(--hairline-soft)",
+        }}
+      >
+        {/* Decorative graduation cap watermark */}
+        <div
+          className="pointer-events-none absolute -right-8 -top-8 opacity-[0.03]"
+          aria-hidden
+        >
+          <GraduationCap size={260} strokeWidth={0.5} />
+        </div>
 
-      <main className="mx-auto w-full max-w-5xl px-4 pb-20">
-        <section className="relative overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
-          <div
-            aria-hidden
-            className="absolute inset-0 -z-10 bg-linear-to-br from-white via-zinc-50 to-emerald-50/40 dark:from-zinc-950 dark:via-zinc-900 dark:to-emerald-950/15"
-          />
-          <div
-            aria-hidden
-            className="pointer-events-none absolute -right-24 -top-24 h-56 w-56 rounded-full bg-emerald-200/30 blur-3xl dark:bg-emerald-900/10"
-          />
-
-          <div className="relative flex flex-col gap-5 p-5 sm:flex-row sm:items-center sm:justify-between sm:gap-6 sm:p-7">
-            <div className="flex min-w-0 items-center gap-4">
-              {profile.avatar ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
-                  src={profile.avatar}
-                  alt={profile.name}
-                  referrerPolicy="no-referrer"
-                  className="h-14 w-14 shrink-0 rounded-2xl border border-zinc-200 object-cover shadow-sm sm:h-16 sm:w-16 dark:border-zinc-800"
-                />
-              ) : (
-                <div className="grid h-14 w-14 shrink-0 place-items-center rounded-2xl bg-zinc-900 text-xl font-semibold text-white shadow-sm sm:h-16 sm:w-16 sm:text-2xl dark:bg-zinc-100 dark:text-zinc-900">
-                  {initial}
-                </div>
-              )}
-
-              <div className="min-w-0">
-                <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-emerald-700 dark:text-emerald-300">
-                  Welcome back
-                </div>
-                <h1 className="mt-0.5 truncate text-2xl font-semibold tracking-tight text-zinc-950 sm:text-[28px] dark:text-zinc-100">
-                  {username}
-                </h1>
-                <div className="mt-1 flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-xs text-zinc-600 dark:text-zinc-300">
-                  {profile.department ? (
-                    <span className="truncate">{profile.department.name}</span>
-                  ) : null}
-                  {profile.isDepartmentHead ? (
-                    <>
-                      <span aria-hidden className="text-zinc-300 dark:text-zinc-700">
-                        ·
-                      </span>
-                      <span className="font-semibold text-emerald-700 dark:text-emerald-300">
-                        Department Head
-                      </span>
-                    </>
-                  ) : null}
-                </div>
-              </div>
-            </div>
-
-            <div className="flex shrink-0 items-center justify-between gap-3 rounded-2xl border border-zinc-200 bg-white/80 px-4 py-3 backdrop-blur sm:justify-start sm:bg-white/60 dark:border-zinc-800 dark:bg-zinc-900/70 dark:sm:bg-zinc-900/60">
-              <div className="flex flex-col">
-                <span className="text-[10px] font-semibold uppercase tracking-[0.18em] text-zinc-500 dark:text-zinc-400">
-                  Class of
-                </span>
+        <div className="mx-auto w-full max-w-[1200px] px-5 pb-10 pt-10 sm:px-8 sm:pt-14 sm:pb-14">
+          <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
+            <div className="flex min-w-0 flex-col gap-4">
+              {/* Eyebrow */}
+              <div className="flex items-center gap-2">
                 <span
-                  className="text-5xl leading-none text-zinc-950 sm:text-6xl dark:text-zinc-100"
-                  style={{ fontFamily: "var(--font-ms-madi)" }}
-                  aria-label={`Class of ${classYear}`}
+                  className="inline-block h-1.5 w-1.5 rounded-full"
+                  style={{ background: "#FFD700" }}
+                  aria-hidden
+                />
+                <span
+                  style={{
+                    ...caption,
+                    color: "var(--ink-faint)",
+                    textTransform: "uppercase",
+                    letterSpacing: "0.18em",
+                    fontSize: 10,
+                  }}
                 >
-                  {classYear}
+                  Class of {classYear}
                 </span>
               </div>
-              <div className="grid h-11 w-11 place-items-center rounded-xl border border-zinc-200 bg-white text-zinc-900 shadow-sm dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-100">
-                <CapIcon className="h-5 w-5" />
+
+              {/* Name + avatar */}
+              <div className="flex items-center gap-4">
+                {profile.avatar ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={profile.avatar}
+                    alt={profile.name}
+                    referrerPolicy="no-referrer"
+                    className="h-14 w-14 shrink-0 overflow-hidden rounded-full object-cover sm:h-16 sm:w-16"
+                    style={{ border: "2px solid rgba(255,215,0,0.3)" }}
+                  />
+                ) : (
+                  <div
+                    className="grid h-14 w-14 shrink-0 place-items-center rounded-full text-xl font-bold sm:h-16 sm:w-16"
+                    style={{
+                      background: "rgba(255,215,0,0.1)",
+                      border: "2px solid rgba(255,215,0,0.25)",
+                      color: "#FFD700",
+                    }}
+                  >
+                    {initial}
+                  </div>
+                )}
+                <div className="min-w-0">
+                  <h1
+                    className="truncate text-3xl font-bold sm:text-4xl"
+                    style={{ letterSpacing: "-0.03em", color: "var(--ink)" }}
+                  >
+                    {firstName}
+                  </h1>
+                  <p
+                    className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm"
+                    style={{ color: "var(--ink-muted)" }}
+                  >
+                    {profile.department ? (
+                      <span style={{ color: "var(--ink)", fontWeight: 500 }}>
+                        {profile.department.name}
+                      </span>
+                    ) : (
+                      <span>No department set</span>
+                    )}
+                    <DotSep />
+                    <span>{profile.username ? `@${profile.username}` : "Graduate"}</span>
+                    {profile.isDepartmentHead ? (
+                      <>
+                        <DotSep />
+                        <span
+                          className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-semibold"
+                          style={{
+                            background: "rgba(255,215,0,0.1)",
+                            color: "#FFD700",
+                            border: "1px solid rgba(255,215,0,0.2)",
+                          }}
+                        >
+                          <BookmarkCheck size={11} />
+                          Dept. Head
+                        </span>
+                      </>
+                    ) : null}
+                  </p>
+                </div>
               </div>
             </div>
-          </div>
-        </section>
 
-        <div className="mt-3 grid gap-3 sm:mt-4 sm:grid-cols-2">
-          <Link
-            href="/templates"
-            className="group flex items-center justify-between gap-4 rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm transition hover:-translate-y-0.5 hover:border-zinc-300 hover:shadow-md sm:p-5 dark:border-zinc-800 dark:bg-zinc-900 dark:hover:border-zinc-700"
-          >
-            <div className="min-w-0">
-              <div className="text-sm font-semibold text-zinc-950 dark:text-zinc-100">
+            {/* CTA pill */}
+            <div className="flex shrink-0 gap-2">
+              <ButtonLink
+                href="/templates"
+                variant="primary"
+                size="md"
+                rightSlot={
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                    <line x1="5" y1="12" x2="19" y2="12" />
+                    <polyline points="12 5 19 12 12 19" />
+                  </svg>
+                }
+              >
                 Browse templates
-              </div>
-              <div className="mt-0.5 text-xs text-zinc-500 dark:text-zinc-400">
-                Tees, face caps, posters, banners.
-              </div>
+              </ButtonLink>
             </div>
-            <ArrowIcon />
-          </Link>
-
-          <a
-            href="#recent-downloads"
-            className="group flex items-center justify-between gap-4 rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm transition hover:-translate-y-0.5 hover:border-zinc-300 hover:shadow-md sm:p-5 dark:border-zinc-800 dark:bg-zinc-900 dark:hover:border-zinc-700"
-          >
-            <div className="min-w-0">
-              <div className="text-sm font-semibold text-zinc-950 dark:text-zinc-100">
-                Your downloads
-              </div>
-              <div className="mt-0.5 text-xs text-zinc-500 dark:text-zinc-400">
-                Saved on this device for 24 hours.
-              </div>
-            </div>
-            <ArrowIcon />
-          </a>
-        </div>
-
-        {/* Pending paid-but-undownloaded designs — surfaced first because
-            it's the most actionable item on the page (the user has already
-            spent money and just needs to finish the export). */}
-        <div className="mt-4 sm:mt-6">
-          <PendingDownloads />
-        </div>
-
-        {profile.isDepartmentHead && profile.department ? (
-          <div className="mt-4 sm:mt-6">
-            <DepartmentLocks departmentName={profile.department.name} />
           </div>
-        ) : null}
 
-        <div id="recent-downloads" className="mt-4 scroll-mt-24 sm:mt-6">
+          {/* Quick stats bar */}
+          <div className="mt-8 grid grid-cols-3 gap-3 sm:gap-4">
+            <StatTile
+              icon={<LayoutTemplate size={15} />}
+              label="Templates"
+              value="Browse"
+              href="/templates"
+            />
+            <StatTile
+              icon={<ImageIcon size={15} />}
+              label="Downloads"
+              value="Library"
+              href="#recent-downloads"
+            />
+            {profile.isDepartmentHead ? (
+              <StatTile
+                icon={<BookmarkCheck size={15} />}
+                label="Reserved"
+                value="Manage"
+                href="#locked"
+                accent
+              />
+            ) : (
+              <StatTile
+                icon={<GraduationCap size={15} />}
+                label="Class"
+                value={String(classYear)}
+                href="#"
+              />
+            )}
+          </div>
+        </div>
+      </section>
+
+      {/* ─── CONTENT ────────────────────────────────────────── */}
+      <main className="mx-auto flex w-full max-w-[1200px] flex-col gap-14 px-5 py-14 sm:gap-20 sm:px-8 sm:py-20">
+        <PendingDownloads />
+
+        <div id="recent-downloads" className="scroll-mt-24">
           <RecentDownloads />
         </div>
 
-        {/* Feedback CTA card + floating "Feedback" button. Both surfaces
-            are dismissible — the card via X, the floating button is always
-            available but tiny and stays out of the way of the rest of the
-            UI. Recently-submitted users (60-day window) see neither. */}
-        <div className="mt-4 sm:mt-6">
-          <FeedbackLauncher />
-        </div>
+        {profile.isDepartmentHead && profile.department ? (
+          <div id="locked" className="scroll-mt-24">
+            <DepartmentLocks departmentName={profile.department.name} />
+          </div>
+        ) : null}
       </main>
+
+      {/* ─── FOOTER ──────────────────────────────────────────── */}
+      <footer
+        className="border-t"
+        style={{ borderColor: "var(--hairline-soft)" }}
+      >
+        <div className="mx-auto flex w-full max-w-[1200px] flex-wrap items-center justify-between gap-4 px-5 py-8 sm:px-8">
+          <div className="flex items-center gap-2.5">
+            <span
+              className="inline-block h-2 w-2 rounded-full"
+              style={{ background: "#FFD700" }}
+              aria-hidden
+            />
+            <span style={{ ...caption, color: "var(--ink-muted)" }}>FYB Studio</span>
+            <span style={{ ...micro, color: "var(--ink-faint)" }}>
+              · {firstName} · Class of {classYear}
+            </span>
+          </div>
+          <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
+            <FooterLink href="/templates">Templates</FooterLink>
+            <FooterLink href="#recent-downloads">Library</FooterLink>
+            {profile.isDepartmentHead ? (
+              <FooterLink href="#locked">Reserved</FooterLink>
+            ) : null}
+          </div>
+        </div>
+      </footer>
+
+      <FeedbackLauncher />
     </div>
   );
 }
 
-function CapIcon({ className }: { className?: string }) {
+function DotSep() {
   return (
-    <svg
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      className={className ?? "h-3.5 w-3.5"}
+    <span
       aria-hidden
-    >
-      <path d="M22 10 12 5 2 10l10 5 10-5Z" />
-      <path d="M6 12v5c2 2 10 2 12 0v-5" />
-      <path d="M22 10v6" />
-    </svg>
+      className="inline-block h-1 w-1 rounded-full"
+      style={{ background: "var(--ink-faint)" }}
+    />
   );
 }
 
-function ArrowIcon() {
+function StatTile({
+  icon,
+  label,
+  value,
+  href,
+  accent,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  value: string;
+  href: string;
+  accent?: boolean;
+}) {
   return (
-    <svg
-      width="16"
-      height="16"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden
-      className="shrink-0 text-zinc-400 transition-transform group-hover:translate-x-0.5 group-hover:text-zinc-900 dark:group-hover:text-zinc-100"
+    <Link
+      href={href}
+      className="group flex flex-col gap-2 overflow-hidden rounded-2xl p-4 transition sm:p-5"
+      style={{
+        background: accent ? "rgba(255,215,0,0.06)" : "var(--surface-1)",
+        border: `1px solid ${accent ? "rgba(255,215,0,0.2)" : "var(--hairline)"}`,
+      }}
     >
-      <line x1="5" y1="12" x2="19" y2="12" />
-      <polyline points="12 5 19 12 12 19" />
-    </svg>
+      <span
+        className="flex h-8 w-8 items-center justify-center rounded-xl"
+        style={{
+          background: accent ? "rgba(255,215,0,0.12)" : "var(--surface-2)",
+          color: accent ? "#FFD700" : "var(--ink-muted)",
+        }}
+      >
+        {icon}
+      </span>
+      <div>
+        <div
+          className="text-base font-bold sm:text-lg"
+          style={{ color: accent ? "#FFD700" : "var(--ink)", letterSpacing: "-0.02em" }}
+        >
+          {value}
+        </div>
+        <div style={{ ...micro, color: "var(--ink-faint)", marginTop: 2 }}>{label}</div>
+      </div>
+    </Link>
+  );
+}
+
+function FooterLink({ href, children }: { href: string; children: React.ReactNode }) {
+  return (
+    <Link href={href} style={{ ...caption, color: "var(--ink-muted)" }} className="hover:text-ink transition-colors">
+      {children}
+    </Link>
   );
 }

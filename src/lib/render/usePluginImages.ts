@@ -13,7 +13,7 @@ export type PluginImageEntry = { url: string; objectFit: "cover" | "contain" };
  * and admin design-assets, so the design renders pixel-perfect with its
  * original images out-of-the-box.
  *
- * Data URLs are used directly — no blob URL lifecycle to manage. The URLs
+ * Data URLs are used directly - no blob URL lifecycle to manage. The URLs
  * become invalid only when the design itself is replaced (a re-render with
  * a new design rebuilds the map).
  */

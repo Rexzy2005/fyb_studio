@@ -79,10 +79,10 @@ export function IconsFontsPanel({ design }: { design: NormalizedDesignV1 }) {
   }, [design.nodesById]);
 
   return (
-    <div className="flex h-full flex-col overflow-hidden border-r border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900">
-      <div className="border-b border-zinc-200 p-4 dark:border-zinc-800">
-        <div className="text-sm font-semibold text-zinc-950 dark:text-zinc-100">Icons &amp; Fonts</div>
-        <div className="mt-1 text-xs text-zinc-600 dark:text-zinc-300">
+    <div className="flex h-full flex-col overflow-hidden border-r border-hairline bg-surface-1 dark:border-hairline dark:bg-surface-1">
+      <div className="border-b border-hairline p-4 dark:border-hairline">
+        <div className="text-sm font-semibold text-ink dark:text-ink">Icons &amp; Fonts</div>
+        <div className="mt-1 text-xs text-ink-muted dark:text-ink-muted">
           Fix missing icons by ensuring vector geometry and fonts are available.
         </div>
       </div>
@@ -90,11 +90,11 @@ export function IconsFontsPanel({ design }: { design: NormalizedDesignV1 }) {
       <div className="min-h-0 flex-1 overflow-y-auto p-4">
         {/* Fonts */}
         {designFontFamilies.length ? (
-          <div className="rounded-2xl border border-zinc-200 bg-white p-3 dark:border-zinc-800 dark:bg-zinc-950/30">
+          <div className="rounded-2xl border border-hairline bg-surface-1 p-3 dark:border-hairline dark:bg-surface-1">
             <div className="flex items-start justify-between gap-3">
               <div>
-                <div className="text-xs font-semibold text-zinc-950 dark:text-zinc-100">Fonts</div>
-                <div className="mt-1 text-[11px] text-zinc-600 dark:text-zinc-300">
+                <div className="text-xs font-semibold text-ink dark:text-ink">Fonts</div>
+                <div className="mt-1 text-[11px] text-ink-muted dark:text-ink-muted">
                   Upload a .woff2/.woff/.ttf/.otf for any missing family. Exports now wait for these fonts.
                 </div>
               </div>
@@ -105,13 +105,13 @@ export function IconsFontsPanel({ design }: { design: NormalizedDesignV1 }) {
               {designFontFamilies.slice(0, 10).map((family) => (
                 <div
                   key={family}
-                  className="flex items-center justify-between gap-2 rounded-xl border border-zinc-200 bg-white px-3 py-2 text-xs dark:border-zinc-800 dark:bg-zinc-900"
+                  className="flex items-center justify-between gap-2 rounded-xl border border-hairline bg-surface-1 px-3 py-2 text-xs dark:border-hairline dark:bg-surface-1"
                 >
                   <div className="min-w-0">
-                    <div className="truncate font-medium text-zinc-900 dark:text-zinc-100" style={{ fontFamily: family }}>
+                    <div className="truncate font-medium text-ink dark:text-ink" style={{ fontFamily: family }}>
                       {family}
                     </div>
-                    <div className="mt-0.5 text-[11px] text-zinc-600 dark:text-zinc-300">
+                    <div className="mt-0.5 text-[11px] text-ink-muted dark:text-ink-muted">
                       {fontStatusByFamily[family] === "stored" ? "custom font stored" : "no custom font stored"}
                     </div>
                   </div>
@@ -122,7 +122,7 @@ export function IconsFontsPanel({ design }: { design: NormalizedDesignV1 }) {
                         setUploadTargetFamily(family);
                         uploadInputRef.current?.click();
                       }}
-                      className="rounded-lg border border-zinc-200 px-2.5 py-1 text-[11px] font-medium text-zinc-800 hover:bg-zinc-50 dark:border-zinc-800 dark:text-zinc-200 dark:hover:bg-zinc-800/60"
+                      className="rounded-lg border border-hairline px-2.5 py-1 text-[11px] font-medium text-ink hover:bg-canvas dark:border-hairline dark:text-ink dark:hover:bg-surface-2/60"
                     >
                       Upload
                     </button>
@@ -130,7 +130,7 @@ export function IconsFontsPanel({ design }: { design: NormalizedDesignV1 }) {
                       <button
                         type="button"
                         onClick={() => onDeleteFont(family)}
-                        className="rounded-lg border border-red-200 px-2.5 py-1 text-[11px] font-medium text-red-700 hover:bg-red-50 dark:border-red-900/40 dark:text-red-300 dark:hover:bg-red-950/30"
+                        className="rounded-lg border border-[rgba(239,68,68,0.28)] px-2.5 py-1 text-[11px] font-medium text-danger hover:bg-[rgba(239,68,68,0.08)] dark:border-[rgba(239,68,68,0.28)] dark:text-red-300 dark:hover:bg-red-950/30"
                       >
                         Remove
                       </button>
@@ -140,58 +140,58 @@ export function IconsFontsPanel({ design }: { design: NormalizedDesignV1 }) {
               ))}
 
               {designFontFamilies.length > 10 ? (
-                <div className="text-[11px] text-zinc-500 dark:text-zinc-400">+{designFontFamilies.length - 10} more fonts detected</div>
+                <div className="text-[11px] text-ink-faint dark:text-ink-faint">+{designFontFamilies.length - 10} more fonts detected</div>
               ) : null}
             </div>
           </div>
         ) : (
-          <div className="rounded-2xl border border-zinc-200 bg-white p-3 text-xs text-zinc-600 dark:border-zinc-800 dark:bg-zinc-950/30 dark:text-zinc-300">
+          <div className="rounded-2xl border border-hairline bg-surface-1 p-3 text-xs text-ink-muted dark:border-hairline dark:bg-surface-1 dark:text-ink-muted">
             No fonts detected in this design.
           </div>
         )}
 
         {/* Diagnostics */}
-        <div className="mt-4 rounded-2xl border border-zinc-200 bg-white p-3 dark:border-zinc-800 dark:bg-zinc-950/30">
-          <div className="text-xs font-semibold text-zinc-950 dark:text-zinc-100">Icon diagnostics</div>
-          <div className="mt-1 text-[11px] text-zinc-600 dark:text-zinc-300">
+        <div className="mt-4 rounded-2xl border border-hairline bg-surface-1 p-3 dark:border-hairline dark:bg-surface-1">
+          <div className="text-xs font-semibold text-ink dark:text-ink">Icon diagnostics</div>
+          <div className="mt-1 text-[11px] text-ink-muted dark:text-ink-muted">
             Common causes: missing vector geometry in the JSON export, or missing icon-font families.
           </div>
 
           <div className="mt-3 space-y-3">
-            <div className="rounded-xl border border-zinc-200 bg-white p-3 text-xs dark:border-zinc-800 dark:bg-zinc-900">
-              <div className="font-medium text-zinc-900 dark:text-zinc-100">Vector geometry warnings</div>
-              <div className="mt-1 text-[11px] text-zinc-600 dark:text-zinc-300">
+            <div className="rounded-xl border border-hairline bg-surface-1 p-3 text-xs dark:border-hairline dark:bg-surface-1">
+              <div className="font-medium text-ink dark:text-ink">Vector geometry warnings</div>
+              <div className="mt-1 text-[11px] text-ink-muted dark:text-ink-muted">
                 {iconWarnings.length ? `${iconWarnings.length} layer(s) reported missing vector geometry.` : "No vector geometry warnings."}
               </div>
               {iconWarnings.slice(0, 5).map((w, idx) => (
-                <div key={`${w.nodeId ?? "none"}-${idx}`} className="mt-2 text-[11px] text-zinc-600 dark:text-zinc-300">
+                <div key={`${w.nodeId ?? "none"}-${idx}`} className="mt-2 text-[11px] text-ink-muted dark:text-ink-muted">
                   • {w.message}
                 </div>
               ))}
               {iconWarnings.length > 5 ? (
-                <div className="mt-2 text-[11px] text-zinc-500 dark:text-zinc-400">+{iconWarnings.length - 5} more</div>
+                <div className="mt-2 text-[11px] text-ink-faint dark:text-ink-faint">+{iconWarnings.length - 5} more</div>
               ) : null}
             </div>
 
-            <div className="rounded-xl border border-zinc-200 bg-white p-3 text-xs dark:border-zinc-800 dark:bg-zinc-900">
-              <div className="font-medium text-zinc-900 dark:text-zinc-100">Compound vectors</div>
-              <div className="mt-1 text-[11px] text-zinc-600 dark:text-zinc-300">
+            <div className="rounded-xl border border-hairline bg-surface-1 p-3 text-xs dark:border-hairline dark:bg-surface-1">
+              <div className="font-medium text-ink dark:text-ink">Compound vectors</div>
+              <div className="mt-1 text-[11px] text-ink-muted dark:text-ink-muted">
                 These shapes have multiple sub-paths. They should now render correctly.
               </div>
               {compoundVectorNodes.length ? (
                 <div className="mt-2 space-y-1">
                   {compoundVectorNodes.slice(0, 8).map((n) => (
                     <div key={n.id} className="flex items-center justify-between gap-2 text-[11px]">
-                      <div className="min-w-0 truncate text-zinc-700 dark:text-zinc-200">{getNodeLabel(n)}</div>
-                      <div className="shrink-0 text-zinc-500 dark:text-zinc-400">{n.vectorPaths?.length ?? 0} paths</div>
+                      <div className="min-w-0 truncate text-ink-muted dark:text-ink">{getNodeLabel(n)}</div>
+                      <div className="shrink-0 text-ink-faint dark:text-ink-faint">{n.vectorPaths?.length ?? 0} paths</div>
                     </div>
                   ))}
                   {compoundVectorNodes.length > 8 ? (
-                    <div className="text-[11px] text-zinc-500 dark:text-zinc-400">+{compoundVectorNodes.length - 8} more</div>
+                    <div className="text-[11px] text-ink-faint dark:text-ink-faint">+{compoundVectorNodes.length - 8} more</div>
                   ) : null}
                 </div>
               ) : (
-                <div className="mt-2 text-[11px] text-zinc-600 dark:text-zinc-300">No compound vector layers detected.</div>
+                <div className="mt-2 text-[11px] text-ink-muted dark:text-ink-muted">No compound vector layers detected.</div>
               )}
             </div>
           </div>

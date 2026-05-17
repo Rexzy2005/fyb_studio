@@ -3,7 +3,7 @@ import mongoose, { Schema, type InferSchemaType, type Model } from "mongoose";
 /**
  * One row per payment attempt. Created in `pending` state when the user opens
  * the Paystack popup; promoted to `success` after server-side verification
- * against Paystack's API (popup callback OR webhook — whichever lands first
+ * against Paystack's API (popup callback OR webhook - whichever lands first
  * wins, the other becomes a no-op via the unique reference).
  *
  * Lifecycle:
@@ -29,7 +29,7 @@ const paymentSchema = new Schema(
       required: true,
       index: true,
     },
-    // The user's working-design id (IndexedDB record id) — denormalised so
+    // The user's working-design id (IndexedDB record id) - denormalised so
     // analytics can group "paid downloads of design X by user Y" without
     // joining IDB state. Optional so the schema doesn't lock us out of future
     // template-only purchases.
@@ -57,7 +57,7 @@ const paymentSchema = new Schema(
       index: true,
     },
 
-    // The full Paystack verify payload — kept verbatim so reconciliation,
+    // The full Paystack verify payload - kept verbatim so reconciliation,
     // refund operations, and dispute handling have the original facts.
     providerResponse: { type: Schema.Types.Mixed, default: null },
 

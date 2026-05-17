@@ -1,13 +1,17 @@
 "use client";
 
 import { useState } from "react";
+import { BookmarkCheck, BookmarkX, ShieldCheck } from "lucide-react";
 
 import {
   deleteTemplateLock,
   lockTemplate,
-  rotateTemplateLockPasscode,
   type TemplateLockClient,
 } from "@/lib/api/templateLocks";
+import { Card } from "@/components/ui/Card";
+import { Badge } from "@/components/ui/Badge";
+import { Button } from "@/components/ui/Button";
+import { headline, bodyMd, caption } from "@/lib/ui/typography";
 
 type Props = {
   templateId: string;
@@ -23,49 +27,32 @@ export function PreviewLockPanel({
   lockedByOtherDept,
 }: Props) {
   const [lock, setLock] = useState<TemplateLockClient | null>(initialLock);
-  const [working, setWorking] = useState<"lock" | "rotate" | "delete" | null>(null);
+  const [working, setWorking] = useState<"reserve" | "free" | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [reveal, setReveal] = useState(false);
-  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [confirmFree, setConfirmFree] = useState(false);
 
-  async function onLock() {
+  async function onReserve() {
     if (working) return;
     setError(null);
-    setWorking("lock");
+    setWorking("reserve");
     try {
       const next = await lockTemplate(templateId);
       setLock(next);
-      setReveal(true);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not lock the design");
+      setError(err instanceof Error ? err.message : "Could not reserve the design");
     } finally {
       setWorking(null);
     }
   }
 
-  async function onRotate() {
+  async function onFree() {
     if (working) return;
     setError(null);
-    setWorking("rotate");
-    try {
-      const next = await rotateTemplateLockPasscode(templateId);
-      setLock(next);
-      setReveal(true);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not rotate passcode");
-    } finally {
-      setWorking(null);
-    }
-  }
-
-  async function onDelete() {
-    if (working) return;
-    setError(null);
-    setWorking("delete");
+    setWorking("free");
     try {
       await deleteTemplateLock(templateId);
       setLock(null);
-      setConfirmDelete(false);
+      setConfirmFree(false);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not free the design");
     } finally {
@@ -75,174 +62,149 @@ export function PreviewLockPanel({
 
   if (lockedByOtherDept && lock) {
     return (
-      <div className="rounded-3xl border border-zinc-200 bg-white p-6 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
-        <div className="inline-flex items-center gap-2 rounded-full border border-rose-200 bg-rose-50 px-3 py-1 text-[11px] font-semibold text-rose-700 dark:border-rose-900/40 dark:bg-rose-900/20 dark:text-rose-300">
-          Locked by another department
-        </div>
-        <h2 className="mt-3 text-lg font-semibold tracking-tight text-zinc-950 dark:text-zinc-100">
+      <Card variant="surface-1" padding={24} radius={20}>
+        <Badge tone="danger">Reserved by another department</Badge>
+        <h2 className="mt-3" style={{ ...headline, fontSize: 18 }}>
           {lock.departmentName} has reserved this design.
         </h2>
-        <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-300">
-          Once a department locks a design for their members, no other
-          department can lock or use it. You can preview the cover but the
-          design itself is unavailable to your department.
+        <p className="mt-2" style={{ ...bodyMd, color: "var(--ink-muted)" }}>
+          Another department head has reserved this design for their members. You can preview the cover but
+          cannot use or reserve it for your department.
         </p>
-      </div>
+      </Card>
     );
   }
 
   if (!lock) {
     return (
-      <div className="rounded-3xl border border-zinc-200 bg-white p-6 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
-        <div className="inline-flex items-center gap-2 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-[11px] font-semibold text-emerald-700 dark:border-emerald-900/40 dark:bg-emerald-900/20 dark:text-emerald-300">
-          Available to lock
-        </div>
-        <h2 className="mt-3 text-lg font-semibold tracking-tight text-zinc-950 dark:text-zinc-100">
-          Lock {templateName} for your department.
+      <Card variant="surface-1" padding={24} radius={20}>
+        <Badge tone="success">Available to reserve</Badge>
+        <h2 className="mt-3" style={{ ...headline, fontSize: 18 }}>
+          Reserve {templateName} for your department
         </h2>
-        <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-300">
-          Locking reserves this design exclusively for your department.
-          Members will need a passcode to use it. The system generates a
-          shareable code for you (e.g. <span className="font-mono">SWE3467</span>).
+        <p className="mt-2" style={{ ...bodyMd, color: "var(--ink-muted)" }}>
+          Reserving this design makes it exclusive to your department. Members from your department
+          will be granted automatic access — no passcode needed. Other departments won&apos;t be able
+          to use it.
         </p>
 
-        {error ? (
-          <div className="mt-4 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-700 dark:border-rose-900/40 dark:bg-rose-900/20 dark:text-rose-300">
-            {error}
-          </div>
-        ) : null}
-
-        <button
-          type="button"
-          onClick={onLock}
-          disabled={working !== null}
-          className="mt-5 inline-flex h-11 items-center justify-center rounded-2xl bg-zinc-900 px-5 text-sm font-medium text-white shadow-sm transition hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-60 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-white"
+        <div
+          className="mt-4 flex items-start gap-2.5 rounded-[12px] px-3 py-3"
+          style={{
+            background: "rgba(34,197,94,0.06)",
+            border: "1px solid rgba(34,197,94,0.2)",
+          }}
         >
-          {working === "lock" ? "Locking…" : "Lock for my department"}
-        </button>
-      </div>
+          <ShieldCheck size={15} className="mt-0.5 shrink-0 text-[#22c55e]" />
+          <p style={{ ...caption, color: "var(--ink-muted)" }}>
+            Your department members get seamless, passcode-free access.
+            Students from other departments will see a &ldquo;reserved&rdquo; message.
+          </p>
+        </div>
+
+        {error ? <ErrorBanner>{error}</ErrorBanner> : null}
+
+        <div className="mt-5">
+          <Button
+            variant="primary"
+            size="lg"
+            onClick={onReserve}
+            loading={working === "reserve"}
+          >
+            <BookmarkCheck className="mr-2 h-4 w-4" />
+            {working === "reserve" ? "Reserving…" : "Reserve for my department"}
+          </Button>
+        </div>
+      </Card>
     );
   }
 
   return (
-    <div className="rounded-3xl border border-zinc-200 bg-white p-6 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
-      <div className="inline-flex items-center gap-2 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-[11px] font-semibold text-emerald-700 dark:border-emerald-900/40 dark:bg-emerald-900/20 dark:text-emerald-300">
-        Locked for {lock.departmentName}
-      </div>
-      <h2 className="mt-3 text-lg font-semibold tracking-tight text-zinc-950 dark:text-zinc-100">
-        Department passcode
+    <Card variant="surface-1" padding={24} radius={20}>
+      <Badge tone="accent">Reserved for {lock.departmentName}</Badge>
+      <h2 className="mt-3" style={{ ...headline, fontSize: 18 }}>
+        {templateName} is reserved
       </h2>
-      <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-300">
-        Share this code with your department. Members enter it to unlock the
-        design for 60 minutes per session.
+      <p className="mt-1" style={{ ...caption, color: "var(--ink-muted)" }}>
+        Your department members can access this design automatically — no passcode or code sharing required.
+        Students from other departments will be redirected.
       </p>
 
-      <div className="mt-4 flex items-center gap-2">
-        <div className="flex-1 rounded-2xl border border-zinc-200 bg-zinc-50 px-4 py-3 font-mono text-lg tracking-[0.18em] text-zinc-950 dark:border-zinc-800 dark:bg-zinc-800/60 dark:text-zinc-100">
-          {reveal && lock.passcode ? lock.passcode : "••••••••"}
-        </div>
-        {lock.passcode ? (
-          <button
-            type="button"
-            onClick={() => setReveal((v) => !v)}
-            aria-label={reveal ? "Hide passcode" : "Show passcode"}
-            className="inline-flex h-12 w-12 items-center justify-center rounded-2xl border border-zinc-200 bg-white text-zinc-700 shadow-sm transition hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800"
-          >
-            {reveal ? <EyeOffIcon /> : <EyeIcon />}
-          </button>
-        ) : null}
+      <div
+        className="mt-4 flex items-start gap-2.5 rounded-[12px] px-3 py-3"
+        style={{
+          background: "rgba(34,197,94,0.06)",
+          border: "1px solid rgba(34,197,94,0.2)",
+        }}
+      >
+        <ShieldCheck size={15} className="mt-0.5 shrink-0 text-[#22c55e]" />
+        <p style={{ ...caption, color: "var(--ink-muted)" }}>
+          Reserved since {new Date(lock.createdAt).toLocaleDateString("en-NG", {
+            day: "numeric",
+            month: "long",
+            year: "numeric",
+          })}. Access is automatic for all {lock.departmentName} members.
+        </p>
       </div>
 
-      {error ? (
-        <div className="mt-3 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-700 dark:border-rose-900/40 dark:bg-rose-900/20 dark:text-rose-300">
-          {error}
-        </div>
-      ) : null}
+      {error ? <ErrorBanner>{error}</ErrorBanner> : null}
 
-      <div className="mt-5 grid grid-cols-2 gap-2">
-        <button
-          type="button"
-          onClick={onRotate}
+      <div className="mt-5">
+        <Button
+          variant="danger"
+          size="md"
+          onClick={() => setConfirmFree(true)}
           disabled={working !== null}
-          className="inline-flex h-11 items-center justify-center rounded-2xl border border-zinc-200 bg-white px-4 text-sm font-medium text-zinc-900 shadow-sm transition hover:bg-zinc-50 disabled:cursor-not-allowed disabled:opacity-60 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-100 dark:hover:bg-zinc-800"
         >
-          {working === "rotate" ? "Rotating…" : "Rotate passcode"}
-        </button>
-        <button
-          type="button"
-          onClick={() => setConfirmDelete(true)}
-          disabled={working !== null}
-          className="inline-flex h-11 items-center justify-center rounded-2xl border border-rose-200 bg-white px-4 text-sm font-medium text-rose-700 shadow-sm transition hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-60 dark:border-rose-900/40 dark:bg-zinc-900 dark:text-rose-300 dark:hover:bg-rose-900/10"
-        >
-          Free design
-        </button>
+          <BookmarkX className="mr-2 h-4 w-4" />
+          Free this design
+        </Button>
       </div>
 
-      {confirmDelete ? (
-        <div className="mt-4 rounded-2xl border border-rose-200 bg-rose-50 p-4 dark:border-rose-900/40 dark:bg-rose-900/15">
-          <p className="text-sm text-rose-800 dark:text-rose-200">
-            Free this design? The lock will be removed and any department will
-            be able to use it again. Your current passcode will stop working.
+      {confirmFree ? (
+        <div
+          className="mt-4 rounded-[12px] p-4"
+          style={{
+            background: "rgba(239, 68, 68, 0.08)",
+            border: "1px solid rgba(239, 68, 68, 0.28)",
+          }}
+        >
+          <p style={{ ...bodyMd, color: "var(--semantic-danger)" }}>
+            Free this design? It will become available to all departments again and your
+            reservation will be removed.
           </p>
           <div className="mt-3 flex items-center justify-end gap-2">
-            <button
-              type="button"
-              onClick={() => setConfirmDelete(false)}
-              className="inline-flex h-9 items-center justify-center rounded-xl border border-zinc-200 bg-white px-3 text-xs font-medium text-zinc-700 shadow-sm transition hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800"
-            >
+            <Button variant="secondary" size="sm" onClick={() => setConfirmFree(false)}>
               Cancel
-            </button>
-            <button
-              type="button"
-              onClick={onDelete}
-              disabled={working === "delete"}
-              className="inline-flex h-9 items-center justify-center rounded-xl bg-rose-600 px-3 text-xs font-medium text-white shadow-sm transition hover:bg-rose-700 disabled:cursor-not-allowed disabled:opacity-60"
+            </Button>
+            <Button
+              variant="primary"
+              size="sm"
+              onClick={onFree}
+              loading={working === "free"}
+              style={{ background: "var(--semantic-danger)", color: "#fff", border: "1px solid var(--semantic-danger)" }}
             >
-              {working === "delete" ? "Freeing…" : "Yes, free design"}
-            </button>
+              {working === "free" ? "Freeing…" : "Yes, free it"}
+            </Button>
           </div>
         </div>
       ) : null}
+    </Card>
+  );
+}
+
+function ErrorBanner({ children }: { children: React.ReactNode }) {
+  return (
+    <div
+      className="mt-3 rounded-[10px] px-3 py-2"
+      style={{
+        background: "rgba(239, 68, 68, 0.08)",
+        border: "1px solid rgba(239, 68, 68, 0.28)",
+        color: "var(--semantic-danger)",
+        fontSize: 13,
+      }}
+    >
+      {children}
     </div>
-  );
-}
-
-function EyeIcon() {
-  return (
-    <svg
-      width="18"
-      height="18"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden
-    >
-      <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Z" />
-      <circle cx="12" cy="12" r="3" />
-    </svg>
-  );
-}
-
-function EyeOffIcon() {
-  return (
-    <svg
-      width="18"
-      height="18"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden
-    >
-      <path d="M17.94 17.94A10.94 10.94 0 0 1 12 19c-7 0-10-7-10-7a18.45 18.45 0 0 1 5.06-5.94" />
-      <path d="M9.9 4.24A10.94 10.94 0 0 1 12 4c7 0 10 7 10 7a18.5 18.5 0 0 1-3.18 4.24" />
-      <path d="M14.12 14.12A3 3 0 1 1 9.88 9.88" />
-      <line x1="2" y1="2" x2="22" y2="22" />
-    </svg>
   );
 }

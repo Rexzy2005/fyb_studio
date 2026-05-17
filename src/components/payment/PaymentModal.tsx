@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { Lock, ShieldCheck } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { GraduationCap, ShieldCheck, Zap } from "lucide-react";
 
 import {
   initializePayment,
@@ -16,7 +16,6 @@ type Props = {
   templateName: string;
   userDesignId: string | null;
   customerEmail: string | null;
-  /** Called after server-side verify succeeds and a grant is issued. */
   onPaid: () => void | Promise<void>;
   onClose: () => void;
 };
@@ -28,18 +27,6 @@ type Stage =
   | { kind: "verifying" }
   | { kind: "error"; message: string };
 
-/**
- * Payment modal. Renders a simple summary + "Pay ₦X" button. On click:
- *   1. POST /api/payments/init  → reference, kobo amount, public key
- *   2. open Paystack popup with those values
- *   3. on popup success → POST /api/payments/verify (server-side)
- *   4. fire onPaid() so the editor can resume the download
- *
- * Failures are surfaced inline; the user can retry without re-typing
- * anything. Cancellation closes the modal silently — payments left in
- * `pending` are reused on the next attempt by the init endpoint, so a
- * cancelled popup doesn't create churn.
- */
 export function PaymentModal({
   open,
   templateId,
@@ -51,27 +38,46 @@ export function PaymentModal({
 }: Props) {
   const [stage, setStage] = useState<Stage>({ kind: "idle" });
   const [priceNgn, setPriceNgn] = useState<number | null>(null);
+  const backdropRef = useRef<HTMLDivElement>(null);
 
-  // Reset stage every time the modal opens so a previous error doesn't
-  // bleed into the next attempt.
   useEffect(() => {
-    if (open) {
-      setStage({ kind: "idle" });
-    }
+    if (open) setStage({ kind: "idle" });
+  }, [open]);
+
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && !submitting) onClose();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
   if (!open) return null;
+
+  const submitting =
+    stage.kind === "initializing" ||
+    stage.kind === "popup" ||
+    stage.kind === "verifying";
+
+  const btnLabel =
+    stage.kind === "initializing"
+      ? "Preparing…"
+      : stage.kind === "popup"
+        ? "Waiting for payment…"
+        : stage.kind === "verifying"
+          ? "Confirming…"
+          : `Pay ₦${(priceNgn ?? 1000).toLocaleString()}`;
 
   async function startPayment() {
     if (!customerEmail) {
       setStage({
         kind: "error",
-        message:
-          "We couldn't find an email on your account. Sign in again and retry.",
+        message: "No email found on your account. Sign out and back in, then retry.",
       });
       return;
     }
-
     setStage({ kind: "initializing" });
     try {
       const init = await initializePayment({ templateId, userDesignId });
@@ -83,20 +89,12 @@ export function PaymentModal({
         reference: init.reference,
         amountKobo: init.amountKobo,
         email: customerEmail,
-        onSuccess: () => {
-          // handled in resolved promise
-        },
-        onCancel: () => {
-          // handled in rejected promise
-        },
+        onSuccess: () => {},
+        onCancel: () => {},
       });
 
       setStage({ kind: "verifying" });
       const verifyResult = await verifyPayment(reference);
-      // Persist a local "I paid for this" marker BEFORE running the export.
-      // If the export blows up (network drop, refresh, render error), the
-      // dashboard can still surface this entry so the user finishes their
-      // download — the server grant is also there as the source of truth.
       recordPendingDownload({
         reference: verifyResult.grant.paystackReference,
         templateId: verifyResult.grant.templateId,
@@ -108,11 +106,7 @@ export function PaymentModal({
       onClose();
     } catch (err) {
       const message =
-        err instanceof Error
-          ? err.message
-          : "Payment could not be completed. Please try again.";
-      // "Payment was cancelled" is a normal user action — close quietly
-      // rather than scaring them with a red error banner.
+        err instanceof Error ? err.message : "Payment could not be completed. Please try again.";
       if (message === "Payment was cancelled") {
         setStage({ kind: "idle" });
         return;
@@ -121,87 +115,169 @@ export function PaymentModal({
     }
   }
 
-  const submitting =
-    stage.kind === "initializing" ||
-    stage.kind === "popup" ||
-    stage.kind === "verifying";
-  const submitLabel =
-    stage.kind === "initializing"
-      ? "Preparing…"
-      : stage.kind === "popup"
-        ? "Waiting for payment…"
-        : stage.kind === "verifying"
-          ? "Verifying…"
-          : `Pay ₦${(priceNgn ?? 1000).toLocaleString()} to download`;
-
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4"
+      ref={backdropRef}
+      className="fixed inset-0 z-50 flex items-end justify-center p-0 sm:items-center sm:p-4"
       role="dialog"
       aria-modal="true"
-      aria-label="Confirm payment"
+      aria-label="Payment"
       onMouseDown={(e) => {
-        if (e.currentTarget === e.target && !submitting) onClose();
+        if (e.target === backdropRef.current && !submitting) onClose();
       }}
+      style={{ background: "rgba(0,0,0,0.65)", backdropFilter: "blur(6px)" }}
     >
-      <div className="absolute inset-0 bg-black/40" />
-      <div className="relative w-full max-w-md overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-xl dark:border-zinc-800 dark:bg-zinc-900">
-        <div className="flex items-start gap-3 border-b border-zinc-100 px-5 py-4 dark:border-zinc-800">
-          <div className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-emerald-50 text-emerald-600 dark:bg-emerald-950/40 dark:text-emerald-300">
-            <Lock className="h-4 w-4" />
+      <div
+        className="relative w-full overflow-hidden sm:max-w-[420px]"
+        style={{
+          background: "var(--canvas)",
+          border: "1px solid var(--hairline)",
+          borderRadius: "28px 28px 0 0",
+          boxShadow: "0 -8px 64px rgba(0,0,0,0.55)",
+        }}
+        // slide up on mobile
+      >
+        {/* Drag handle (mobile) */}
+        <div className="flex justify-center pt-3 pb-1 sm:hidden">
+          <div className="h-1 w-10 rounded-full" style={{ background: "var(--hairline)" }} />
+        </div>
+
+        {/* Header */}
+        <div className="flex items-start gap-4 px-5 pt-5 pb-4">
+          <div
+            className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl"
+            style={{ background: "rgba(255,215,0,0.12)", color: "#FFD700" }}
+          >
+            <GraduationCap size={22} strokeWidth={1.8} />
           </div>
           <div className="min-w-0">
-            <div className="text-sm font-semibold text-zinc-950 dark:text-zinc-100">
-              Unlock download
+            <div
+              className="text-base font-semibold leading-snug"
+              style={{ color: "var(--ink)", letterSpacing: "-0.02em" }}
+            >
+              Download your design
             </div>
-            <div className="mt-1 text-sm leading-6 text-zinc-600 dark:text-zinc-300">
-              You&apos;re about to download{" "}
-              <span className="font-medium text-zinc-900 dark:text-zinc-100">
+            <div className="mt-1 text-sm" style={{ color: "var(--ink-muted)" }}>
+              <span
+                className="font-medium"
+                style={{ color: "var(--ink)" }}
+              >
                 {templateName}
-              </span>
-              . A one-off payment of <span className="font-semibold">₦1,000</span>{" "}
-              unlocks this design — re-downloads of the same design are free for
-              the next 24 hours.
+              </span>{" "}
+              · one-time unlock
             </div>
           </div>
         </div>
 
-        <div className="px-5 py-4">
-          <ul className="space-y-2 text-sm text-zinc-700 dark:text-zinc-300">
-            <li className="flex items-start gap-2">
-              <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-emerald-500" />
-              Secure payment processed by Paystack — we never see your card details.
-            </li>
-            <li className="flex items-start gap-2">
-              <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-emerald-500" />
-              A receipt is emailed to you once payment succeeds.
-            </li>
-          </ul>
+        {/* Divider */}
+        <div style={{ height: 1, background: "var(--hairline-soft)" }} />
 
+        {/* Price callout */}
+        <div className="flex items-center justify-between px-5 py-4">
+          <div>
+            <div className="text-xs font-medium" style={{ color: "var(--ink-faint)", letterSpacing: "0.1em", textTransform: "uppercase" }}>
+              One-off payment
+            </div>
+            <div
+              className="mt-1 text-3xl font-bold tabular-nums"
+              style={{ color: "var(--ink)", letterSpacing: "-0.03em" }}
+            >
+              ₦{(priceNgn ?? 1000).toLocaleString()}
+            </div>
+          </div>
+          <div
+            className="flex flex-col items-end gap-1.5 text-right text-xs"
+            style={{ color: "var(--ink-muted)" }}
+          >
+            <span className="flex items-center gap-1.5">
+              <Zap size={11} className="text-[#FFD700]" />
+              Re-downloads free for 24 h
+            </span>
+            <span className="flex items-center gap-1.5">
+              <ShieldCheck size={11} style={{ color: "var(--accent-blue)" }} />
+              Secured by Paystack
+            </span>
+          </div>
+        </div>
+
+        {/* Divider */}
+        <div style={{ height: 1, background: "var(--hairline-soft)" }} />
+
+        {/* Body */}
+        <div className="px-5 py-4">
           {stage.kind === "error" ? (
-            <div className="mt-4 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700 dark:border-red-900/40 dark:bg-red-950/30 dark:text-red-200">
+            <div
+              className="mb-4 rounded-xl px-3 py-2.5 text-sm"
+              style={{
+                background: "rgba(239,68,68,0.08)",
+                border: "1px solid rgba(239,68,68,0.25)",
+                color: "var(--semantic-danger)",
+              }}
+            >
               {stage.message}
             </div>
           ) : null}
 
-          <div className="mt-5 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
-            <button
-              type="button"
-              onClick={onClose}
-              disabled={submitting}
-              className="inline-flex h-10 items-center justify-center rounded-xl border border-zinc-200 bg-white px-4 text-sm font-medium text-zinc-900 shadow-xs transition hover:bg-zinc-50 disabled:opacity-50 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-100 dark:hover:bg-zinc-800"
+          {/* Progress dots when paying */}
+          {submitting ? (
+            <div
+              className="mb-4 flex items-center gap-2 rounded-xl px-3 py-2.5 text-sm"
+              style={{
+                background: "var(--surface-1)",
+                border: "1px solid var(--hairline)",
+                color: "var(--ink-muted)",
+              }}
             >
-              Not now
-            </button>
+              <span className="fyb-dots">
+                <span />
+                <span />
+                <span />
+              </span>
+              {stage.kind === "initializing"
+                ? "Opening payment…"
+                : stage.kind === "popup"
+                  ? "Waiting for Paystack…"
+                  : "Confirming payment…"}
+            </div>
+          ) : null}
+
+          <div
+            className="flex flex-col gap-2 sm:flex-row-reverse"
+            style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
+          >
             <button
               type="button"
               onClick={startPayment}
               disabled={submitting}
-              className="inline-flex h-10 items-center justify-center rounded-xl bg-zinc-900 px-4 text-sm font-medium text-white shadow-xs transition hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-60 dark:bg-emerald-600 dark:hover:bg-emerald-500"
+              className="inline-flex h-12 flex-1 items-center justify-center gap-2 rounded-2xl text-sm font-semibold transition active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-60"
+              style={{
+                background: submitting ? "var(--surface-2)" : "#FFD700",
+                color: "#000",
+              }}
             >
-              {submitLabel}
+              {btnLabel}
+            </button>
+            <button
+              type="button"
+              onClick={onClose}
+              disabled={submitting}
+              className="inline-flex h-12 flex-1 items-center justify-center rounded-2xl border text-sm font-medium transition disabled:opacity-50"
+              style={{
+                background: "transparent",
+                borderColor: "var(--hairline)",
+                color: "var(--ink-muted)",
+              }}
+            >
+              Not now
             </button>
           </div>
+
+          <p
+            className="mt-3 text-center text-xs"
+            style={{ color: "var(--ink-faint)" }}
+          >
+            Receipt emailed after payment. Card details never shared with us.
+          </p>
         </div>
       </div>
     </div>

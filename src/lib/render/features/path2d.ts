@@ -16,7 +16,7 @@ export function boundsPath(node: Exclude<NormalizedNode, { kind: "text" }>): Pat
 }
 
 /**
- * Same as boundsPath but with explicit position/size — used when drawing into
+ * Same as boundsPath but with explicit position/size - used when drawing into
  * a translated/transformed local space (size from node.size, origin at 0,0).
  */
 export function boundsPathAt(

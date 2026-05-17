@@ -7,17 +7,17 @@ import type { ImageFilters } from "@/lib/figma";
  * Figma's filters are documented as values in the range [-1, 1] (with 0 as
  * the identity). Their visual semantics:
  *
- *   exposure    — brightens/darkens the entire image, photographically
+ *   exposure    - brightens/darkens the entire image, photographically
  *                 (multiplies linear-light intensity by 2^exposure).
- *   contrast    — expands/compresses the tonal range around midgray.
- *   saturation  — pulls colors toward grayscale (-1) or boosts them (+1).
- *   temperature — warm (+) shifts toward orange (more R, less B);
+ *   contrast    - expands/compresses the tonal range around midgray.
+ *   saturation  - pulls colors toward grayscale (-1) or boosts them (+1).
+ *   temperature - warm (+) shifts toward orange (more R, less B);
  *                 cool (-)  shifts toward blue   (less R, more B).
- *   tint        — magenta (+) pushes G down (more R+B perceptually);
+ *   tint        - magenta (+) pushes G down (more R+B perceptually);
  *                 green   (-) pushes G up.
- *   highlights  — recovers/boosts only the bright pixels (lifted via a
+ *   highlights  - recovers/boosts only the bright pixels (lifted via a
  *                 smoothstep mask weighted toward luminance > 0.5).
- *   shadows     — recovers/boosts only the dark pixels (mask weighted
+ *   shadows     - recovers/boosts only the dark pixels (mask weighted
  *                 toward luminance < 0.5).
  *
  * All seven channels are applied in a single pass over the pixel buffer
@@ -30,7 +30,7 @@ import type { ImageFilters } from "@/lib/figma";
  *   - or the canvas is tainted by cross-origin pixels (getImageData throws).
  *
  * Callers should fall back to drawing the unfiltered source when null
- * is returned — better to lose the filter than to crash the render.
+ * is returned - better to lose the filter than to crash the render.
  */
 export function applyImageFiltersToBitmap(
   source: CanvasImageSource,
@@ -54,7 +54,7 @@ export function applyImageFiltersToBitmap(
   try {
     imageData = ctx.getImageData(0, 0, w, h);
   } catch {
-    // Cross-origin tainted canvas — caller falls back to unfiltered draw.
+    // Cross-origin tainted canvas - caller falls back to unfiltered draw.
     return null;
   }
 
@@ -111,7 +111,7 @@ export function applyFiltersInPlace(
   const tintG = -f.tint * 0.15;
   const tintRB = f.tint * 0.05;
 
-  // Highlight/shadow lift is also empirical — Figma's exact curve isn't
+  // Highlight/shadow lift is also empirical - Figma's exact curve isn't
   // public but +/- 0.30 at the extremes matches well.
   const highlightStrength = f.highlights * 0.3;
   const shadowStrength = f.shadows * 0.3;
@@ -135,7 +135,7 @@ export function applyFiltersInPlace(
     }
 
     if (doSaturation) {
-      // Rec. 709 luminance — matches Figma's color-management space.
+      // Rec. 709 luminance - matches Figma's color-management space.
       const lum = 0.2126 * r + 0.7152 * g + 0.0722 * b;
       r = lum + (r - lum) * satMul;
       g = lum + (g - lum) * satMul;
@@ -173,7 +173,7 @@ export function applyFiltersInPlace(
       b += adjust;
     }
 
-    // Uint8ClampedArray clamps to [0,255] on assignment — no Math.max/min needed.
+    // Uint8ClampedArray clamps to [0,255] on assignment - no Math.max/min needed.
     buf[i] = r * 255;
     buf[i + 1] = g * 255;
     buf[i + 2] = b * 255;

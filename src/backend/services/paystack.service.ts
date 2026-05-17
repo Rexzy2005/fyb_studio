@@ -32,7 +32,7 @@ function requireSecretKey(): string {
 
 /**
  * Server-side verification of a Paystack transaction. Called BOTH from the
- * popup-callback handler and from the webhook — Paystack guarantees at-least-
+ * popup-callback handler and from the webhook - Paystack guarantees at-least-
  * once delivery, so the caller is responsible for idempotency (we use the
  * unique `paystackReference` index on `Payment`).
  *
@@ -56,7 +56,7 @@ export async function verifyPaystackTransaction(
     try {
       const res = await fetch(url, { headers, cache: "no-store" });
       if (!res.ok) {
-        // 4xx from Paystack is authoritative — no point retrying. Read the
+        // 4xx from Paystack is authoritative - no point retrying. Read the
         // body so the AppError carries Paystack's message back to the client.
         const body = await safeJson(res);
         if (res.status >= 400 && res.status < 500) {
@@ -105,7 +105,7 @@ export async function verifyPaystackTransaction(
       };
     } catch (err) {
       lastError = err;
-      // Don't retry AppError — those are deterministic.
+      // Don't retry AppError - those are deterministic.
       if (err instanceof AppError) throw err;
     }
   }
@@ -121,7 +121,7 @@ export async function verifyPaystackTransaction(
 /**
  * Verify a Paystack webhook signature. Paystack signs the raw request body
  * with the merchant secret (HMAC-SHA512) and sends the digest in the
- * `x-paystack-signature` header. Caller passes the raw body string — DO NOT
+ * `x-paystack-signature` header. Caller passes the raw body string - DO NOT
  * pass a parsed JSON object, since serialisation differences will break the
  * signature.
  */

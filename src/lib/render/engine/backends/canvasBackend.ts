@@ -11,6 +11,7 @@ import type {
 import { drawImageCoverContain, drawImagePlaceholder } from "@/lib/render/drawImage";
 import { applyDropShadow } from "@/lib/render/features/effects/dropShadow";
 import { applyInnerShadow } from "@/lib/render/features/effects/innerShadow";
+import { applyBackgroundBlur } from "@/lib/render/features/effects/backgroundBlur";
 import { applyImageFill } from "@/lib/render/features/paints/imageFill";
 import { paintGradientFill } from "@/lib/render/features/canvasGradient";
 import { clipNode, fillNode, strokeNode } from "@/lib/render/features/canvasNode";
@@ -53,7 +54,7 @@ export type CanvasBackendDeps = {
 };
 
 /**
- * Canvas backend — paints shapes, containers and image fills onto the
+ * Canvas backend - paints shapes, containers and image fills onto the
  * supplied 2D context. Text is intentionally not painted here; the SVG layer
  * handles that so editor preview and PNG export share the same text engine.
  */
@@ -63,7 +64,7 @@ export class CanvasBackend implements RenderBackend {
   private readonly colorOverride: Record<string, string>;
   private readonly resolvePreviewImage: CanvasBackendDeps["resolvePreviewImage"];
 
-  // Stack-of-stacks — each push wraps in a save() so pop is just restore().
+  // Stack-of-stacks - each push wraps in a save() so pop is just restore().
   private readonly alphaStack: number[] = [];
   private readonly blendStack: GlobalCompositeOperation[] = [];
 
@@ -144,14 +145,20 @@ export class CanvasBackend implements RenderBackend {
     ctx.clearRect(0, 0, designWidth, designHeight);
 
     if (backgrounds && backgrounds.length) {
+      const bgFrame = { x: 0, y: 0, width: designWidth, height: designHeight };
+      const bgPath = new Path2D();
+      bgPath.rect(0, 0, designWidth, designHeight);
       for (const fill of backgrounds) {
         if (!fill.visible) continue;
         if (fill.kind === "solid") {
           ctx.fillStyle = fill.css;
           ctx.fillRect(0, 0, designWidth, designHeight);
         } else if (fill.kind === "gradient") {
-          ctx.fillStyle = fill.cssFallback;
-          ctx.fillRect(0, 0, designWidth, designHeight);
+          const ok = paintGradientFill(ctx, bgPath, fill, bgFrame);
+          if (!ok) {
+            ctx.fillStyle = fill.cssFallback;
+            ctx.fillRect(0, 0, designWidth, designHeight);
+          }
         } else if (fill.kind === "image") {
           ctx.fillStyle = fill.cssFallback;
           ctx.fillRect(0, 0, designWidth, designHeight);
@@ -202,16 +209,16 @@ export class CanvasBackend implements RenderBackend {
       makeBoundsPath(x, y, width, height, node.cornerRadius);
 
     // For SHAPE nodes, geometry preference is:
-    //   1. fillGeometry — Figma's resolved silhouette. Already accounts for
+    //   1. fillGeometry - Figma's resolved silhouette. Already accounts for
     //      corner radius, boolean ops, vertex-level corner smoothing, etc.
     //      A "Rectangle 1" VECTOR with 10px rounded corners has square
-    //      vectorPaths but a rounded fillGeometry — so fillGeometry wins.
-    //   2. vectorPaths — the editable source path. Used only when fillGeometry
+    //      vectorPaths but a rounded fillGeometry - so fillGeometry wins.
+    //   2. vectorPaths - the editable source path. Used only when fillGeometry
     //      is absent (some legacy exporters skip it).
-    //   3. boundsPathAt — a corner-radius-aware rectangle covering the bbox.
+    //   3. boundsPathAt - a corner-radius-aware rectangle covering the bbox.
     //
     // strokeGeometry is the closed path Figma renders FOR the stroke. For
-    // zero-area shapes (LINE) it's the only thing visible — see strokeFillPath
+    // zero-area shapes (LINE) it's the only thing visible - see strokeFillPath
     // below.
     const fillGeomPaths =
       node.kind === "shape" && node.fillGeometry?.length
@@ -223,7 +230,7 @@ export class CanvasBackend implements RenderBackend {
         try {
           const p = buildCompoundVectorPath(paths);
           if (!p) return null;
-          // Local-vs-absolute check kept as a sanity guard — both paths get
+          // Local-vs-absolute check kept as a sanity guard - both paths get
           // returned the same way today, but the heuristic stays here so a
           // future transform-baking branch can hook in without re-walking.
           void paths.every((path) =>
@@ -248,7 +255,7 @@ export class CanvasBackend implements RenderBackend {
 
     const fillPath = shapePath();
 
-    // strokeGeometry is Figma's closed silhouette of the stroke itself —
+    // strokeGeometry is Figma's closed silhouette of the stroke itself -
     // useful when the bbox is degenerate (LINE has height=0, so stroking
     // around the bbox path produces nothing). When present, paint it as a
     // FILL of the stroke's color rather than stroking around fillPath.
@@ -265,12 +272,38 @@ export class CanvasBackend implements RenderBackend {
       (e): e is Extract<NormalizedNode["effects"][number], { kind: "inner-shadow" }> =>
         e.kind === "inner-shadow" && e.visible,
     );
+    // Layer blur: blurs the node's own content. Approximate by setting ctx.filter
+    // before all fills so every drawing operation appears blurred.
+    const layerBlurRadius = (node.effects ?? []).reduce(
+      (max, e) => e.kind === "layer-blur" && e.visible && e.radius > max ? e.radius : max,
+      0,
+    );
+    // Background blur: blurs canvas content that lies behind this node, then
+    // paints it back clipped to the node shape. Must run before fills.
+    const bgBlurEffect = (node.effects ?? []).find(
+      (e): e is Extract<NormalizedNode["effects"][number], { kind: "background-blur" }> =>
+        e.kind === "background-blur" && e.visible,
+    );
 
     const overrideColor = this.colorOverride[node.id];
+    const fillFrame = canUseMatrix
+      ? { x: 0, y: 0, width: localW, height: localH }
+      : { x: node.frame.x, y: node.frame.y, width: node.frame.width, height: node.frame.height };
 
-    // Paint drop shadows behind the actual fills.
+    // Paint drop shadows behind the actual fills (not affected by layer blur).
     for (const eff of dropShadows) {
       applyDropShadow(ctx, fillPath, eff);
+    }
+
+    // Background blur: capture and blur what's already on canvas under the node.
+    if (bgBlurEffect && bgBlurEffect.radius > 0) {
+      applyBackgroundBlur(ctx, fillPath, fillFrame, bgBlurEffect.radius);
+    }
+
+    // Layer blur: set filter before fills so all subsequent draws appear blurred.
+    if (layerBlurRadius > 0) {
+      const pxScale = Math.abs(ctx.getTransform().a) || 1;
+      ctx.filter = `blur(${layerBlurRadius * pxScale}px)`;
     }
 
     // Fills
@@ -280,6 +313,12 @@ export class CanvasBackend implements RenderBackend {
     } else {
       for (const fill of node.fills) {
         if (!fill.visible) continue;
+        ctx.save();
+        // Apply per-fill blend mode (composites this fill against fills below it).
+        const fillBlendOp = BLEND_MODE_TO_CANVAS[fill.blendMode] ?? "source-over";
+        if (fillBlendOp !== "source-over") {
+          ctx.globalCompositeOperation = fillBlendOp;
+        }
         if (fill.kind === "solid") {
           ctx.fillStyle = fill.css;
           this.fillWithPath(ctx, node, fillPath, baseTransform, nodeSpaceTransform, canUseMatrix, localW, localH);
@@ -289,16 +328,15 @@ export class CanvasBackend implements RenderBackend {
           // pixel-exact offscreen blit for angular/diamond). On failure
           // (e.g. cross-origin tainted offscreen) it returns false and we
           // fall back to the gradient's cssFallback solid colour.
-          const frame = canUseMatrix
-            ? { x: 0, y: 0, width: localW, height: localH }
-            : { x: node.frame.x, y: node.frame.y, width: node.frame.width, height: node.frame.height };
-          const ok = paintGradientFill(ctx, fillPath, fill, frame);
+          const ok = paintGradientFill(ctx, fillPath, fill, fillFrame);
           if (!ok) {
             ctx.fillStyle = fill.cssFallback;
             this.fillWithPath(ctx, node, fillPath, baseTransform, nodeSpaceTransform, canUseMatrix, localW, localH);
           }
         } else if (fill.kind === "image") {
-          ctx.save();
+          // Image fill opacity is not baked into the bitmap (unlike solid/gradient
+          // fills where opacity is baked into the CSS alpha). Apply it explicitly.
+          if (fill.opacity < 1) ctx.globalAlpha *= fill.opacity;
           ctx.clip(fillPath);
 
           const override = this.resolvePreviewImage(node.id);
@@ -310,12 +348,8 @@ export class CanvasBackend implements RenderBackend {
               height: canUseMatrix ? localH : node.frame.height,
               objectFit: override.objectFit,
             });
-            // applyImageFill respects the IMAGE paint's scaleMode, but for
-            // user-provided previews the editor lets users pick cover/contain;
-            // fall back to the legacy helper if applyImageFill couldn't draw
-            // (e.g. no image source for tile/pattern modes).
           } else {
-            // No override yet — show a placeholder clipped to the same shape.
+            // No override yet - show a placeholder clipped to the same shape.
             drawImagePlaceholder(
               ctx,
               0,
@@ -325,11 +359,9 @@ export class CanvasBackend implements RenderBackend {
               { label: "IMAGE" },
             );
           }
-          ctx.restore();
-          // Suppress the unused-import lint for drawImageCoverContain since
-          // legacy helper is still surfaced via drawImage.ts re-export.
           void drawImageCoverContain;
         }
+        ctx.restore();
       }
     }
 
@@ -337,8 +369,8 @@ export class CanvasBackend implements RenderBackend {
     //   - strokeFillPath: Figma already resolved the stroke into a closed
     //     silhouette (e.g. LINE nodes, or any node whose stroke alignment
     //     and dash pattern Figma serialised pre-baked). Paint it as a fill
-    //     of the stroke colour — pixel-exact with no canvas-side miter/cap
-    //     differences.
+    //     of the stroke colour - pixel-exact with no canvas-side miter/cap
+    //     differences. Gradient strokes are rendered via paintGradientFill.
     //   - else: stroke around fillPath using canvas line-rendering with
     //     INSIDE/CENTER/OUTSIDE alignment.
     for (const stroke of node.strokes) {
@@ -346,8 +378,16 @@ export class CanvasBackend implements RenderBackend {
       if (!stroke.paint.visible) continue;
       if (strokeFillPath) {
         ctx.save();
-        ctx.fillStyle = stroke.css;
-        ctx.fill(strokeFillPath);
+        if (stroke.paint.kind === "gradient") {
+          const ok = paintGradientFill(ctx, strokeFillPath, stroke.paint, fillFrame);
+          if (!ok) {
+            ctx.fillStyle = stroke.css;
+            ctx.fill(strokeFillPath);
+          }
+        } else {
+          ctx.fillStyle = stroke.css;
+          ctx.fill(strokeFillPath);
+        }
         ctx.restore();
       } else {
         this.strokeWithAlignment(ctx, node, stroke, fillPath, canUseMatrix, localW, localH);

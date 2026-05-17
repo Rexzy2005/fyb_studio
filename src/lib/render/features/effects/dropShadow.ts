@@ -45,7 +45,7 @@ const BLEND_MODE_TO_CANVAS: Partial<Record<BlendMode, GlobalCompositeOperation>>
  *     soft outward growth)
  *
  * Falls back to the native `ctx.shadow*` API when OffscreenCanvas isn't
- * available (older Safari) — this is the same code path as the previous
+ * available (older Safari) - this is the same code path as the previous
  * implementation, so older browsers see no regression.
  */
 export function applyDropShadow(
@@ -54,7 +54,7 @@ export function applyDropShadow(
   shadow: DropShadow,
 ): void {
   if (!shadow.visible) return;
-  // A shadow with a fully transparent color is invisible — skip the work.
+  // A shadow with a fully transparent color is invisible - skip the work.
   if (isTransparent(shadow.color)) return;
 
   const main = ctx.canvas;

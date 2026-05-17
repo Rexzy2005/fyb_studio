@@ -19,7 +19,7 @@ const templateLockSchema = new Schema(
       ref: "User",
       required: true,
     },
-    passcode: { type: String, required: true, trim: true },
+    passcode: { type: String, required: false, default: null, trim: true },
   },
   { timestamps: true }
 );

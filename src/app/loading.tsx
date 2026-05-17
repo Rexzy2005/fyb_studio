@@ -4,7 +4,7 @@ import { ProgressModal } from "@/components/ui/ProgressModal";
 
 export default function Loading() {
   return (
-    <div className="min-h-dvh bg-zinc-50 dark:bg-zinc-950">
+    <div className="min-h-dvh bg-canvas">
       <ProgressModal
         open
         title="Loading"

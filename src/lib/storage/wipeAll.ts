@@ -12,7 +12,7 @@ import { getDb } from "./idb";
  *  - sessionStorage
  *  - Cache API entries (service-worker caches, if any)
  *
- * Does not touch httpOnly cookies (server-set, JS can't reach them) — NextAuth
+ * Does not touch httpOnly cookies (server-set, JS can't reach them) - NextAuth
  * signOut clears auth cookies; transient lock cookies (`fyb-lock-*`) expire on
  * their own within 60 minutes and are scoped per-template, so they pose no
  * cross-user risk.

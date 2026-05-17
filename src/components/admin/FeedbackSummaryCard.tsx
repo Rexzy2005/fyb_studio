@@ -38,24 +38,24 @@ export function FeedbackSummaryCard() {
     stats?.statusBreakdown.find((s) => s.status === "new")?.count ?? 0;
 
   return (
-    <section className="rounded-2xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900">
+    <section className="rounded-2xl border border-hairline bg-surface-1 p-4 dark:border-hairline dark:bg-surface-1">
       <header className="flex items-start justify-between gap-3">
         <div className="flex items-start gap-3">
-          <div className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-emerald-50 text-emerald-600 dark:bg-emerald-950/40 dark:text-emerald-300">
+          <div className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-[var(--accent-blue-soft)] text-[var(--accent-blue)] dark:bg-[var(--accent-blue-soft)] dark:text-[var(--accent-blue)]">
             <MessageSquareText className="h-4 w-4" />
           </div>
           <div>
-            <h2 className="text-sm font-semibold tracking-tight text-zinc-950 dark:text-zinc-100">
+            <h2 className="text-sm font-semibold tracking-tight text-ink dark:text-ink">
               User feedback
             </h2>
-            <p className="text-xs text-zinc-600 dark:text-zinc-400">
+            <p className="text-xs text-ink-muted dark:text-ink-faint">
               What customers are telling you, in 30 seconds.
             </p>
           </div>
         </div>
         <Link
           href="/admin/feedback"
-          className="inline-flex h-8 items-center gap-1 rounded-lg border border-zinc-200 bg-white px-3 text-xs font-medium text-zinc-700 transition hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-950/30 dark:text-zinc-300 dark:hover:bg-zinc-800"
+          className="inline-flex h-8 items-center gap-1 rounded-lg border border-hairline bg-surface-1 px-3 text-xs font-medium text-ink-muted transition hover:bg-canvas dark:border-hairline dark:bg-surface-1 dark:text-ink-muted dark:hover:bg-surface-2"
         >
           Open
           <ArrowRight className="h-3 w-3" />
@@ -75,7 +75,7 @@ export function FeedbackSummaryCard() {
         <Item
           label="Avg rating"
           value={
-            stats ? `${stats.averageRating.toFixed(1)}` : loading ? "…" : "—"
+            stats ? `${stats.averageRating.toFixed(1)}` : loading ? "…" : "-"
           }
           sub={stats ? `${stats.last30Days.total} this month` : ""}
         />
@@ -108,25 +108,25 @@ function Item({
       className={
         "rounded-xl border p-3 " +
         (highlight
-          ? "border-amber-200 bg-amber-50/60 dark:border-amber-900/40 dark:bg-amber-950/15"
-          : "border-zinc-200 bg-zinc-50/40 dark:border-zinc-800 dark:bg-zinc-950/30")
+          ? "border-[rgba(245,158,11,0.28)] bg-[rgba(245,158,11,0.08)]/60 dark:border-[rgba(245,158,11,0.28)] dark:bg-[rgba(245,158,11,0.08)]"
+          : "border-hairline bg-canvas/40 dark:border-hairline dark:bg-surface-1")
       }
     >
-      <dt className="text-[11px] uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+      <dt className="text-[11px] uppercase tracking-wide text-ink-faint dark:text-ink-faint">
         {label}
       </dt>
       <dd
         className={
           "mt-1 text-xl font-semibold tracking-tight " +
           (highlight
-            ? "text-amber-700 dark:text-amber-300"
-            : "text-zinc-950 dark:text-zinc-100")
+            ? "text-warning dark:text-warning"
+            : "text-ink dark:text-ink")
         }
       >
         {value}
       </dd>
       {sub ? (
-        <div className="mt-0.5 truncate text-[11px] text-zinc-500 dark:text-zinc-400">
+        <div className="mt-0.5 truncate text-[11px] text-ink-faint dark:text-ink-faint">
           {sub}
         </div>
       ) : null}

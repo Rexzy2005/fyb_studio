@@ -2,6 +2,7 @@
 
 import { signIn } from "next-auth/react";
 import { useState } from "react";
+import { bodySm } from "@/lib/ui/typography";
 
 export function GoogleSignInButton({ callbackUrl }: { callbackUrl?: string }) {
   const [pending, setPending] = useState(false);
@@ -21,7 +22,15 @@ export function GoogleSignInButton({ callbackUrl }: { callbackUrl?: string }) {
       type="button"
       onClick={onClick}
       disabled={pending}
-      className="inline-flex h-12 w-full items-center justify-center gap-3 rounded-2xl border border-zinc-200 bg-white px-5 text-sm font-medium text-zinc-900 shadow-sm transition hover:bg-zinc-50 disabled:cursor-not-allowed disabled:opacity-60 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-100 dark:hover:bg-zinc-800"
+      className="inline-flex w-full items-center justify-center gap-3 rounded-full transition disabled:cursor-not-allowed disabled:opacity-60"
+      style={{
+        ...bodySm,
+        height: 48,
+        padding: "0 22px",
+        background: "var(--ink)",
+        color: "#000",
+        border: "1px solid var(--ink)",
+      }}
     >
       <GoogleMark />
       <span>{pending ? "Redirecting…" : "Continue with Google"}</span>

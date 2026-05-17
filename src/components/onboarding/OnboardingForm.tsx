@@ -6,6 +6,8 @@ import type { DepartmentListItem } from "@/backend/services/department.service";
 import { UsernameField } from "@/components/onboarding/UsernameField";
 import { DepartmentSelect } from "@/components/onboarding/DepartmentSelect";
 import { safeReturnPath } from "@/lib/auth/safeRedirect";
+import { Button } from "@/components/ui/Button";
+import { bodySm, micro } from "@/lib/ui/typography";
 
 type ApiError = {
   error?: { code?: string; message?: string };
@@ -61,8 +63,7 @@ export function OnboardingForm({ returnTo }: { returnTo?: string }) {
 
   const headDisabled = !selectedDept || selectedDept.hasHead;
 
-  const canSubmit =
-    !submitting && usernameValid && Boolean(departmentId) && !loadingDepts;
+  const canSubmit = !submitting && usernameValid && Boolean(departmentId) && !loadingDepts;
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -96,17 +97,12 @@ export function OnboardingForm({ returnTo }: { returnTo?: string }) {
         return;
       }
 
-      // Belt-and-braces: server already refreshed the cookie via
-      // unstable_update, but we also nudge the client session so any
-      // mounted SessionProvider listeners pick up the new claims before
-      // the navigation. Failures here are non-fatal — the cookie set by
-      // the server response is what middleware actually reads.
       try {
         await updateSession({
           user: { isOnboarded: true },
         } as Parameters<typeof updateSession>[0]);
       } catch {
-        // ignore — server-side update is the source of truth
+        /* ignore - server-side update is the source of truth */
       }
       window.location.assign(destination);
       return;
@@ -118,12 +114,8 @@ export function OnboardingForm({ returnTo }: { returnTo?: string }) {
   }
 
   return (
-    <form onSubmit={onSubmit} className="space-y-5">
-      <UsernameField
-        value={username}
-        onChange={setUsername}
-        onValidityChange={setUsernameValid}
-      />
+    <form onSubmit={onSubmit} className="flex flex-col gap-5">
+      <UsernameField value={username} onChange={setUsername} onValidityChange={setUsernameValid} />
 
       <DepartmentSelect
         departments={departments}
@@ -133,23 +125,25 @@ export function OnboardingForm({ returnTo }: { returnTo?: string }) {
       />
 
       <label
-        className={
-          "flex items-start gap-3 rounded-2xl border p-3 transition " +
-          (headDisabled
-            ? "border-zinc-200 bg-zinc-50 opacity-60 dark:border-zinc-800 dark:bg-zinc-900/50"
-            : "border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900")
-        }
+        className="flex items-start gap-3 rounded-[12px] p-3 transition"
+        style={{
+          background: headDisabled ? "var(--surface-2)" : "var(--surface-1)",
+          border: "1px solid var(--hairline)",
+          opacity: headDisabled ? 0.6 : 1,
+          cursor: headDisabled ? "not-allowed" : "pointer",
+        }}
       >
         <input
           type="checkbox"
           checked={isHead}
           disabled={headDisabled}
           onChange={(e) => setIsHead(e.target.checked)}
-          className="mt-0.5 h-4 w-4 rounded border-zinc-300 text-zinc-900 focus:ring-zinc-400 dark:border-zinc-700"
+          className="mt-0.5 h-4 w-4"
+          style={{ accentColor: "var(--accent-blue)" }}
         />
-        <span className="text-sm leading-5 text-zinc-800 dark:text-zinc-200">
-          <span className="font-medium">I am the department head</span>
-          <span className="mt-0.5 block text-[11px] text-zinc-500 dark:text-zinc-400">
+        <span className="flex flex-col gap-0.5">
+          <span style={{ ...bodySm, color: "var(--ink)", fontWeight: 600 }}>I am the department head</span>
+          <span style={{ ...micro, color: "var(--ink-faint)" }}>
             {selectedDept?.hasHead
               ? "This department already has a head."
               : "Only one head per department."}
@@ -158,18 +152,22 @@ export function OnboardingForm({ returnTo }: { returnTo?: string }) {
       </label>
 
       {serverError ? (
-        <div className="rounded-2xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700 dark:border-rose-900/50 dark:bg-rose-950/30 dark:text-rose-300">
+        <div
+          className="rounded-[12px] px-3 py-2.5"
+          style={{
+            background: "rgba(239, 68, 68, 0.08)",
+            border: "1px solid rgba(239, 68, 68, 0.28)",
+            color: "var(--semantic-danger)",
+            fontSize: 13,
+          }}
+        >
           {serverError}
         </div>
       ) : null}
 
-      <button
-        type="submit"
-        disabled={!canSubmit}
-        className="inline-flex h-12 w-full items-center justify-center rounded-2xl bg-zinc-900 px-5 text-sm font-semibold text-white shadow-sm transition hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-60 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-white"
-      >
+      <Button type="submit" variant="primary" size="lg" fullWidth loading={submitting} disabled={!canSubmit}>
         {submitting ? "Setting up your account…" : "Continue to dashboard"}
-      </button>
+      </Button>
     </form>
   );
 }

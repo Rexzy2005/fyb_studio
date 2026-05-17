@@ -7,7 +7,6 @@ import {
   deleteLock,
   getLockViewForTemplate,
   lockTemplateForDepartment,
-  rotateLockPasscode,
 } from "@/backend/services/templateLock.service";
 
 export const runtime = "nodejs";
@@ -63,24 +62,11 @@ export const POST = withErrorHandler(async (_req, ctx) => {
   return NextResponse.json({ lock }, { status: 201 });
 });
 
-export const PATCH = withErrorHandler(async (_req, ctx) => {
-  const session = await requireSession();
-  const { id } = await ctx.params;
-
-  if (!session.user.isDepartmentHead) {
-    throw new AppError(
-      "FORBIDDEN",
-      "Only a department head can rotate the passcode",
-      403
-    );
-  }
-
-  const lock = await rotateLockPasscode({
-    templateId: id,
-    userId: session.user.id,
-  });
-
-  return NextResponse.json({ lock });
+export const PATCH = withErrorHandler(async (_req, _ctx) => {
+  return NextResponse.json(
+    { error: "Passcode rotation is not supported" },
+    { status: 405 }
+  );
 });
 
 export const DELETE = withErrorHandler(async (_req, ctx) => {

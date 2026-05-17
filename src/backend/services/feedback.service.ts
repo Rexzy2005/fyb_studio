@@ -72,7 +72,7 @@ export type ListFeedbackResult = {
 
 /**
  * Cursor-paginated list of feedback for the admin dashboard. Cursor is the
- * `_id` of the last row returned — keeps pagination stable even as new rows
+ * `_id` of the last row returned - keeps pagination stable even as new rows
  * arrive at the top of the list.
  */
 export async function listFeedback(

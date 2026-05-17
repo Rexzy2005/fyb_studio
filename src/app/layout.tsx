@@ -1,43 +1,26 @@
 import type { Metadata } from "next";
-import {
-  Geist,
-  Geist_Mono,
-  Ms_Madi,
-  Bricolage_Grotesque,
-  Fraunces,
-} from "next/font/google";
+import { Geist, Geist_Mono, Plus_Jakarta_Sans } from "next/font/google";
 import "./globals.css";
-import { ThemeScript } from "@/components/theme/ThemeScript";
-import { ThemeToggleFloating } from "@/components/theme/ThemeToggleFloating";
 import { SessionProvider } from "@/components/auth/SessionProvider";
 import { ExpirySweeper } from "@/components/userDesigns/ExpirySweeper";
+import { ToastProvider } from "@/components/ui/Toast";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
   subsets: ["latin"],
+  display: "swap",
 });
 
 const geistMono = Geist_Mono({
   variable: "--font-geist-mono",
   subsets: ["latin"],
-});
-
-const msMadi = Ms_Madi({
-  weight: "400",
-  subsets: ["latin"],
-  variable: "--font-ms-madi",
-});
-
-const bricolage = Bricolage_Grotesque({
-  subsets: ["latin"],
-  variable: "--font-bricolage",
   display: "swap",
 });
 
-const fraunces = Fraunces({
+const plusJakarta = Plus_Jakarta_Sans({
+  variable: "--font-plus-jakarta",
   subsets: ["latin"],
-  variable: "--font-fraunces",
-  axes: ["SOFT", "opsz"],
+  weight: ["400", "600", "800"],
   display: "swap",
 });
 
@@ -52,17 +35,16 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" suppressHydrationWarning>
-      <head>
-        <ThemeScript />
-      </head>
+    <html lang="en" className="dark" suppressHydrationWarning>
       <body
-        className={`${geistSans.variable} ${geistMono.variable} ${msMadi.variable} ${bricolage.variable} ${fraunces.variable} min-h-screen bg-background text-foreground antialiased`}
+        className={`${geistSans.variable} ${geistMono.variable} ${plusJakarta.variable} min-h-screen antialiased`}
+        style={{ background: "var(--canvas)", color: "var(--ink)" }}
       >
         <SessionProvider>
-          <ExpirySweeper />
-          <ThemeToggleFloating />
-          {children}
+          <ToastProvider>
+            <ExpirySweeper />
+            {children}
+          </ToastProvider>
         </SessionProvider>
       </body>
     </html>

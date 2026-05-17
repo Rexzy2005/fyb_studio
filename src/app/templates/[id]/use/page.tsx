@@ -4,7 +4,7 @@ import { use, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useSession } from "next-auth/react";
-import { ArrowLeft, ChevronLeft, ChevronRight, Menu, X } from "lucide-react";
+import { ArrowLeft, CheckCircle2, ChevronLeft, ChevronRight, Download, GraduationCap, Menu, X } from "lucide-react";
 
 import type { NormalizedDesignV1 } from "@/lib/figma";
 import { composeImageMap } from "@/lib/render/composeImageMap";
@@ -59,6 +59,13 @@ function deriveCategoryLabel(name: string, explicit: string | null): string {
  * One quality preset = one consistent, professional output. No size pickers,
  * no risk of users accidentally exporting a low-resolution file.
  */
+// Mobile devices (particularly iOS) have stricter canvas memory limits.
+// Use 1× on small screens so large canvases don't OOM the tab.
+function getExportScale(): 1 | 2 {
+  if (typeof window !== "undefined" && window.innerWidth < 768) return 1;
+  return 2;
+}
+
 const STANDARD_EXPORT_SCALE = 2;
 
 export default function UseTemplatePage({
@@ -80,6 +87,8 @@ export default function UseTemplatePage({
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [exportStage, setExportStage] = useState<string>("");
+  const [downloadChecking, setDownloadChecking] = useState(false);
+  const [downloadSuccess, setDownloadSuccess] = useState(false);
   const [mobileDetailsOpen, setMobileDetailsOpen] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [autoFitNonce, setAutoFitNonce] = useState(0);
@@ -137,13 +146,43 @@ export default function UseTemplatePage({
     };
   }, []);
 
-  // Load or create the user-design working copy. Always hits the server first
-  // to enforce the lock state — even if an IDB record exists.
+  // Load or create the user-design working copy.
+  // IDB lookup and server lock-check run concurrently so returning users see
+  // their cached design immediately while the auth/lock response is in-flight.
   useEffect(() => {
     let cancelled = false;
+
+    function hydrateRecord(record: UserDesignRecord) {
+      setUserDesign(record);
+      setPreviewTextByNodeId({ ...record.inputs.textByNodeId });
+      setPreviewColorByNodeId({ ...record.inputs.colorByNodeId });
+      const hydrated: Record<
+        string,
+        { url: string; blob: Blob; objectFit: "cover" | "contain"; _revoke?: boolean }
+      > = {};
+      for (const [nodeId, entry] of Object.entries(record.inputs.imageBlobsByNodeId)) {
+        const url = URL.createObjectURL(entry.blob);
+        hydrated[nodeId] = { url, blob: entry.blob, objectFit: entry.objectFit, _revoke: true };
+      }
+      setPreviewImageByNodeId(hydrated);
+    }
+
     (async () => {
       try {
-        const remote = await fetchPublicTemplate(templateId);
+        // Kick off both operations simultaneously.
+        const idbPromise = requestedDesignId
+          ? getUserDesign(requestedDesignId)
+          : findInProgressByTemplate(templateId);
+        const serverPromise = fetchPublicTemplate(templateId);
+
+        // Show cached design immediately if available — no waiting for the server.
+        const cachedRecord = await idbPromise;
+        if (cachedRecord && !cancelled) {
+          hydrateRecord(cachedRecord);
+        }
+
+        // Wait for the server response to enforce lock/auth state.
+        const remote = await serverPromise;
         if (cancelled) return;
 
         if (remote.kind === "not-found") {
@@ -159,53 +198,29 @@ export default function UseTemplatePage({
 
         setLockBlock(null);
 
-        let record: UserDesignRecord | null = null;
-        if (requestedDesignId) {
-          record = await getUserDesign(requestedDesignId);
-        } else {
-          record = await findInProgressByTemplate(templateId);
-        }
+        // If we already hydrated from IDB, we're done.
+        if (cachedRecord) return;
 
-        if (!record) {
-          const assetUrlsByNodeId: Record<string, string> = {};
-          for (const a of remote.template.designAssets) {
-            assetUrlsByNodeId[a.nodeId] = a.url;
-          }
-          record = await createInProgressDesign({
-            templateId: remote.template.id,
-            name: remote.template.name,
-            categoryLabel: deriveCategoryLabel(
-              remote.template.name,
-              remote.template.category
-            ),
-            designJson: remote.template.designJson,
-            normalized: remote.template.normalized,
-            fieldConfig: remote.template.fieldConfig as FieldConfig,
-            assetUrlsByNodeId,
-          });
+        // First visit: create a fresh IDB record from the server template.
+        const assetUrlsByNodeId: Record<string, string> = {};
+        for (const a of remote.template.designAssets) {
+          assetUrlsByNodeId[a.nodeId] = a.url;
         }
+        const record = await createInProgressDesign({
+          templateId: remote.template.id,
+          name: remote.template.name,
+          categoryLabel: deriveCategoryLabel(
+            remote.template.name,
+            remote.template.category
+          ),
+          designJson: remote.template.designJson,
+          normalized: remote.template.normalized,
+          fieldConfig: remote.template.fieldConfig as FieldConfig,
+          assetUrlsByNodeId,
+        });
 
         if (cancelled) return;
-        setUserDesign(record);
-
-        // Hydrate workspace state from saved inputs.
-        setPreviewTextByNodeId({ ...record.inputs.textByNodeId });
-        setPreviewColorByNodeId({ ...record.inputs.colorByNodeId });
-
-        const hydrated: Record<
-          string,
-          { url: string; blob: Blob; objectFit: "cover" | "contain"; _revoke?: boolean }
-        > = {};
-        for (const [nodeId, entry] of Object.entries(record.inputs.imageBlobsByNodeId)) {
-          const url = URL.createObjectURL(entry.blob);
-          hydrated[nodeId] = {
-            url,
-            blob: entry.blob,
-            objectFit: entry.objectFit,
-            _revoke: true,
-          };
-        }
-        setPreviewImageByNodeId(hydrated);
+        hydrateRecord(record);
       } catch (e) {
         if (!cancelled) {
           setLoadError(e instanceof Error ? e.message : "Failed to load template");
@@ -292,8 +307,8 @@ export default function UseTemplatePage({
 
   if (loadError) {
     return (
-      <div className="min-h-screen bg-zinc-50 p-6 dark:bg-zinc-950">
-        <div className="rounded-2xl border border-zinc-200 bg-white p-6 text-sm text-zinc-700 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-200">
+      <div className="min-h-screen bg-canvas p-6 dark:bg-canvas">
+        <div className="rounded-2xl border border-hairline bg-surface-1 p-6 text-sm text-ink-muted dark:border-hairline dark:bg-surface-1 dark:text-ink">
           {loadError}
         </div>
       </div>
@@ -302,17 +317,12 @@ export default function UseTemplatePage({
 
   if (lockBlock) {
     return (
-      <div className="min-h-screen bg-zinc-50 dark:bg-zinc-950">
+      <div className="min-h-screen bg-canvas dark:bg-canvas">
         <LockedAccessModal
           open
-          variant={lockBlock.fromSameDept ? "passcode-required" : "blocked"}
           templateId={lockBlock.templateId}
           departmentName={lockBlock.departmentName}
           onClose={() => router.push("/templates")}
-          onUnlocked={() => {
-            setLockBlock(null);
-            setRefetchTrigger((n) => n + 1);
-          }}
         />
       </div>
     );
@@ -320,7 +330,7 @@ export default function UseTemplatePage({
 
   if (pageLoading || !userDesign || !fieldConfig || !normalized) {
     return (
-      <div className="min-h-dvh bg-zinc-50 dark:bg-zinc-950">
+      <div className="min-h-dvh bg-canvas dark:bg-canvas">
         <ProgressModal
           open
           title="Loading template"
@@ -447,7 +457,7 @@ export default function UseTemplatePage({
           thumbnail = {
             blob,
             mime: blob.type || "image/png",
-            // Use the bitmap dimensions returned by the exporter — those are
+            // Use the bitmap dimensions returned by the exporter - those are
             // already the integer pixel size of the actual PNG. We never
             // re-derive them from the design canvas (which carries fractional
             // values that should not be rounded independently).
@@ -502,16 +512,11 @@ export default function UseTemplatePage({
         console.warn("[use] recordDownload failed", err);
       }
 
-      // ?justDownloaded=1 nudges the dashboard's FeedbackLauncher to open
-      // the survey modal automatically — peak honesty moment. The launcher
-      // respects the same "recently submitted" cooldown so heavy users
-      // don't get badgered every download.
-      router.push("/dashboard?justDownloaded=1");
+      // Show celebration screen instead of auto-redirecting
+      setDownloadSuccess(true);
     } catch (err) {
       console.error("[use] export failed after payment", err);
-      // The grant is still active server-side because recordDownload
-      // didn't run, AND the local marker is still set. Send the user to
-      // the dashboard so they can resume — and never throw the file away.
+      // Grant is still active server-side; dashboard will show a resume tile.
       router.push("/dashboard?resumePayment=1");
     } finally {
       setExporting(false);
@@ -519,16 +524,10 @@ export default function UseTemplatePage({
     }
   }
 
-  // One-click HD export, gated by a per-design payment.
-  // Flow:
-  //   1. Silently check the server for an unconsumed grant (no progress
-  //      modal flash — that was creating a confusing "modal twice" UX).
-  //   2. If grant exists → start export.
-  //   3. Otherwise → open the payment modal; on success its `onPaid`
-  //      callback runs the export.
   async function startExport() {
-    if (exporting) return;
+    if (exporting || downloadChecking) return;
     if (!userDesign) return;
+    setDownloadChecking(true);
     let hasGrant = false;
     try {
       const info = await fetchActiveGrant({
@@ -537,13 +536,12 @@ export default function UseTemplatePage({
       });
       hasGrant = Boolean(info.grant);
     } catch (err) {
-      // Transient grant-check failures fall through to the payment modal.
-      // The verify endpoint will detect the existing grant if there is one
-      // and refund/short-circuit there — better UX than blocking the click.
       console.error("[use] grant check failed", err);
+    } finally {
+      setDownloadChecking(false);
     }
     if (hasGrant) {
-      void doExportPng(STANDARD_EXPORT_SCALE);
+      void doExportPng(getExportScale());
       return;
     }
     setPaymentModalOpen(true);
@@ -561,26 +559,26 @@ export default function UseTemplatePage({
   }
 
   return (
-    <div className="flex h-dvh min-w-0 flex-col bg-zinc-50 dark:bg-zinc-950">
-      <div className="sticky top-0 z-20 flex items-center justify-between gap-3 border-b border-zinc-200 bg-white/90 px-3 py-2 backdrop-blur lg:hidden dark:border-zinc-800 dark:bg-zinc-900/80">
+    <div className="flex h-dvh min-w-0 flex-col bg-canvas dark:bg-canvas">
+      <div className="sticky top-0 z-20 flex items-center justify-between gap-3 border-b border-hairline bg-surface-1/90 px-3 py-2 backdrop-blur lg:hidden dark:border-hairline dark:bg-surface-1/80">
         <button
           type="button"
           onClick={() => setMobileMenuOpen(true)}
-          className="inline-flex h-10 w-10 items-center justify-center rounded-2xl border border-zinc-200 bg-white text-zinc-900 hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-100 dark:hover:bg-zinc-800"
+          className="inline-flex h-10 w-10 items-center justify-center rounded-2xl border border-hairline bg-surface-1 text-ink hover:bg-canvas dark:border-hairline dark:bg-surface-1 dark:text-ink dark:hover:bg-surface-2"
           aria-label="Open menu"
         >
           <Menu className="h-5 w-5" />
         </button>
         <div className="min-w-0 text-center">
-          <div className="truncate text-sm font-semibold text-zinc-950 dark:text-zinc-100">
+          <div className="truncate text-sm font-semibold text-ink dark:text-ink">
             {recordName}
           </div>
-          <div className="truncate text-[11px] text-zinc-600 dark:text-zinc-300">Workspace</div>
+          <div className="truncate text-[11px] text-ink-muted dark:text-ink-muted">Workspace</div>
         </div>
         <button
           type="button"
           onClick={() => setMobileDetailsOpen(true)}
-          className="inline-flex h-9 items-center justify-center rounded-xl bg-zinc-900 px-3 text-xs font-medium text-white hover:bg-zinc-800 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-white"
+          className="inline-flex h-9 items-center justify-center rounded-xl bg-surface-1 px-3 text-xs font-medium text-white hover:bg-surface-2 dark:bg-surface-2 dark:text-ink dark:hover:bg-surface-1"
         >
           Details
         </button>
@@ -589,16 +587,16 @@ export default function UseTemplatePage({
       <div className="flex min-h-0 min-w-0 flex-1">
         <aside
           className={
-            "hidden h-full flex-col border-r border-zinc-200 bg-white lg:flex dark:border-zinc-800 dark:bg-zinc-900 " +
+            "hidden h-full flex-col border-r border-hairline bg-surface-1 lg:flex dark:border-hairline dark:bg-surface-1 " +
             (sidebarCollapsed ? "w-18" : "w-65")
           }
         >
-          <div className="flex items-center justify-between gap-2 border-b border-zinc-200 px-3 py-3 dark:border-zinc-800">
+          <div className="flex items-center justify-between gap-2 border-b border-hairline px-3 py-3 dark:border-hairline">
             <div className={"min-w-0 " + (sidebarCollapsed ? "sr-only" : "")}>
-              <div className="truncate text-sm font-semibold text-zinc-950 dark:text-zinc-100">
+              <div className="truncate text-sm font-semibold text-ink dark:text-ink">
                 {recordName}
               </div>
-              <div className="truncate text-xs text-zinc-600 dark:text-zinc-300">Template</div>
+              <div className="truncate text-xs text-ink-muted dark:text-ink-muted">Template</div>
             </div>
             <button
               type="button"
@@ -609,7 +607,7 @@ export default function UseTemplatePage({
                   return next;
                 })
               }
-              className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-zinc-200 bg-white text-sm font-medium text-zinc-900 hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-100 dark:hover:bg-zinc-800"
+              className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-hairline bg-surface-1 text-sm font-medium text-ink hover:bg-canvas dark:border-hairline dark:bg-surface-1 dark:text-ink dark:hover:bg-surface-2"
               title={sidebarCollapsed ? "Expand" : "Collapse"}
               aria-label={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
             >
@@ -620,7 +618,7 @@ export default function UseTemplatePage({
           <nav className="flex-1 space-y-1 p-3 text-sm">
             <Link
               href="/templates"
-              className="block rounded-xl px-3 py-2 text-zinc-700 hover:bg-zinc-50 dark:text-zinc-200 dark:hover:bg-zinc-800/60"
+              className="block rounded-xl px-3 py-2 text-ink-muted hover:bg-canvas dark:text-ink dark:hover:bg-surface-2/60"
               title="Back to templates"
             >
               <span className={sidebarCollapsed ? "sr-only" : ""}>Back</span>
@@ -628,16 +626,16 @@ export default function UseTemplatePage({
             {isHead ? (
               <Link
                 href={`/templates/${templateId}/preview`}
-                className="block rounded-xl px-3 py-2 text-emerald-700 hover:bg-emerald-50 dark:text-emerald-300 dark:hover:bg-emerald-900/20"
-                title="Preview & lock for your department"
+                className="block rounded-xl px-3 py-2 text-[var(--accent-blue)] hover:bg-[var(--accent-blue-soft)] dark:text-[var(--accent-blue)] dark:hover:bg-[var(--accent-blue-soft)]"
+                title="Preview & reserve for your department"
               >
-                <span className={sidebarCollapsed ? "sr-only" : ""}>Preview & lock</span>
+                <span className={sidebarCollapsed ? "sr-only" : ""}>Preview & reserve</span>
               </Link>
             ) : null}
-            <div className="mt-2 rounded-xl bg-zinc-50 p-3 dark:bg-zinc-800/40">
+            <div className="mt-2 rounded-xl bg-canvas p-3 dark:bg-surface-2/40">
               <div
                 className={
-                  "text-xs font-medium text-zinc-900 dark:text-zinc-100 " +
+                  "text-xs font-medium text-ink dark:text-ink " +
                   (sidebarCollapsed ? "sr-only" : "")
                 }
               >
@@ -645,7 +643,7 @@ export default function UseTemplatePage({
               </div>
               <div
                 className={
-                  "mt-1 text-xs text-zinc-600 dark:text-zinc-300 " +
+                  "mt-1 text-xs text-ink-muted dark:text-ink-muted " +
                   (sidebarCollapsed ? "sr-only" : "")
                 }
               >
@@ -656,13 +654,13 @@ export default function UseTemplatePage({
         </aside>
 
         <main className="flex h-full min-w-0 flex-1 flex-col overflow-hidden">
-          <div className="hidden items-center justify-between border-b border-zinc-200 bg-white px-4 py-3 lg:flex dark:border-zinc-800 dark:bg-zinc-900">
-            <div className="text-sm font-semibold text-zinc-950 dark:text-zinc-100">Workspace</div>
-            {/* <div className="text-xs text-zinc-600 dark:text-zinc-300">Read-only canvas</div> */}
+          <div className="hidden items-center justify-between border-b border-hairline bg-surface-1 px-4 py-3 lg:flex dark:border-hairline dark:bg-surface-1">
+            <div className="text-sm font-semibold text-ink dark:text-ink">Workspace</div>
+            {/* <div className="text-xs text-ink-muted dark:text-ink-muted">Read-only canvas</div> */}
           </div>
 
           <div className="flex-1 overflow-hidden p-0 sm:p-2 lg:p-2 xl:p-2">
-            <div className="h-full min-h-0 w-full overflow-hidden bg-white sm:rounded-2xl sm:border sm:border-zinc-200 dark:bg-zinc-900 dark:sm:border-zinc-800">
+            <div className="h-full min-h-0 w-full overflow-hidden bg-surface-1 sm:rounded-2xl sm:border sm:border-hairline dark:bg-surface-1 dark:sm:border-hairline">
               <DesignWorkspace
                 design={normalized}
                 fieldConfig={fieldConfig}
@@ -680,10 +678,10 @@ export default function UseTemplatePage({
           </div>
         </main>
 
-        <aside className="hidden h-full w-80 flex-col border-l border-zinc-200 bg-white lg:flex xl:w-95 dark:border-zinc-800 dark:bg-zinc-900">
-          <div className="border-b border-zinc-200 px-4 py-2.5 dark:border-zinc-800">
-            <div className="text-sm font-semibold text-zinc-950 dark:text-zinc-100">Your details</div>
-            <div className="mt-1 text-xs text-zinc-600 dark:text-zinc-300">
+        <aside className="hidden h-full w-80 flex-col border-l border-hairline bg-surface-1 lg:flex xl:w-95 dark:border-hairline dark:bg-surface-1">
+          <div className="border-b border-hairline px-4 py-2.5 dark:border-hairline">
+            <div className="text-sm font-semibold text-ink dark:text-ink">Your details</div>
+            <div className="mt-1 text-xs text-ink-muted dark:text-ink-muted">
               Generated from admin configuration.
             </div>
           </div>
@@ -696,18 +694,18 @@ export default function UseTemplatePage({
                   <details
                     key={section.id}
                     open
-                    className="group rounded-2xl border border-zinc-200 bg-white open:shadow-sm dark:border-zinc-800 dark:bg-zinc-900"
+                    className="group rounded-2xl border border-hairline bg-surface-1 open:shadow-sm dark:border-hairline dark:bg-surface-1"
                   >
-                    <summary className="flex cursor-pointer items-center justify-between gap-2 px-3 py-2 text-xs font-semibold text-zinc-950 marker:hidden dark:text-zinc-100 [&::-webkit-details-marker]:hidden">
+                    <summary className="flex cursor-pointer items-center justify-between gap-2 px-3 py-2 text-xs font-semibold text-ink marker:hidden dark:text-ink [&::-webkit-details-marker]:hidden">
                       <span className="flex min-w-0 items-center gap-2">
-                        <Icon className="h-4 w-4 shrink-0 text-zinc-700 dark:text-zinc-300" />
+                        <Icon className="h-4 w-4 shrink-0 text-ink-muted dark:text-ink-muted" />
                         <span className="truncate">{section.label}</span>
                       </span>
-                      <span className="shrink-0 text-[11px] font-normal text-zinc-600 dark:text-zinc-400">
+                      <span className="shrink-0 text-[11px] font-normal text-ink-muted dark:text-ink-faint">
                         {fields.length}
                       </span>
                     </summary>
-                    <div className="space-y-2 border-t border-zinc-200 p-3 dark:border-zinc-800">
+                    <div className="space-y-2 border-t border-hairline p-3 dark:border-hairline">
                       {fields.map((f) => (
                         <FormField
                           key={f.id}
@@ -728,46 +726,60 @@ export default function UseTemplatePage({
             </div>
           </div>
 
-          <div className="border-t border-zinc-200 p-4 dark:border-zinc-800">
+          <div className="border-t border-hairline p-4 dark:border-hairline">
             <div className="flex items-center gap-2">
               <button
                 type="button"
                 disabled={exporting || !hasEdits}
                 onClick={resetUserWorkspace}
-                className="inline-flex h-9 flex-1 items-center justify-center rounded-xl border border-zinc-200 bg-white px-4 text-sm font-medium text-zinc-900 hover:bg-zinc-50 disabled:opacity-50 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-100 dark:hover:bg-zinc-800"
+                className="inline-flex h-9 flex-1 items-center justify-center rounded-xl border border-hairline bg-surface-1 px-4 text-sm font-medium text-ink hover:bg-canvas disabled:opacity-50 dark:border-hairline dark:bg-surface-1 dark:text-ink dark:hover:bg-surface-2"
               >
                 Reset
               </button>
               <button
                 type="button"
-                disabled={exporting}
+                disabled={exporting || downloadChecking}
                 onClick={startExport}
-                className="inline-flex h-9 flex-1 items-center justify-center rounded-xl bg-zinc-900 px-4 text-sm font-medium text-white hover:bg-zinc-800 disabled:opacity-60 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-white"
+                className="inline-flex h-9 flex-1 items-center justify-center gap-2 rounded-xl px-4 text-sm font-semibold text-white transition disabled:opacity-60"
+                style={{ background: downloadChecking || exporting ? "var(--surface-2)" : "#FFD700", color: downloadChecking || exporting ? "var(--ink-muted)" : "#000" }}
               >
-                {exporting ? "Exporting…" : "Download PNG"}
+                {downloadChecking ? (
+                  <><span className="fyb-dots"><span /><span /><span /></span> Checking…</>
+                ) : exporting ? (
+                  "Exporting…"
+                ) : (
+                  <><Download className="h-4 w-4" /> Download PNG</>
+                )}
               </button>
             </div>
           </div>
         </aside>
       </div>
 
-      <div className="fixed inset-x-0 bottom-0 z-30 border-t border-zinc-200 bg-white/90 p-3 backdrop-blur lg:hidden dark:border-zinc-800 dark:bg-zinc-900/80 pb-[calc(env(safe-area-inset-bottom)+0.75rem)]">
+      <div className="fixed inset-x-0 bottom-0 z-30 border-t border-hairline bg-surface-1/90 p-3 backdrop-blur lg:hidden dark:border-hairline dark:bg-surface-1/80 pb-[calc(env(safe-area-inset-bottom)+0.75rem)]">
         <div className="mx-auto flex w-full max-w-xl items-center gap-2">
           <button
             type="button"
-            disabled={exporting || !hasEdits}
+            disabled={exporting || downloadChecking || !hasEdits}
             onClick={resetUserWorkspace}
-            className="inline-flex h-11 flex-1 items-center justify-center rounded-2xl border border-zinc-200 bg-white px-4 text-sm font-semibold text-zinc-900 hover:bg-zinc-50 disabled:opacity-50 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-100 dark:hover:bg-zinc-800"
+            className="inline-flex h-11 flex-1 items-center justify-center rounded-2xl border border-hairline bg-surface-1 px-4 text-sm font-semibold text-ink hover:bg-canvas disabled:opacity-50 dark:border-hairline dark:bg-surface-1 dark:text-ink dark:hover:bg-surface-2"
           >
             Reset
           </button>
           <button
             type="button"
-            disabled={exporting}
+            disabled={exporting || downloadChecking}
             onClick={startExport}
-            className="inline-flex h-11 flex-1 items-center justify-center rounded-2xl bg-zinc-900 px-4 text-sm font-semibold text-white hover:bg-zinc-800 disabled:opacity-60 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-white"
+            className="inline-flex h-11 flex-1 items-center justify-center gap-2 rounded-2xl px-4 text-sm font-semibold transition active:scale-[0.98] disabled:opacity-60"
+            style={{ background: downloadChecking || exporting ? "var(--surface-2)" : "#FFD700", color: downloadChecking || exporting ? "var(--ink-muted)" : "#000" }}
           >
-            {exporting ? "Exporting…" : "Download PNG"}
+            {downloadChecking ? (
+              <><span className="fyb-dots"><span /><span /><span /></span> Checking…</>
+            ) : exporting ? (
+              "Exporting…"
+            ) : (
+              <><Download className="h-4 w-4" /> Download PNG</>
+            )}
           </button>
         </div>
       </div>
@@ -780,36 +792,36 @@ export default function UseTemplatePage({
             aria-label="Close details"
             onClick={() => setMobileDetailsOpen(false)}
           />
-          <div className="absolute inset-x-0 bottom-0 max-h-[82dvh] overflow-hidden rounded-t-3xl border border-zinc-200 bg-white shadow-2xl dark:border-zinc-800 dark:bg-zinc-900">
-            <div className="flex items-center justify-between gap-3 border-b border-zinc-200 px-4 py-3 dark:border-zinc-800">
+          <div className="absolute inset-x-0 bottom-0 max-h-[82dvh] overflow-hidden rounded-t-3xl border border-hairline bg-surface-1 shadow-2xl dark:border-hairline dark:bg-surface-1">
+            <div className="flex items-center justify-between gap-3 border-b border-hairline px-4 py-3 dark:border-hairline">
               <div className="min-w-0">
                 <div className="flex items-center gap-2">
                   {currentMobileSection
                     ? (() => {
                         const Icon = sectionIcon(currentMobileSection.section.icon);
-                        return <Icon className="h-4 w-4 shrink-0 text-zinc-700 dark:text-zinc-300" />;
+                        return <Icon className="h-4 w-4 shrink-0 text-ink-muted dark:text-ink-muted" />;
                       })()
                     : null}
-                  <div className="truncate text-sm font-semibold text-zinc-950 dark:text-zinc-100">
+                  <div className="truncate text-sm font-semibold text-ink dark:text-ink">
                     {currentMobileSection?.section.label ?? "Your details"}
                   </div>
                 </div>
-                <div className="mt-0.5 text-xs text-zinc-600 dark:text-zinc-300">
+                <div className="mt-0.5 text-xs text-ink-muted dark:text-ink-muted">
                   Section {Math.min(mobileFormPage + 1, mobileSectionCount)} of {mobileSectionCount}
                 </div>
               </div>
               <button
                 type="button"
                 onClick={() => setMobileDetailsOpen(false)}
-                className="inline-flex h-9 items-center justify-center rounded-xl border border-zinc-200 bg-white px-3 text-xs font-medium text-zinc-900 hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-100 dark:hover:bg-zinc-800"
+                className="inline-flex h-9 items-center justify-center rounded-xl border border-hairline bg-surface-1 px-3 text-xs font-medium text-ink hover:bg-canvas dark:border-hairline dark:bg-surface-1 dark:text-ink dark:hover:bg-surface-2"
               >
                 Close
               </button>
             </div>
 
-            {/* Section progress dots — tappable for direct jump. */}
+            {/* Section progress dots - tappable for direct jump. */}
             {mobileSectionCount > 1 ? (
-              <div className="flex items-center justify-center gap-1.5 border-b border-zinc-200 px-4 py-2 dark:border-zinc-800">
+              <div className="flex items-center justify-center gap-1.5 border-b border-hairline px-4 py-2 dark:border-hairline">
                 {mobileSections.map((g, idx) => {
                   const active = idx === mobileFormPage;
                   return (
@@ -826,8 +838,8 @@ export default function UseTemplatePage({
                       className={
                         "h-1.5 rounded-full transition-all " +
                         (active
-                          ? "w-6 bg-zinc-900 dark:bg-zinc-100"
-                          : "w-1.5 bg-zinc-300 dark:bg-zinc-700")
+                          ? "w-6 bg-surface-1 dark:bg-surface-2"
+                          : "w-1.5 bg-surface-2")
                       }
                     />
                   );
@@ -856,7 +868,7 @@ export default function UseTemplatePage({
               </div>
             </div>
 
-            <div className="border-t border-zinc-200 px-4 py-3 dark:border-zinc-800 pb-[calc(env(safe-area-inset-bottom)+72px)]">
+            <div className="border-t border-hairline px-4 py-3 dark:border-hairline pb-[calc(env(safe-area-inset-bottom)+72px)]">
               <div className="flex items-center gap-2">
                 <button
                   type="button"
@@ -867,7 +879,7 @@ export default function UseTemplatePage({
                       mobileFormScrollRef.current?.scrollTo({ top: 0, behavior: "smooth" })
                     );
                   }}
-                  className="inline-flex h-11 flex-1 items-center justify-center gap-2 rounded-2xl border border-zinc-200 bg-white px-4 text-sm font-semibold text-zinc-900 hover:bg-zinc-50 disabled:opacity-50 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-100 dark:hover:bg-zinc-800"
+                  className="inline-flex h-11 flex-1 items-center justify-center gap-2 rounded-2xl border border-hairline bg-surface-1 px-4 text-sm font-semibold text-ink hover:bg-canvas disabled:opacity-50 dark:border-hairline dark:bg-surface-1 dark:text-ink dark:hover:bg-surface-2"
                 >
                   <ChevronLeft className="h-4 w-4" />
                   Back
@@ -876,7 +888,7 @@ export default function UseTemplatePage({
                   <button
                     type="button"
                     onClick={() => setMobileDetailsOpen(false)}
-                    className="inline-flex h-11 flex-1 items-center justify-center gap-2 rounded-2xl bg-zinc-900 px-4 text-sm font-semibold text-white hover:bg-zinc-800 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-white"
+                    className="inline-flex h-11 flex-1 items-center justify-center gap-2 rounded-2xl bg-surface-1 px-4 text-sm font-semibold text-white hover:bg-surface-2 dark:bg-surface-2 dark:text-ink dark:hover:bg-surface-1"
                   >
                     Done
                   </button>
@@ -889,14 +901,14 @@ export default function UseTemplatePage({
                         mobileFormScrollRef.current?.scrollTo({ top: 0, behavior: "smooth" })
                       );
                     }}
-                    className="inline-flex h-11 flex-1 items-center justify-center gap-2 rounded-2xl bg-zinc-900 px-4 text-sm font-semibold text-white hover:bg-zinc-800 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-white"
+                    className="inline-flex h-11 flex-1 items-center justify-center gap-2 rounded-2xl bg-surface-1 px-4 text-sm font-semibold text-white hover:bg-surface-2 dark:bg-surface-2 dark:text-ink dark:hover:bg-surface-1"
                   >
                     Next
                     <ChevronRight className="h-4 w-4" />
                   </button>
                 )}
               </div>
-              <div className="mt-2 text-center text-[11px] text-zinc-600 dark:text-zinc-300">
+              <div className="mt-2 text-center text-[11px] text-ink-muted dark:text-ink-muted">
                 Tap dots above to jump between sections.
               </div>
             </div>
@@ -912,18 +924,18 @@ export default function UseTemplatePage({
             aria-label="Close menu"
             onClick={() => setMobileMenuOpen(false)}
           />
-          <div className="absolute left-0 top-0 h-full w-[86vw] max-w-sm border-r border-zinc-200 bg-white shadow-2xl dark:border-zinc-800 dark:bg-zinc-900">
-            <div className="flex items-center justify-between border-b border-zinc-200 px-4 py-3 dark:border-zinc-800">
+          <div className="absolute left-0 top-0 h-full w-[86vw] max-w-sm border-r border-hairline bg-surface-1 shadow-2xl dark:border-hairline dark:bg-surface-1">
+            <div className="flex items-center justify-between border-b border-hairline px-4 py-3 dark:border-hairline">
               <div className="min-w-0">
-                <div className="truncate text-sm font-semibold text-zinc-950 dark:text-zinc-100">
+                <div className="truncate text-sm font-semibold text-ink dark:text-ink">
                   {recordName}
                 </div>
-                <div className="truncate text-xs text-zinc-600 dark:text-zinc-300">Menu</div>
+                <div className="truncate text-xs text-ink-muted dark:text-ink-muted">Menu</div>
               </div>
               <button
                 type="button"
                 onClick={() => setMobileMenuOpen(false)}
-                className="inline-flex h-10 w-10 items-center justify-center rounded-2xl border border-zinc-200 bg-white text-zinc-900 hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-100 dark:hover:bg-zinc-800"
+                className="inline-flex h-10 w-10 items-center justify-center rounded-2xl border border-hairline bg-surface-1 text-ink hover:bg-canvas dark:border-hairline dark:bg-surface-1 dark:text-ink dark:hover:bg-surface-2"
                 aria-label="Close menu"
               >
                 <X className="h-5 w-5" />
@@ -934,7 +946,7 @@ export default function UseTemplatePage({
               <Link
                 href="/templates"
                 onClick={() => setMobileMenuOpen(false)}
-                className="flex items-center gap-3 rounded-2xl px-3 py-3 text-sm font-medium text-zinc-900 hover:bg-zinc-50 dark:text-zinc-100 dark:hover:bg-zinc-800/60"
+                className="flex items-center gap-3 rounded-2xl px-3 py-3 text-sm font-medium text-ink hover:bg-canvas dark:text-ink dark:hover:bg-surface-2/60"
               >
                 <ArrowLeft className="h-5 w-5" />
                 Back to templates
@@ -946,14 +958,14 @@ export default function UseTemplatePage({
                   setMobileMenuOpen(false);
                   setMobileDetailsOpen(true);
                 }}
-                className="mt-1 flex w-full items-center gap-3 rounded-2xl px-3 py-3 text-left text-sm font-medium text-zinc-900 hover:bg-zinc-50 dark:text-zinc-100 dark:hover:bg-zinc-800/60"
+                className="mt-1 flex w-full items-center gap-3 rounded-2xl px-3 py-3 text-left text-sm font-medium text-ink hover:bg-canvas dark:text-ink dark:hover:bg-surface-2/60"
               >
                 <ChevronRight className="h-5 w-5" />
                 Open details form
               </button>
 
-              <div className="mt-4 rounded-2xl bg-zinc-50 p-3 text-xs text-zinc-700 dark:bg-zinc-800/40 dark:text-zinc-200">
-                <div className="font-semibold text-zinc-950 dark:text-zinc-100">Tips</div>
+              <div className="mt-4 rounded-2xl bg-canvas p-3 text-xs text-ink-muted dark:bg-surface-2/40 dark:text-ink">
+                <div className="font-semibold text-ink dark:text-ink">Tips</div>
                 <div className="mt-1">Pan: hold Space and drag</div>
                 <div>Zoom: Ctrl+Wheel</div>
               </div>
@@ -964,10 +976,10 @@ export default function UseTemplatePage({
 
       <ProgressModal
         open={exporting}
-        title="Exporting"
+        title="Exporting your design"
         subtitle={exportStage || (exportProgress < 0.6 ? "Rendering PNG" : "Finalizing")}
         percent={Math.round(exportProgress * 100)}
-        hint="Larger designs and custom fonts can take a moment."
+        hint="Larger designs and custom fonts can take a moment. Keep this tab open."
       />
 
       <PaymentModal
@@ -979,10 +991,145 @@ export default function UseTemplatePage({
         onClose={() => setPaymentModalOpen(false)}
         onPaid={async () => {
           setPaymentModalOpen(false);
-          // Run the actual export now that the user has an active grant.
-          await doExportPng(STANDARD_EXPORT_SCALE);
+          await doExportPng(getExportScale());
         }}
       />
+
+      {downloadSuccess && (
+        <DownloadSuccessModal
+          designName={recordName}
+          onContinue={() => router.push("/dashboard?justDownloaded=1")}
+          onDismiss={() => setDownloadSuccess(false)}
+        />
+      )}
+    </div>
+  );
+}
+
+function DownloadSuccessModal({
+  designName,
+  onContinue,
+  onDismiss,
+}: {
+  designName: string;
+  onContinue: () => void;
+  onDismiss: () => void;
+}) {
+  return (
+    <div
+      className="fixed inset-0 z-[90] flex items-center justify-center p-4"
+      style={{ background: "rgba(0,0,0,0.8)", backdropFilter: "blur(10px)" }}
+    >
+      {/* Confetti dots */}
+      <div className="pointer-events-none absolute inset-0 overflow-hidden" aria-hidden>
+        {[
+          ["#FFD700", "15%", "20%", "0.6s"],
+          ["#A855F7", "35%", "10%", "0.3s"],
+          ["#22c55e", "55%", "15%", "0.8s"],
+          ["#F97316", "75%", "12%", "0.1s"],
+          ["#06B6D4", "88%", "25%", "0.5s"],
+          ["#EC4899", "20%", "75%", "0.7s"],
+          ["#FFD700", "65%", "80%", "0.2s"],
+          ["#A855F7", "82%", "70%", "0.9s"],
+          ["#22c55e", "10%", "60%", "0.4s"],
+          ["#F97316", "45%", "85%", "0.6s"],
+        ].map(([color, left, top, delay], i) => (
+          <div
+            key={i}
+            className="absolute h-3 w-3 rounded-full animate-bounce"
+            style={{
+              background: color,
+              left,
+              top,
+              animationDelay: delay,
+              animationDuration: `${1.2 + i * 0.1}s`,
+              opacity: 0.8,
+            }}
+          />
+        ))}
+      </div>
+
+      <div
+        className="relative w-full max-w-sm overflow-hidden text-center"
+        style={{
+          background: "var(--canvas)",
+          border: "1px solid var(--hairline)",
+          borderRadius: 28,
+          boxShadow: "0 40px 100px rgba(0,0,0,0.7)",
+        }}
+      >
+        {/* Gold top bar */}
+        <div
+          className="absolute inset-x-0 top-0 h-[3px]"
+          style={{ background: "linear-gradient(90deg,#FFD700,#F97316,#A855F7)" }}
+        />
+
+        <div className="px-6 pt-9 pb-7">
+          {/* Icon */}
+          <div className="relative mx-auto mb-5 flex h-20 w-20 items-center justify-center">
+            {/* Pulse rings */}
+            <div
+              className="absolute inset-0 animate-ping rounded-full"
+              style={{ background: "rgba(255,215,0,0.15)", animationDuration: "1.5s" }}
+            />
+            <div
+              className="absolute inset-0 animate-ping rounded-full"
+              style={{ background: "rgba(255,215,0,0.08)", animationDuration: "2s" }}
+            />
+            <div
+              className="grid h-20 w-20 place-items-center rounded-full"
+              style={{ background: "rgba(255,215,0,0.12)" }}
+            >
+              <GraduationCap size={36} style={{ color: "#FFD700" }} strokeWidth={1.5} />
+            </div>
+            <CheckCircle2
+              size={22}
+              className="absolute -right-1 -top-1"
+              style={{ color: "#22c55e", background: "var(--canvas)", borderRadius: "50%" }}
+            />
+          </div>
+
+          <h2
+            className="text-xl font-bold"
+            style={{ color: "var(--ink)", letterSpacing: "-0.025em" }}
+          >
+            Download complete!
+          </h2>
+          <p
+            className="mt-2 text-sm"
+            style={{ color: "var(--ink-muted)", lineHeight: 1.6 }}
+          >
+            <span style={{ color: "var(--ink)", fontWeight: 600 }}>{designName}</span> is saved to your
+            device. Your masterpiece is ready.
+          </p>
+
+          <div
+            className="mt-5 flex items-center justify-center gap-1.5 text-xs"
+            style={{ color: "var(--ink-faint)" }}
+          >
+            <span className="inline-block h-1.5 w-1.5 rounded-full" style={{ background: "#FFD700" }} />
+            Powered by FYB Studio
+          </div>
+
+          <button
+            type="button"
+            onClick={onContinue}
+            className="mt-6 inline-flex h-12 w-full items-center justify-center gap-2 rounded-2xl text-sm font-semibold transition active:scale-[0.97]"
+            style={{ background: "#FFD700", color: "#000" }}
+          >
+            Continue to dashboard
+          </button>
+
+          <button
+            type="button"
+            onClick={onDismiss}
+            className="mt-2 inline-flex h-10 w-full items-center justify-center rounded-2xl text-sm transition"
+            style={{ color: "var(--ink-muted)" }}
+          >
+            Stay in workspace
+          </button>
+        </div>
+      </div>
     </div>
   );
 }

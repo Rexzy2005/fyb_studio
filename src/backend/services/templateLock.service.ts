@@ -19,7 +19,7 @@ export type TemplateLockView = {
   departmentAbbreviation: string;
   lockedByUserId: string;
   isOwnerLock: boolean;
-  passcode: string | null;
+  passcode: null;
   createdAt: string;
   updatedAt: string;
 };
@@ -29,15 +29,10 @@ export type DepartmentLockListItem = TemplateLockView & {
   templateCoverUrl: string | null;
 };
 
-function generatePasscode(abbreviation: string): string {
-  const digits = String(Math.floor(1000 + Math.random() * 9000));
-  return `${abbreviation.toUpperCase()}${digits}`;
-}
-
 function toView(
   lock: TemplateLockDoc,
   dept: Pick<DepartmentDoc, "_id" | "name" | "abbreviation">,
-  options: { revealPasscode: boolean; viewerUserId: string }
+  options: { viewerUserId: string }
 ): TemplateLockView {
   const isOwner = lock.lockedByUserId.toString() === options.viewerUserId;
   return {
@@ -48,7 +43,7 @@ function toView(
     departmentAbbreviation: dept.abbreviation,
     lockedByUserId: lock.lockedByUserId.toString(),
     isOwnerLock: isOwner,
-    passcode: options.revealPasscode ? lock.passcode : null,
+    passcode: null,
     createdAt: lock.createdAt.toISOString(),
     updatedAt: lock.updatedAt.toISOString(),
   };
@@ -78,7 +73,6 @@ export async function getLockViewForTemplate(input: {
   if (!dept) return null;
 
   return toView(lock, dept, {
-    revealPasscode: input.isLockOwner,
     viewerUserId: input.viewerUserId,
   });
 }
@@ -113,17 +107,14 @@ export async function lockTemplateForDepartment(input: {
     );
   }
 
-  const passcode = generatePasscode(dept.abbreviation);
-
   const created = await TemplateLock.create({
     templateId: new mongoose.Types.ObjectId(input.templateId),
     departmentId: new mongoose.Types.ObjectId(input.departmentId),
     lockedByUserId: new mongoose.Types.ObjectId(input.userId),
-    passcode,
+    passcode: "",
   });
 
   return toView(created, dept, {
-    revealPasscode: true,
     viewerUserId: input.userId,
   });
 }
@@ -132,27 +123,11 @@ export async function rotateLockPasscode(input: {
   templateId: string;
   userId: string;
 }): Promise<TemplateLockView> {
-  await connectDb();
-  if (!mongoose.isValidObjectId(input.templateId)) {
-    throw new AppError("NOT_FOUND", "Lock not found", 404);
-  }
-
-  const lock = await TemplateLock.findOne({ templateId: input.templateId });
-  if (!lock) throw new AppError("NOT_FOUND", "Lock not found", 404);
-  if (lock.lockedByUserId.toString() !== input.userId) {
-    throw new AppError("FORBIDDEN", "Only the lock owner can rotate the passcode", 403);
-  }
-
-  const dept = await Department.findById(lock.departmentId).lean<DepartmentDoc | null>();
-  if (!dept) throw new AppError("NOT_FOUND", "Department not found", 404);
-
-  lock.passcode = generatePasscode(dept.abbreviation);
-  await lock.save();
-
-  return toView(lock, dept, {
-    revealPasscode: true,
-    viewerUserId: input.userId,
-  });
+  throw new AppError(
+    "FORBIDDEN",
+    "Passcode rotation is not supported for reserved designs",
+    403
+  );
 }
 
 export async function deleteLock(input: {
@@ -187,11 +162,6 @@ export async function verifyPasscode(input: {
     lock.departmentId.toString() !== input.viewerDepartmentId
   ) {
     return { ok: false, reason: "wrong-department" };
-  }
-
-  const submitted = input.passcode.trim().toUpperCase();
-  if (submitted !== lock.passcode.trim().toUpperCase()) {
-    return { ok: false, reason: "invalid-passcode" };
   }
 
   return { ok: true, departmentId: lock.departmentId.toString() };
@@ -232,7 +202,7 @@ export async function listLocksByDepartment(input: {
       departmentAbbreviation: dept.abbreviation,
       lockedByUserId: l.lockedByUserId.toString(),
       isOwnerLock: isOwner,
-      passcode: isOwner ? l.passcode : null,
+      passcode: null,
       createdAt: l.createdAt.toISOString(),
       updatedAt: l.updatedAt.toISOString(),
       templateName: tpl?.name ?? "(deleted template)",

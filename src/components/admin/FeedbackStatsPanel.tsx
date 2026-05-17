@@ -9,9 +9,9 @@ import {
 import type { FeedbackStats } from "@/backend/services/feedback.service";
 
 const SENTIMENT_COLORS = {
-  positive: "bg-emerald-500",
-  neutral: "bg-zinc-400",
-  negative: "bg-red-500",
+  positive: "bg-[var(--accent-blue)]",
+  neutral: "bg-ink-faint",
+  negative: "bg-[rgba(239,68,68,0.08)]0",
 } as const;
 
 export function FeedbackStatsPanel() {
@@ -48,7 +48,7 @@ export function FeedbackStatsPanel() {
 
   if (error) {
     return (
-      <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700 dark:border-red-900/40 dark:bg-red-950/40 dark:text-red-200">
+      <div className="rounded-xl border border-[rgba(239,68,68,0.28)] bg-[rgba(239,68,68,0.08)] p-4 text-sm text-danger dark:border-[rgba(239,68,68,0.28)] dark:bg-red-950/40 dark:text-danger">
         {error}
       </div>
     );
@@ -65,7 +65,7 @@ export function FeedbackStatsPanel() {
         />
         <StatCard
           label="Average rating"
-          value={stats ? `${stats.averageRating.toFixed(1)} / 5` : loading ? "…" : "—"}
+          value={stats ? `${stats.averageRating.toFixed(1)} / 5` : loading ? "…" : "-"}
           sub={stats ? renderStars(stats.averageRating) : ""}
         />
         <StatCard
@@ -94,8 +94,8 @@ export function FeedbackStatsPanel() {
 
       {/* Charts row: rating distribution + sentiment + categories */}
       <div className="grid gap-3 lg:grid-cols-3">
-        <div className="rounded-2xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900">
-          <div className="mb-3 text-xs font-semibold uppercase tracking-wide text-zinc-700 dark:text-zinc-300">
+        <div className="rounded-2xl border border-hairline bg-surface-1 p-4 dark:border-hairline dark:bg-surface-1">
+          <div className="mb-3 text-xs font-semibold uppercase tracking-wide text-ink-muted dark:text-ink-muted">
             Rating distribution
           </div>
           {loading || !stats ? (
@@ -109,8 +109,8 @@ export function FeedbackStatsPanel() {
           )}
         </div>
 
-        <div className="rounded-2xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900">
-          <div className="mb-3 text-xs font-semibold uppercase tracking-wide text-zinc-700 dark:text-zinc-300">
+        <div className="rounded-2xl border border-hairline bg-surface-1 p-4 dark:border-hairline dark:bg-surface-1">
+          <div className="mb-3 text-xs font-semibold uppercase tracking-wide text-ink-muted dark:text-ink-muted">
             Sentiment
           </div>
           {loading || !stats ? (
@@ -120,8 +120,8 @@ export function FeedbackStatsPanel() {
           )}
         </div>
 
-        <div className="rounded-2xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900">
-          <div className="mb-3 text-xs font-semibold uppercase tracking-wide text-zinc-700 dark:text-zinc-300">
+        <div className="rounded-2xl border border-hairline bg-surface-1 p-4 dark:border-hairline dark:bg-surface-1">
+          <div className="mb-3 text-xs font-semibold uppercase tracking-wide text-ink-muted dark:text-ink-muted">
             Top topics
           </div>
           {loading || !stats ? (
@@ -137,17 +137,17 @@ export function FeedbackStatsPanel() {
       </div>
 
       {/* 30-day trend */}
-      <div className="rounded-2xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900">
+      <div className="rounded-2xl border border-hairline bg-surface-1 p-4 dark:border-hairline dark:bg-surface-1">
         <div className="mb-3 flex items-center justify-between">
-          <div className="text-xs font-semibold uppercase tracking-wide text-zinc-700 dark:text-zinc-300">
+          <div className="text-xs font-semibold uppercase tracking-wide text-ink-muted dark:text-ink-muted">
             Last 30 days
           </div>
-          <div className="flex items-center gap-3 text-[11px] text-zinc-600 dark:text-zinc-400">
+          <div className="flex items-center gap-3 text-[11px] text-ink-muted dark:text-ink-faint">
             <span className="inline-flex items-center gap-1.5">
-              <span className="h-2 w-3 rounded-full bg-emerald-500" /> Avg rating
+              <span className="h-2 w-3 rounded-full bg-[var(--accent-blue)]" /> Avg rating
             </span>
             <span className="inline-flex items-center gap-1.5">
-              <span className="h-2 w-3 rounded-full bg-zinc-400" /> Responses
+              <span className="h-2 w-3 rounded-full bg-ink-faint" /> Responses
             </span>
           </div>
         </div>
@@ -171,15 +171,15 @@ function StatCard({
   sub: string;
 }) {
   return (
-    <div className="rounded-2xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900">
-      <div className="text-[11px] uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+    <div className="rounded-2xl border border-hairline bg-surface-1 p-4 dark:border-hairline dark:bg-surface-1">
+      <div className="text-[11px] uppercase tracking-wide text-ink-faint dark:text-ink-faint">
         {label}
       </div>
-      <div className="mt-1 text-xl font-semibold tracking-tight text-zinc-950 dark:text-zinc-100">
+      <div className="mt-1 text-xl font-semibold tracking-tight text-ink dark:text-ink">
         {value}
       </div>
       {sub ? (
-        <div className="mt-0.5 truncate text-[11px] text-zinc-500 dark:text-zinc-400">
+        <div className="mt-0.5 truncate text-[11px] text-ink-faint dark:text-ink-faint">
           {sub}
         </div>
       ) : null}
@@ -202,23 +202,23 @@ function DistributionChart({
         const pct = row.pct;
         const barColor =
           star >= 4
-            ? "bg-emerald-500"
+            ? "bg-[var(--accent-blue)]"
             : star === 3
-              ? "bg-zinc-400"
-              : "bg-red-500";
+              ? "bg-ink-faint"
+              : "bg-[rgba(239,68,68,0.08)]0";
         return (
           <li key={star} className="flex items-center gap-3">
-            <span className="w-12 shrink-0 text-xs font-medium text-zinc-700 dark:text-zinc-300">
+            <span className="w-12 shrink-0 text-xs font-medium text-ink-muted dark:text-ink-muted">
               {"★".repeat(star)}
               {"☆".repeat(5 - star)}
             </span>
-            <div className="relative h-2 flex-1 overflow-hidden rounded-full bg-zinc-100 dark:bg-zinc-800">
+            <div className="relative h-2 flex-1 overflow-hidden rounded-full bg-surface-2 dark:bg-surface-2">
               <div
                 className={`absolute inset-y-0 left-0 ${barColor}`}
                 style={{ width: `${pct}%` }}
               />
             </div>
-            <span className="w-16 shrink-0 text-right text-xs tabular-nums text-zinc-600 dark:text-zinc-400">
+            <span className="w-16 shrink-0 text-right text-xs tabular-nums text-ink-muted dark:text-ink-faint">
               {row.count.toLocaleString()} ({pct}%)
             </span>
           </li>
@@ -278,7 +278,7 @@ function SentimentDonut({
             strokeDashoffset={s.dashOffset}
             className={
               s.key === "positive"
-                ? "stroke-emerald-500"
+                ? "stroke-[var(--accent-blue)]"
                 : s.key === "neutral"
                   ? "stroke-zinc-400"
                   : "stroke-red-500"
@@ -309,12 +309,12 @@ function SentimentRow({
   const pct = total > 0 ? Math.round((count / total) * 100) : 0;
   return (
     <li className="flex items-center justify-between gap-2">
-      <span className="inline-flex items-center gap-1.5 text-zinc-700 dark:text-zinc-300">
+      <span className="inline-flex items-center gap-1.5 text-ink-muted dark:text-ink-muted">
         <span className={`h-2 w-2 rounded-full ${colorClass}`} />
         {label}
       </span>
-      <span className="text-zinc-500 dark:text-zinc-400 tabular-nums">
-        {count} <span className="text-zinc-400">·</span> {pct}%
+      <span className="text-ink-faint dark:text-ink-faint tabular-nums">
+        {count} <span className="text-ink-faint">·</span> {pct}%
       </span>
     </li>
   );
@@ -337,14 +337,14 @@ function CategoryChart({
         return (
           <li key={b.category} className="space-y-1">
             <div className="flex items-center justify-between text-xs">
-              <span className="truncate text-zinc-700 dark:text-zinc-300">{label}</span>
-              <span className="text-zinc-500 dark:text-zinc-400 tabular-nums">
+              <span className="truncate text-ink-muted dark:text-ink-muted">{label}</span>
+              <span className="text-ink-faint dark:text-ink-faint tabular-nums">
                 {b.count.toLocaleString()}
               </span>
             </div>
-            <div className="h-1.5 overflow-hidden rounded-full bg-zinc-100 dark:bg-zinc-800">
+            <div className="h-1.5 overflow-hidden rounded-full bg-surface-2 dark:bg-surface-2">
               <div
-                className="h-full bg-emerald-500"
+                className="h-full bg-[var(--accent-blue)]"
                 style={{ width: `${pct}%` }}
               />
             </div>
@@ -410,7 +410,7 @@ function DailyTrendChart({
         <polyline
           fill="none"
           strokeWidth={2}
-          className="stroke-emerald-500"
+          className="stroke-[var(--accent-blue)]"
           points={linePoints}
         />
         {daily.map((b, i) => {
@@ -427,12 +427,12 @@ function DailyTrendChart({
               cx={x.toFixed(1)}
               cy={y.toFixed(1)}
               r={2.4}
-              className="fill-emerald-500"
+              className="fill-[var(--accent-blue)]"
             />
           );
         })}
       </svg>
-      <div className="mt-2 flex items-center justify-between text-[11px] text-zinc-500 dark:text-zinc-400">
+      <div className="mt-2 flex items-center justify-between text-[11px] text-ink-faint dark:text-ink-faint">
         <span>{daily[0]?.date ?? ""}</span>
         <span>{totalResponses.toLocaleString()} responses · 30 days</span>
         <span>{daily[daily.length - 1]?.date ?? ""}</span>

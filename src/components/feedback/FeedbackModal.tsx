@@ -129,39 +129,39 @@ export function FeedbackModal({
     >
       <div className="absolute inset-0 bg-black/40" />
 
-      <div className="relative w-full max-w-md overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-xl dark:border-zinc-800 dark:bg-zinc-900">
+      <div className="relative w-full max-w-md overflow-hidden rounded-2xl border border-hairline bg-surface-1 shadow-xl dark:border-hairline dark:bg-surface-1">
         <button
           type="button"
           aria-label="Close"
           onClick={onClose}
           disabled={submitting}
-          className="absolute right-3 top-3 inline-flex h-8 w-8 items-center justify-center rounded-full text-zinc-500 transition hover:bg-zinc-100 hover:text-zinc-900 disabled:opacity-50 dark:hover:bg-zinc-800 dark:hover:text-zinc-100"
+          className="absolute right-3 top-3 inline-flex h-8 w-8 items-center justify-center rounded-full text-ink-faint transition hover:bg-surface-2 hover:text-ink disabled:opacity-50 dark:hover:bg-surface-2 dark:hover:text-ink"
         >
           <X className="h-4 w-4" />
         </button>
 
         {stage.kind === "success" ? (
           <div className="px-6 py-10 text-center">
-            <div className="mx-auto mb-3 grid h-12 w-12 place-items-center rounded-full bg-emerald-100 text-emerald-600 dark:bg-emerald-950/40 dark:text-emerald-300">
+            <div className="mx-auto mb-3 grid h-12 w-12 place-items-center rounded-full bg-[var(--accent-blue-soft)] text-[var(--accent-blue)] dark:bg-[var(--accent-blue-soft)] dark:text-[var(--accent-blue)]">
               <Check className="h-5 w-5" />
             </div>
-            <div className="text-sm font-semibold text-zinc-950 dark:text-zinc-100">
+            <div className="text-sm font-semibold text-ink dark:text-ink">
               Thank you!
             </div>
-            <div className="mt-1 text-sm text-zinc-600 dark:text-zinc-300">
+            <div className="mt-1 text-sm text-ink-muted dark:text-ink-muted">
               Your feedback is on its way to the team.
             </div>
           </div>
         ) : (
           <div className="px-6 py-5">
-            <div className="text-sm font-semibold text-zinc-950 dark:text-zinc-100">
+            <div className="text-sm font-semibold text-ink dark:text-ink">
               How&apos;s FYB Studio working for you?
             </div>
-            <div className="mt-1 text-xs text-zinc-600 dark:text-zinc-300">
+            <div className="mt-1 text-xs text-ink-muted dark:text-ink-muted">
               Honest feedback shapes the next release. Takes 30 seconds.
             </div>
 
-            {/* Rating picker — emoji row */}
+            {/* Rating picker - emoji row */}
             <div className="mt-5">
               <div
                 role="radiogroup"
@@ -179,10 +179,10 @@ export function FeedbackModal({
                       aria-label={r.label}
                       onClick={() => setRating(r.value)}
                       className={
-                        "group flex flex-col items-center gap-1 rounded-xl border px-1 py-2 text-2xl transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/40 " +
+                        "group flex flex-col items-center gap-1 rounded-xl border px-1 py-2 text-2xl transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent-blue-ring)] " +
                         (selected
-                          ? "border-emerald-500 bg-emerald-50 dark:border-emerald-500 dark:bg-emerald-950/40"
-                          : "border-zinc-200 bg-white hover:border-zinc-300 hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-950/30 dark:hover:bg-zinc-800")
+                          ? "border-[var(--accent-blue)] bg-[var(--accent-blue-soft)] dark:border-[var(--accent-blue)] dark:bg-[var(--accent-blue-soft)]"
+                          : "border-hairline bg-surface-1 hover:border-hairline hover:bg-canvas dark:border-hairline dark:bg-surface-1 dark:hover:bg-surface-2")
                       }
                     >
                       <span aria-hidden>{r.emoji}</span>
@@ -190,8 +190,8 @@ export function FeedbackModal({
                         className={
                           "text-[10px] font-medium tracking-wide " +
                           (selected
-                            ? "text-emerald-700 dark:text-emerald-300"
-                            : "text-zinc-500 dark:text-zinc-400")
+                            ? "text-[var(--accent-blue)] dark:text-[var(--accent-blue)]"
+                            : "text-ink-faint dark:text-ink-faint")
                         }
                       >
                         {r.label}
@@ -204,8 +204,8 @@ export function FeedbackModal({
 
             {/* Category chips */}
             <fieldset className="mt-5">
-              <legend className="text-xs font-medium text-zinc-700 dark:text-zinc-300">
-                What is this about? <span className="text-zinc-400">(optional)</span>
+              <legend className="text-xs font-medium text-ink-muted dark:text-ink-muted">
+                What is this about? <span className="text-ink-faint">(optional)</span>
               </legend>
               <div className="mt-2 flex flex-wrap gap-1.5">
                 {FEEDBACK_CATEGORY_KEYS.map((key) => {
@@ -216,10 +216,10 @@ export function FeedbackModal({
                       type="button"
                       onClick={() => toggleCategory(key)}
                       className={
-                        "inline-flex items-center rounded-full border px-2.5 py-1 text-xs font-medium transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/40 " +
+                        "inline-flex items-center rounded-full border px-2.5 py-1 text-xs font-medium transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent-blue-ring)] " +
                         (selected
-                          ? "border-emerald-500 bg-emerald-500 text-white dark:bg-emerald-600"
-                          : "border-zinc-200 bg-white text-zinc-700 hover:border-zinc-300 hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-950/30 dark:text-zinc-200 dark:hover:bg-zinc-800")
+                          ? "border-[var(--accent-blue)] bg-[var(--accent-blue)] text-white dark:bg-[var(--accent-blue)]"
+                          : "border-hairline bg-surface-1 text-ink-muted hover:border-hairline hover:bg-canvas dark:border-hairline dark:bg-surface-1 dark:text-ink dark:hover:bg-surface-2")
                       }
                       aria-pressed={selected}
                     >
@@ -232,23 +232,23 @@ export function FeedbackModal({
 
             {/* Free text */}
             <label className="mt-5 block">
-              <div className="text-xs font-medium text-zinc-700 dark:text-zinc-300">
-                Anything else? <span className="text-zinc-400">(optional)</span>
+              <div className="text-xs font-medium text-ink-muted dark:text-ink-muted">
+                Anything else? <span className="text-ink-faint">(optional)</span>
               </div>
               <textarea
                 value={message}
                 onChange={(e) => setMessage(e.target.value.slice(0, 4000))}
                 rows={4}
                 placeholder="Tell us what's on your mind…"
-                className="mt-1.5 w-full resize-none rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-900 outline-none transition focus-visible:ring-2 focus-visible:ring-emerald-500/40 dark:border-zinc-800 dark:bg-zinc-950/30 dark:text-zinc-100"
+                className="mt-1.5 w-full resize-none rounded-xl border border-hairline bg-surface-1 px-3 py-2 text-sm text-ink outline-none transition focus-visible:ring-2 focus-visible:ring-[var(--accent-blue-ring)] dark:border-hairline dark:bg-surface-1 dark:text-ink"
               />
-              <div className="mt-1 text-right text-[10.5px] text-zinc-400">
+              <div className="mt-1 text-right text-[10.5px] text-ink-faint">
                 {message.length}/4000
               </div>
             </label>
 
             {stage.kind === "error" ? (
-              <div className="mt-3 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700 dark:border-red-900/40 dark:bg-red-950/30 dark:text-red-200">
+              <div className="mt-3 rounded-xl border border-[rgba(239,68,68,0.28)] bg-[rgba(239,68,68,0.08)] px-3 py-2 text-xs text-danger dark:border-[rgba(239,68,68,0.28)] dark:bg-red-950/30 dark:text-danger">
                 {stage.message}
               </div>
             ) : null}
@@ -258,7 +258,7 @@ export function FeedbackModal({
                 type="button"
                 onClick={onClose}
                 disabled={submitting}
-                className="inline-flex h-10 items-center justify-center rounded-xl border border-zinc-200 bg-white px-4 text-sm font-medium text-zinc-900 transition hover:bg-zinc-50 disabled:opacity-50 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-100 dark:hover:bg-zinc-800"
+                className="inline-flex h-10 items-center justify-center rounded-xl border border-hairline bg-surface-1 px-4 text-sm font-medium text-ink transition hover:bg-canvas disabled:opacity-50 dark:border-hairline dark:bg-surface-1 dark:text-ink dark:hover:bg-surface-2"
               >
                 Maybe later
               </button>
@@ -266,7 +266,7 @@ export function FeedbackModal({
                 type="button"
                 onClick={handleSubmit}
                 disabled={submitting || !rating}
-                className="inline-flex h-10 items-center justify-center rounded-xl bg-zinc-900 px-4 text-sm font-medium text-white transition hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-60 dark:bg-emerald-600 dark:hover:bg-emerald-500"
+                className="inline-flex h-10 items-center justify-center rounded-xl bg-surface-1 px-4 text-sm font-medium text-white transition hover:bg-surface-2 disabled:cursor-not-allowed disabled:opacity-60 dark:bg-[var(--accent-blue)] dark:hover:bg-[var(--accent-blue)]"
               >
                 {submitting ? "Sending…" : "Send feedback"}
               </button>

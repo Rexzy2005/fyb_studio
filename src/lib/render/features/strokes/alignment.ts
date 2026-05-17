@@ -9,7 +9,7 @@
  *   CENTER  → stroke at the literal weight (default canvas behaviour).
  *
  * The caller is responsible for setting strokeStyle, lineWidth, lineCap, lineJoin,
- * miterLimit and any dash pattern BEFORE calling this — we adjust lineWidth here
+ * miterLimit and any dash pattern BEFORE calling this - we adjust lineWidth here
  * for INSIDE/OUTSIDE.
  */
 export function applyAlignedStroke(
@@ -30,7 +30,7 @@ export function applyAlignedStroke(
     ctx.lineWidth = weight * 2;
     ctx.stroke(path);
   } else {
-    // OUTSIDE — clip to the inverse via evenodd.
+    // OUTSIDE - clip to the inverse via evenodd.
     const inverse = new Path2D();
     const margin = Math.max(weight * 4, 1);
     inverse.rect(

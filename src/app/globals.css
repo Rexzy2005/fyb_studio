@@ -1,105 +1,325 @@
 @import "tailwindcss";
 
-/*
-  Tailwind v4 defaults `dark:` to prefers-color-scheme media.
-  We want the app-wide toggle (html.dark) to control ALL dark styles.
-*/
-@custom-variant dark (&:where(.dark, .dark *));
+/* ============================================================
+ * FYB Studio · Framer design system
+ * Single dark canvas. Tokens mirror DESIGN.md.
+ * ============================================================ */
 
 :root {
-  --background: #ffffff;
-  --foreground: #0a0a0a;
-  --surface: #ffffff;
-  --surface-muted: #fafafa;
-  --border: #e4e4e7;
-  --muted: #71717a;
-  --placeholder: #a1a1aa;
-  --ring: rgba(59, 130, 246, 0.5);
+  /* Color tokens — see DESIGN.md */
+  --canvas: #090909;
+  --surface-1: #141414;
+  --surface-2: #1c1c1c;
+  --surface-3: #242424;
+  --hairline: #262626;
+  --hairline-soft: #1a1a1a;
 
-  /* UI font stack (platform system fonts).
-     iOS/macOS: San Francisco via system-ui / -apple-system
-     Android: Roboto via system-ui
-     Windows 11: Segoe UI Variable (preferred) */
-  --font-ui:
-    "Segoe UI Variable", system-ui, -apple-system, BlinkMacSystemFont,
-    "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", "Liberation Sans",
-    sans-serif;
+  --ink: #ffffff;
+  --ink-muted: #999999;
+  --ink-faint: #666666;
+
+  --accent-blue: #0099ff;
+  --accent-blue-soft: rgba(0, 153, 255, 0.14);
+  --accent-blue-ring: rgba(0, 153, 255, 0.45);
+
+  --gradient-magenta: #d44df0;
+  --gradient-violet: #6a4cf5;
+  --gradient-orange: #ff7a3d;
+  --gradient-coral: #ff5577;
+
+  --semantic-success: #22c55e;
+  --semantic-warning: #f59e0b;
+  --semantic-danger: #ef4444;
+
+  /* Radii */
+  --radius-xs: 4px;
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 15px;
+  --radius-xl: 20px;
+  --radius-xxl: 30px;
+  --radius-pill: 100px;
+  --radius-full: 9999px;
+
+  /* Shadow / glow */
+  --glow-accent: 0 0 0 1px rgba(0, 153, 255, 0.25), 0 8px 28px rgba(0, 153, 255, 0.18);
+  --shadow-card: 0 1px 0 rgba(255, 255, 255, 0.04) inset, 0 24px 60px rgba(0, 0, 0, 0.5);
+
+  /* Legacy compat tokens — kept so any unrefactored components don't crash. */
+  --background: #090909;
+  --foreground: #ffffff;
+  --surface: #141414;
+  --surface-muted: #1c1c1c;
+  --border: #262626;
+  --muted: #999999;
+  --placeholder: #666666;
+  --ring: rgba(0, 153, 255, 0.45);
+
+  color-scheme: dark;
 }
 
+/* Tailwind v4 theme — exposes tokens as utility classes (bg-canvas, text-ink, etc.) */
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-ui);
-  --font-mono: var(--font-geist-mono);
+  --color-canvas: var(--canvas);
+  --color-surface-1: var(--surface-1);
+  --color-surface-2: var(--surface-2);
+  --color-surface-3: var(--surface-3);
+  --color-hairline: var(--hairline);
+  --color-hairline-soft: var(--hairline-soft);
+  --color-ink: var(--ink);
+  --color-ink-muted: var(--ink-muted);
+  --color-ink-faint: var(--ink-faint);
+  --color-accent-blue: var(--accent-blue);
+  --color-gradient-magenta: var(--gradient-magenta);
+  --color-gradient-violet: var(--gradient-violet);
+  --color-gradient-orange: var(--gradient-orange);
+  --color-gradient-coral: var(--gradient-coral);
+  --color-success: var(--semantic-success);
+  --color-warning: var(--semantic-warning);
+  --color-danger: var(--semantic-danger);
+  --color-background: var(--canvas);
+  --color-foreground: var(--ink);
+
+  --radius-xs: var(--radius-xs);
+  --radius-sm: var(--radius-sm);
+  --radius-md: var(--radius-md);
+  --radius-lg: var(--radius-lg);
+  --radius-xl: var(--radius-xl);
+  --radius-xxl: var(--radius-xxl);
+  --radius-pill: var(--radius-pill);
+
+  --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+  --font-display: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-geist-mono), ui-monospace, "SF Mono", Menlo, monospace;
 }
 
-html.dark {
-  --background: #09090b;
-  --foreground: #f4f4f5;
-  --surface: #0f0f12;
-  --surface-muted: #141418;
-  --border: #27272a;
-  --muted: #a1a1aa;
-  --placeholder: #71717a;
-  --ring: rgba(59, 130, 246, 0.55);
+/* Single font family across the whole UI: Geist Sans.
+ * Applied to html so every descendant inherits — no element can fall back to
+ * a system font. The rendering engine sets its own fontFamily on text nodes
+ * inside the design canvas, so this does NOT affect rendered designs. */
+html {
+  font-family: var(--font-geist-sans);
 }
-
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: var(--font-ui);
+  background: var(--canvas);
+  color: var(--ink);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
+/* Form controls inherit the page font (Tailwind preflight covers most of this
+ * but we set it explicitly for safety). */
+button, input, textarea, select {
+  font-family: inherit;
+}
+
+::selection {
+  background: var(--accent-blue);
+  color: var(--canvas);
+}
+
+/* ============================================================
+ * Helper classes — shared layout primitives.
+ * ============================================================ */
+
+.fyb-surface-1 {
+  background: var(--surface-1);
+  border: 1px solid var(--hairline);
+}
+.fyb-surface-2 {
+  background: var(--surface-2);
+  border: 1px solid var(--hairline);
+}
+.fyb-hairline {
+  border-color: var(--hairline);
+}
+.fyb-hairline-soft {
+  border-color: var(--hairline-soft);
+}
+
+/* Pill buttons — primary (white on dark) and secondary (charcoal). */
+.fyb-pill-primary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 0 18px;
+  height: 38px;
+  border-radius: var(--radius-pill);
+  background: var(--ink);
+  color: #000;
+  font-weight: 500;
+  font-size: 14px;
+  letter-spacing: -0.14px;
+  border: 1px solid var(--ink);
+  transition: transform 140ms ease, opacity 140ms ease, background 140ms ease;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.fyb-pill-primary:hover {
+  background: #f0f0f0;
+}
+.fyb-pill-primary:active {
+  transform: scale(0.985);
+}
+.fyb-pill-primary:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.fyb-pill-secondary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 0 16px;
+  height: 38px;
+  border-radius: var(--radius-pill);
+  background: var(--surface-2);
+  color: var(--ink);
+  font-weight: 500;
+  font-size: 14px;
+  letter-spacing: -0.14px;
+  border: 1px solid var(--hairline);
+  transition: background 140ms ease, transform 140ms ease;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.fyb-pill-secondary:hover {
+  background: var(--surface-3);
+}
+.fyb-pill-secondary:active {
+  transform: scale(0.985);
+}
+.fyb-pill-secondary:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Input / textarea / select baseline */
+.fyb-input {
+  width: 100%;
+  display: block;
+  background: var(--surface-1);
+  color: var(--ink);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-md);
+  padding: 10px 14px;
+  font-size: 15px;
+  letter-spacing: -0.15px;
+  line-height: 1.3;
+  transition: border-color 140ms ease, box-shadow 140ms ease;
+}
+.fyb-input::placeholder {
+  color: var(--ink-faint);
+}
+.fyb-input:focus {
+  outline: none;
+  border-color: var(--accent-blue);
+  box-shadow: 0 0 0 3px var(--accent-blue-soft);
+}
+.fyb-input:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Modal panel base — paired with .fyb-modal-overlay */
+.fyb-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.7);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  z-index: 70;
+}
+.fyb-modal-shell {
+  background: var(--surface-1);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-card);
+  color: var(--ink);
+}
+
+/* Card primitive */
+.fyb-card {
+  background: var(--surface-1);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-lg);
+}
+.fyb-card-2 {
+  background: var(--surface-2);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-lg);
+}
+
+/* Eyebrow — small accent-blue dot + caption */
+.fyb-eyebrow-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  background: var(--accent-blue);
+  display: inline-block;
+}
+
+/* Form controls — global baseline (inputs not using .fyb-input still readable) */
+input,
+textarea,
+select {
+  color: var(--ink);
+  background: var(--surface-1);
+  border-color: var(--hairline);
+}
+input::placeholder,
+textarea::placeholder {
+  color: var(--ink-faint);
+  opacity: 1;
+}
+input:focus,
+textarea:focus,
+select:focus {
+  outline: none;
+  border-color: var(--accent-blue);
+  box-shadow: 0 0 0 3px var(--accent-blue-soft);
+}
+
+a:focus-visible,
+button:focus-visible,
+[role="button"]:focus-visible {
+  outline: 2px solid var(--accent-blue);
+  outline-offset: 2px;
+}
+
+html {
+  color-scheme: dark;
+  scroll-behavior: smooth;
+}
+
+/* ============================================================
+ * Animations — modal, dots, skeleton shimmer, progress.
+ * Honour prefers-reduced-motion below.
+ * ============================================================ */
 
 @media (prefers-reduced-motion: no-preference) {
   @keyframes fyb-modal-overlay-in {
-    from {
-      opacity: 0;
-    }
-    to {
-      opacity: 1;
-    }
+    from { opacity: 0; }
+    to { opacity: 1; }
   }
   @keyframes fyb-modal-overlay-out {
-    from {
-      opacity: 1;
-    }
-    to {
-      opacity: 0;
-    }
+    from { opacity: 1; }
+    to { opacity: 0; }
   }
   @keyframes fyb-modal-card-in {
-    from {
-      opacity: 0;
-      transform: translateY(10px) scale(0.985);
-    }
-    to {
-      opacity: 1;
-      transform: translateY(0) scale(1);
-    }
+    from { opacity: 0; transform: translateY(10px) scale(0.985); }
+    to { opacity: 1; transform: translateY(0) scale(1); }
   }
   @keyframes fyb-modal-card-out {
-    from {
-      opacity: 1;
-      transform: translateY(0) scale(1);
-    }
-    to {
-      opacity: 0;
-      transform: translateY(8px) scale(0.99);
-    }
+    from { opacity: 1; transform: translateY(0) scale(1); }
+    to { opacity: 0; transform: translateY(8px) scale(0.99); }
   }
 
-  .fyb-modal-overlay-in {
-    animation: fyb-modal-overlay-in 160ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
-  }
-  .fyb-modal-overlay-out {
-    animation: fyb-modal-overlay-out 160ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
-  }
-  .fyb-modal-card-in {
-    animation: fyb-modal-card-in 180ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
-  }
-  .fyb-modal-card-out {
-    animation: fyb-modal-card-out 160ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
-  }
+  .fyb-modal-overlay-in { animation: fyb-modal-overlay-in 160ms cubic-bezier(0.2, 0.8, 0.2, 1) both; }
+  .fyb-modal-overlay-out { animation: fyb-modal-overlay-out 160ms cubic-bezier(0.2, 0.8, 0.2, 1) both; }
+  .fyb-modal-card-in { animation: fyb-modal-card-in 200ms cubic-bezier(0.2, 0.8, 0.2, 1) both; }
+  .fyb-modal-card-out { animation: fyb-modal-card-out 160ms cubic-bezier(0.2, 0.8, 0.2, 1) both; }
 
   .fyb-dots {
     display: inline-flex;
@@ -114,91 +334,38 @@ body {
     opacity: 0.35;
     animation: fyb-dot 900ms ease-in-out infinite;
   }
-  .fyb-dots > span:nth-child(2) {
-    animation-delay: 120ms;
-  }
-  .fyb-dots > span:nth-child(3) {
-    animation-delay: 240ms;
-  }
+  .fyb-dots > span:nth-child(2) { animation-delay: 120ms; }
+  .fyb-dots > span:nth-child(3) { animation-delay: 240ms; }
 
   @keyframes fyb-dot {
-    0%,
-    100% {
-      transform: translateY(0);
-      opacity: 0.35;
-    }
-    50% {
-      transform: translateY(-2px);
-      opacity: 0.85;
-    }
+    0%, 100% { transform: translateY(0); opacity: 0.35; }
+    50%      { transform: translateY(-2px); opacity: 0.85; }
   }
 
-  /* ============================================================
-   * Skeleton loading effects
-   *
-   * Two utilities, both with the same shimmer language so the page reads as
-   * one coherent loading state:
-   *
-   *   .fyb-skeleton        — drop-in for any skeletal element (bar, circle,
-   *                          panel). Provides BOTH the animated base
-   *                          background AND the moving highlight band.
-   *                          Replace `animate-pulse + bg-zinc-200` with this.
-   *
-   *   .fyb-skeleton-shine  — overlay-only shimmer for elements that already
-   *                          have their own background (image placeholders,
-   *                          card cover regions). Mounted as an absolutely-
-   *                          positioned child element.
-   *
-   * Both honour `prefers-reduced-motion` further down in this file.
-   * ============================================================ */
-
-  /* Base background sweep — a 3-stop gradient slid across the element so the
-   * surface itself appears to breathe, not just an overlay highlight. */
+  /* Skeleton shimmer — surface-2 base, hairline glint. */
   @keyframes fyb-skeleton-base {
-    0% {
-      background-position: 200% 0;
-    }
-    100% {
-      background-position: -200% 0;
-    }
+    0%   { background-position: 200% 0; }
+    100% { background-position: -200% 0; }
   }
-
-  /* Reflective highlight band — narrower, brighter, slid across faster than
-   * the base. The diagonal angle reads as a real glint of light. */
   @keyframes fyb-skeleton-glint {
-    0% {
-      background-position: 200% 0;
-    }
-    100% {
-      background-position: -100% 0;
-    }
+    0%   { background-position: 200% 0; }
+    100% { background-position: -100% 0; }
   }
 
   .fyb-skeleton {
     position: relative;
     overflow: hidden;
-    background-color: rgb(228, 228, 231); /* zinc-200 — visible base under the gradient */
+    background-color: var(--surface-2);
     background-image: linear-gradient(
       100deg,
-      rgba(228, 228, 231, 0) 30%,
-      rgba(244, 244, 245, 0.95) 50%,
-      rgba(228, 228, 231, 0) 70%
+      rgba(28, 28, 28, 0) 30%,
+      rgba(60, 60, 60, 0.85) 50%,
+      rgba(28, 28, 28, 0) 70%
     );
     background-size: 220% 100%;
     background-repeat: no-repeat;
     animation: fyb-skeleton-base 1.6s cubic-bezier(0.4, 0, 0.2, 1) infinite;
   }
-
-  html.dark .fyb-skeleton {
-    background-color: rgb(39, 39, 42); /* zinc-800 */
-    background-image: linear-gradient(
-      100deg,
-      rgba(39, 39, 42, 0) 30%,
-      rgba(82, 82, 91, 0.85) 50%,
-      rgba(39, 39, 42, 0) 70%
-    );
-  }
-
   .fyb-skeleton::after {
     content: "";
     position: absolute;
@@ -206,7 +373,7 @@ body {
     background-image: linear-gradient(
       105deg,
       transparent 35%,
-      rgba(255, 255, 255, 0.7) 50%,
+      rgba(255, 255, 255, 0.08) 50%,
       transparent 65%
     );
     background-size: 250% 100%;
@@ -215,29 +382,16 @@ body {
     animation: fyb-skeleton-glint 1.6s cubic-bezier(0.4, 0, 0.2, 1) infinite;
     animation-delay: 200ms;
     pointer-events: none;
-    mix-blend-mode: overlay;
-  }
-
-  html.dark .fyb-skeleton::after {
-    background-image: linear-gradient(
-      105deg,
-      transparent 35%,
-      rgba(255, 255, 255, 0.16) 50%,
-      transparent 65%
-    );
     mix-blend-mode: screen;
   }
 
-  /* Overlay variant — for elements that already have their own background
-   * (e.g. an <img>'s placeholder slot). Mount as `<div className="fyb-skeleton-shine
-   * absolute inset-0" />`. Same visual language as `.fyb-skeleton`. */
   .fyb-skeleton-shine {
     position: relative;
     overflow: hidden;
     background-image: linear-gradient(
       100deg,
       transparent 30%,
-      rgba(244, 244, 245, 0.7) 50%,
+      rgba(255, 255, 255, 0.18) 50%,
       transparent 70%
     );
     background-size: 220% 100%;
@@ -246,56 +400,17 @@ body {
     animation: fyb-skeleton-base 1.6s cubic-bezier(0.4, 0, 0.2, 1) infinite;
   }
 
-  html.dark .fyb-skeleton-shine {
-    background-image: linear-gradient(
-      100deg,
-      transparent 30%,
-      rgba(244, 244, 245, 0.18) 50%,
-      transparent 70%
-    );
+  /* Indeterminate progress bar */
+  @keyframes fyb-progress-indet {
+    0%   { transform: translateX(-100%); }
+    100% { transform: translateX(250%); }
   }
 
-  .fyb-skeleton-shine::before {
-    content: "";
-    position: absolute;
-    inset: -30%;
-    background:
-      radial-gradient(circle at 30% 30%, rgba(16, 185, 129, 0.16), transparent 55%),
-      radial-gradient(circle at 70% 70%, rgba(168, 85, 247, 0.14), transparent 55%);
-    filter: blur(20px);
-    opacity: 0.55;
-    pointer-events: none;
-    animation: fyb-skeleton-base 3.2s cubic-bezier(0.4, 0, 0.2, 1) infinite;
-    background-size: 220% 220%;
-  }
-
-  .fyb-skeleton-shine::after {
-    content: "";
-    position: absolute;
-    inset: 0;
-    background-image: linear-gradient(
-      105deg,
-      transparent 35%,
-      rgba(255, 255, 255, 0.85) 50%,
-      transparent 65%
-    );
-    background-size: 250% 100%;
-    background-position: 200% 0;
-    background-repeat: no-repeat;
-    animation: fyb-skeleton-glint 1.6s cubic-bezier(0.4, 0, 0.2, 1) infinite;
-    animation-delay: 200ms;
-    pointer-events: none;
-    mix-blend-mode: overlay;
-  }
-
-  html.dark .fyb-skeleton-shine::after {
-    background-image: linear-gradient(
-      105deg,
-      transparent 35%,
-      rgba(255, 255, 255, 0.22) 50%,
-      transparent 65%
-    );
-    mix-blend-mode: screen;
+  /* Floating widget bob */
+  @keyframes fybFloat {
+    0% { transform: translateY(0px); }
+    50% { transform: translateY(-3px); }
+    100% { transform: translateY(0px); }
   }
 }
 
@@ -306,307 +421,751 @@ body {
   .fyb-modal-card-out,
   .fyb-skeleton,
   .fyb-skeleton::after,
-  .fyb-skeleton-shine,
-  .fyb-skeleton-shine::before,
-  .fyb-skeleton-shine::after {
+  .fyb-skeleton-shine {
     animation: none !important;
   }
-}
-
-/* Smooth theme transitions (only when user hasn't requested reduced motion). */
-@media (prefers-reduced-motion: no-preference) {
-  html.theme-transition,
-  html.theme-transition * {
-    transition-property: background-color, border-color, color, fill, stroke;
-    transition-duration: 180ms;
-    transition-timing-function: cubic-bezier(0.2, 0.8, 0.2, 1);
-  }
-}
-
-/* Form controls should stay readable in both themes. */
-input,
-textarea,
-select {
-  color: var(--foreground);
-  background: var(--surface);
-  border-color: var(--border);
-}
-
-input::placeholder,
-textarea::placeholder {
-  color: var(--placeholder);
-  opacity: 1;
-}
-
-input:focus,
-textarea:focus,
-select:focus {
-  outline: 2px solid transparent;
-  outline-offset: 2px;
-  box-shadow: 0 0 0 3px var(--ring);
-}
-
-/* Keyboard focus should be visible on links/buttons too. */
-a:focus-visible,
-button:focus-visible,
-[role="button"]:focus-visible {
-  outline: 2px solid var(--ring);
-  outline-offset: 2px;
-}
-
-/* Let built-in widgets (scrollbars, etc.) choose appropriate colors. */
-html {
-  color-scheme: light;
-}
-
-html.dark {
-  color-scheme: dark;
-}
-
-/* Landing-page hero/marketing keyframes. Used via Tailwind animate-[name_...] arbitrary values; motion-reduce: variants on the call sites disable them. */
-@keyframes fybBlink {
-  0%, 49% { opacity: 1; }
-  50%, 100% { opacity: 0; }
-}
-
-@keyframes fybPing {
-  0% { transform: scale(1); opacity: 0.55; }
-  70% { transform: scale(2.8); opacity: 0; }
-  100% { transform: scale(3.2); opacity: 0; }
-}
-
-@keyframes fybProgress {
-  0% { width: 12%; }
-  55% { width: 78%; }
-  100% { width: 92%; }
-}
-
-@keyframes fybFill {
-  0% { width: 14%; opacity: 0.7; }
-  70% { width: 82%; opacity: 1; }
-  100% { width: 82%; opacity: 1; }
-}
-
-@keyframes fybFloat {
-  0% { transform: translateY(0px); }
-  50% { transform: translateY(-3px); }
-  100% { transform: translateY(0px); }
-}
-
-@keyframes fybCursor {
-  0% { transform: translate(0px, 0px); opacity: 0; }
-  8% { opacity: 1; }
-  92% { opacity: 1; }
-  100% { transform: translate(var(--cx, 0px), var(--cy, 0px)); opacity: 0; }
-}
-
-@keyframes fybGlow {
-  0% { opacity: 0.35; }
-  50% { opacity: 0.8; }
-  100% { opacity: 0.35; }
-}
-
-@media (prefers-reduced-motion: reduce) {
   * { scroll-behavior: auto !important; }
 }
 
-/* ────────────────────────────────────────────────────────────
-   FYB · Cinema theme
-   Scoped via .fyb-cinema wrapper. Always dark — like a theatre.
-   Used by /  (landing) and /templates (gallery).
-   ──────────────────────────────────────────────────────────── */
-.fyb-cinema {
-  --night: #0a0908;
-  --night-2: #11100e;
-  --night-3: #1a1815;
-  --paper: #efe9dc;
-  --paper-soft: #b9b0a0;
-  --paper-faint: rgba(239, 233, 220, 0.55);
-  --accent: #ff5a3c;
-  --accent-soft: #ff8b76;
-  --gold: #d2a35c;
-  --rule: rgba(239, 233, 220, 0.12);
-  --rule-strong: rgba(239, 233, 220, 0.32);
-  background: var(--night);
-  color: var(--paper);
+/* ============================================================
+ * Toast container baseline
+ * ============================================================ */
+.fyb-toast-stack {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  z-index: 80;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  pointer-events: none;
 }
-.fyb-cinema ::selection {
-  background: var(--accent);
-  color: var(--night);
+.fyb-toast {
+  pointer-events: auto;
+  background: var(--surface-1);
+  border: 1px solid var(--hairline);
+  border-left: 3px solid var(--accent-blue);
+  border-radius: var(--radius-md);
+  padding: 12px 16px;
+  color: var(--ink);
+  font-size: 14px;
+  letter-spacing: -0.14px;
+  min-width: 260px;
+  max-width: 380px;
+  box-shadow: var(--shadow-card);
+}
+.fyb-toast[data-tone="success"] { border-left-color: var(--semantic-success); }
+.fyb-toast[data-tone="error"]   { border-left-color: var(--semantic-danger); }
+.fyb-toast[data-tone="warning"] { border-left-color: var(--semantic-warning); }
+
+/* ============================================================
+ * Monochrome landing page design system
+ * Pure black and white. Background: #050505.
+ * ============================================================ */
+
+:root {
+  --nv-bg: #050505;
+  --nv-ease: cubic-bezier(0.16, 1, 0.3, 1);
 }
 
-@keyframes fybRise {
-  0%   { opacity: 0; transform: translateY(14px); filter: blur(2px); }
-  100% { opacity: 1; transform: translateY(0); filter: blur(0); }
+/* Primary Button — gold gradient, celebration energy */
+@keyframes nv-laser-sweep {
+  from { background-position: 200% 0; }
+  to   { background-position: -100% 0; }
 }
-.fyb-rise {
-  animation: fybRise 720ms cubic-bezier(0.22, 1, 0.36, 1) both;
+@keyframes nv-gold-pulse {
+  0%, 100% { box-shadow: 0 4px 28px rgba(255, 180, 0, 0.35), 0 1px 0 rgba(255,255,255,0.18) inset; }
+  50%       { box-shadow: 0 6px 40px rgba(255, 107, 107, 0.4), 0 1px 0 rgba(255,255,255,0.18) inset; }
 }
 
-/* Scroll reveal — staggered via inline --reveal-delay */
-.reveal {
-  opacity: 0;
-  transform: translateY(36px);
-  filter: blur(3px);
+.nv-laser-btn {
+  position: relative;
+  overflow: hidden;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(130deg, #FFD700 0%, #FF8C42 55%, #FF6B6B 100%);
+  color: #000000;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  border: none;
+  cursor: pointer;
+  text-decoration: none;
+  box-shadow: 0 4px 28px rgba(255, 180, 0, 0.35), 0 1px 0 rgba(255,255,255,0.18) inset;
+  transition: transform 220ms var(--nv-ease), filter 220ms, box-shadow 220ms;
+  -webkit-font-smoothing: antialiased;
+}
+.nv-laser-btn::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    105deg,
+    transparent 30%,
+    rgba(255, 255, 255, 0.28) 50%,
+    transparent 70%
+  );
+  background-size: 200% 100%;
+  background-position: 200% 0;
+  pointer-events: none;
+}
+.nv-laser-btn:hover::after {
+  animation: nv-laser-sweep 500ms var(--nv-ease) forwards;
+}
+.nv-laser-btn:hover {
+  transform: translateY(-2px) scale(1.01);
+  filter: brightness(1.06) saturate(1.1);
+  box-shadow: 0 8px 40px rgba(255, 160, 0, 0.5), 0 1px 0 rgba(255,255,255,0.22) inset;
+}
+.nv-laser-btn:active {
+  transform: scale(0.97);
+}
+
+/* Ghost Button — warm border on hover */
+.nv-ghost-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.6);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  cursor: pointer;
+  text-decoration: none;
+  transition: border-color 220ms, color 220ms, background 220ms;
+  -webkit-font-smoothing: antialiased;
+}
+.nv-ghost-btn:hover {
+  border-color: rgba(255, 215, 0, 0.35);
+  color: rgba(255, 215, 0, 0.9);
+  background: rgba(255, 215, 0, 0.04);
+}
+
+/* Luminosity Card — dark glass */
+.nv-card {
+  background: rgba(12, 12, 12, 0.95);
+  border: 1px solid rgba(255, 255, 255, 0.07);
   transition:
-    opacity 900ms cubic-bezier(0.22, 1, 0.36, 1),
-    transform 1100ms cubic-bezier(0.22, 1, 0.36, 1),
-    filter 900ms cubic-bezier(0.22, 1, 0.36, 1);
-  transition-delay: var(--reveal-delay, 0ms);
+    border-color 350ms var(--nv-ease),
+    box-shadow 350ms var(--nv-ease),
+    background 350ms var(--nv-ease);
 }
-.reveal.is-revealed {
+.nv-card:hover {
+  border-color: rgba(255, 215, 0, 0.18);
+  box-shadow:
+    0 0 0 1px rgba(255, 215, 0, 0.04) inset,
+    0 0 60px rgba(255, 180, 0, 0.05),
+    0 20px 60px rgba(0, 0, 0, 0.7);
+  background: rgba(255, 215, 0, 0.01);
+}
+
+/* Scroll reveal */
+.nv-reveal {
+  opacity: 0;
+  transform: translateY(40px);
+  transition:
+    opacity 700ms var(--nv-ease),
+    transform 700ms var(--nv-ease);
+}
+.nv-reveal.nv-visible {
   opacity: 1;
   transform: translateY(0);
-  filter: blur(0);
-}
-.reveal-kinetic {
-  opacity: 0;
-  transition: opacity 500ms ease 100ms;
-}
-.reveal-kinetic.is-revealed {
-  opacity: 1;
-}
-
-/* Kinetic letter cascade */
-.kinetic-letter {
-  display: inline-block;
-  opacity: 0;
-  transform: translateY(110%) rotate(8deg);
-  will-change: transform, opacity;
-}
-.reveal-kinetic.is-revealed .kinetic-letter {
-  animation: fybKineticIn 950ms cubic-bezier(0.22, 1, 0.36, 1) forwards;
-  animation-delay: calc(var(--ki-i, 0) * 32ms);
-}
-@keyframes fybKineticIn {
-  0%   { opacity: 0; transform: translateY(120%) rotate(10deg); }
-  55%  { opacity: 1; transform: translateY(-6%) rotate(-2deg); }
-  100% { opacity: 1; transform: translateY(0) rotate(0); }
-}
-
-/* Image-clipped giant text — covers shimmer behind the digits */
-.fyb-clip-text {
-  background-clip: text;
-  -webkit-background-clip: text;
-  color: transparent;
-  -webkit-text-fill-color: transparent;
-  background-size: 140% 140%;
-  background-position: 0% 50%;
-  animation: fybClipDrift 14s ease-in-out infinite alternate;
-}
-@keyframes fybClipDrift {
-  0%   { background-position: 0% 30%; }
-  100% { background-position: 100% 70%; }
-}
-
-/* Curtain wipe reveal */
-.fyb-curtain {
-  clip-path: inset(0 100% 0 0);
-  transition: clip-path 1100ms cubic-bezier(0.76, 0, 0.24, 1);
-  transition-delay: var(--curtain-delay, 0ms);
-}
-.fyb-curtain.is-revealed { clip-path: inset(0 0 0 0); }
-
-/* Slow ambient blob behind the page */
-.fyb-blob {
-  position: absolute;
-  border-radius: 9999px;
-  filter: blur(120px);
-  opacity: 0.55;
-  pointer-events: none;
-  will-change: transform;
-}
-@keyframes fybBlobA {
-  0%, 100% { transform: translate3d(-10%, 0%, 0) scale(1); }
-  50%      { transform: translate3d(15%, -8%, 0) scale(1.15); }
-}
-@keyframes fybBlobB {
-  0%, 100% { transform: translate3d(8%, 12%, 0) scale(0.95); }
-  50%      { transform: translate3d(-12%, 0%, 0) scale(1.1); }
-}
-.fyb-blob.a { animation: fybBlobA 22s ease-in-out infinite; }
-.fyb-blob.b { animation: fybBlobB 28s ease-in-out infinite; }
-
-/* Marquee-free now-showing stage — sticky big number scrub */
-.fyb-stage-pin {
-  position: sticky;
-  top: 0;
-  height: 100vh;
-  overflow: hidden;
-}
-
-/* Number flicker (vintage projector vibe) */
-@keyframes fybFlicker {
-  0%, 19%, 22%, 62%, 64%, 100% { opacity: 1; }
-  20%, 21%, 63% { opacity: 0.78; }
-}
-.fyb-flicker { animation: fybFlicker 6s linear infinite; }
-
-/* Hero parallax stack — JS sets transforms, no CSS transition (lerp smooths) */
-[data-stack-card] {
-  position: absolute;
-  left: 50%;
-  top: 50%;
-  will-change: transform;
-}
-
-/* Cursor — comet trail (main + 2 lagging) */
-.fyb-cursor {
-  position: fixed;
-  left: 0; top: 0;
-  pointer-events: none;
-  z-index: 100;
-  border-radius: 9999px;
-  mix-blend-mode: difference;
-  transform: translate(-200px, -200px);
-}
-.fyb-cursor.main { width: 12px; height: 12px; margin: -6px 0 0 -6px; background: var(--accent); }
-.fyb-cursor.t1   { width: 28px; height: 28px; margin: -14px 0 0 -14px; border: 1px solid var(--accent); opacity: 0.5; }
-.fyb-cursor.t2   { width: 56px; height: 56px; margin: -28px 0 0 -28px; border: 1px solid var(--accent); opacity: 0.18; }
-.fyb-cursor.is-hot { mix-blend-mode: normal; }
-
-@media (hover: none), (pointer: coarse) {
-  .fyb-cursor-dot { display: none; }
-}
-
-/* Magnetic CTA wrapper */
-.fyb-magnet {
-  display: inline-block;
-  transition: transform 320ms cubic-bezier(0.22, 1, 0.36, 1);
-  will-change: transform;
-}
-
-/* Tilt plate */
-.fyb-tilt {
-  transform-style: preserve-3d;
-  transition: transform 320ms cubic-bezier(0.22, 1, 0.36, 1);
-  will-change: transform;
-}
-
-/* Scroll progress bar */
-.fyb-progress {
-  position: fixed;
-  inset: 0 0 auto 0;
-  height: 2px;
-  z-index: 60;
-  background: var(--accent);
-  transform-origin: 0 0;
-  transform: scaleX(0);
-  transition: transform 80ms linear;
-}
-
-@media (hover: none), (pointer: coarse) {
-  .fyb-cursor { display: none; }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .fyb-rise,
-  .reveal,
-  .reveal-kinetic,
-  .kinetic-letter,
-  .fyb-clip-text,
-  .fyb-curtain,
-  .fyb-blob,
-  .fyb-flicker { animation: none !important; transition: none !important; opacity: 1 !important; transform: none !important; filter: none !important; clip-path: none !important; }
-  .fyb-cursor { display: none; }
+  .nv-reveal {
+    opacity: 1;
+    transform: none;
+    transition: none;
+  }
+}
+
+/* ============================================================
+ * Animation keyframes + utility classes
+ * ============================================================ */
+
+/* ── Word-rise — overflow:hidden wrapper + this inner span ── */
+@keyframes nv-word-rise {
+  from {
+    opacity: 0;
+    transform: translateY(108%) skewY(4deg);
+    filter: blur(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) skewY(0deg);
+    filter: blur(0);
+  }
+}
+.nv-word-clip {
+  display: inline-block;
+  overflow: hidden;
+  vertical-align: bottom;
+}
+.nv-word-inner {
+  display: inline-block;
+  opacity: 0;
+  animation: nv-word-rise 700ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  will-change: transform, opacity;
+}
+
+/* ── Floating ── */
+@keyframes nv-float-y {
+  0%, 100% { transform: translateY(0px); }
+  50%       { transform: translateY(-18px); }
+}
+@keyframes nv-float-y-sm {
+  0%, 100% { transform: translateY(0px); }
+  50%       { transform: translateY(-8px); }
+}
+@keyframes nv-float-x {
+  0%, 100% { transform: translateX(0px); }
+  50%       { transform: translateX(10px); }
+}
+@keyframes nv-hat-drift {
+  0%   { transform: translateY(0px) rotate(-6deg);  opacity: 0;  }
+  10%  { opacity: 1; }
+  50%  { transform: translateY(-30px) rotate(10deg); opacity: 1; }
+  90%  { opacity: 1; }
+  100% { transform: translateY(0px) rotate(-6deg);  opacity: 0;  }
+}
+.nv-float        { animation: nv-float-y 4s ease-in-out infinite; }
+.nv-float-slow   { animation: nv-float-y 6s ease-in-out infinite; }
+.nv-float-slower { animation: nv-float-y 9s ease-in-out infinite; }
+.nv-float-sm     { animation: nv-float-y-sm 3s ease-in-out infinite; }
+
+/* ── Rotation ── */
+@keyframes nv-spin-cw  { to { transform: rotate(360deg); } }
+@keyframes nv-spin-ccw { to { transform: rotate(-360deg); } }
+.nv-spin-slow  { animation: nv-spin-cw  16s linear infinite; }
+.nv-spin-rev   { animation: nv-spin-ccw 20s linear infinite; }
+.nv-spin-fast  { animation: nv-spin-cw  6s linear infinite; }
+
+/* ── Pulse ring ── */
+@keyframes nv-pulse-ring {
+  0%   { transform: scale(0.85); opacity: 0.5; }
+  100% { transform: scale(2.2);  opacity: 0; }
+}
+.nv-pulse-ring {
+  border-radius: 50%;
+  animation: nv-pulse-ring 2.4s cubic-bezier(0.16, 1, 0.3, 1) infinite;
+}
+.nv-pulse-ring-2 {
+  border-radius: 50%;
+  animation: nv-pulse-ring 2.4s 1.2s cubic-bezier(0.16, 1, 0.3, 1) infinite;
+}
+
+/* ── Marquee ── */
+@keyframes nv-marquee {
+  from { transform: translateX(0); }
+  to   { transform: translateX(-50%); }
+}
+@keyframes nv-marquee-rev {
+  from { transform: translateX(-50%); }
+  to   { transform: translateX(0); }
+}
+.nv-marquee-track {
+  animation: nv-marquee 28s linear infinite;
+  will-change: transform;
+}
+.nv-marquee-track-rev {
+  animation: nv-marquee-rev 22s linear infinite;
+  will-change: transform;
+}
+.nv-marquee-track:hover,
+.nv-marquee-track-rev:hover { animation-play-state: paused; }
+
+/* ── Scale-in ── */
+@keyframes nv-scale-in {
+  from { opacity: 0; transform: scale(0.7); }
+  to   { opacity: 1; transform: scale(1); }
+}
+@keyframes nv-fade-up {
+  from { opacity: 0; transform: translateY(16px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes nv-fade-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+/* ── SVG poster element anims ── */
+@keyframes nv-bar-grow {
+  from { transform: scaleX(0); }
+  to   { transform: scaleX(1); }
+}
+@keyframes nv-circle-grow {
+  from { transform: scale(0) rotate(-10deg); }
+  to   { transform: scale(1) rotate(0deg); }
+}
+
+/* ── Scan line ── */
+@keyframes nv-scan {
+  from { transform: translateY(-100%); opacity: 0.5; }
+  60%  { opacity: 0.12; }
+  to   { transform: translateY(100vh); opacity: 0; }
+}
+
+/* ── Stagger reveal variant ── */
+.nv-stagger > * {
+  opacity: 0;
+  transform: translateY(32px) scale(0.97);
+  transition:
+    opacity 600ms var(--nv-ease),
+    transform 600ms var(--nv-ease);
+}
+.nv-stagger.nv-visible > *:nth-child(1) { opacity: 1; transform: none; transition-delay: 0ms; }
+.nv-stagger.nv-visible > *:nth-child(2) { opacity: 1; transform: none; transition-delay: 120ms; }
+.nv-stagger.nv-visible > *:nth-child(3) { opacity: 1; transform: none; transition-delay: 240ms; }
+.nv-stagger.nv-visible > *:nth-child(4) { opacity: 1; transform: none; transition-delay: 360ms; }
+
+/* ── Glitch text decoration ── */
+@keyframes nv-glitch-1 {
+  0%,  90%, 100% { clip-path: inset(0 0 100% 0); transform: translateX(0); }
+  91%            { clip-path: inset(15% 0 55% 0); transform: translateX(-6px); }
+  94%            { clip-path: inset(55% 0 10% 0); transform: translateX(5px); }
+  97%            { clip-path: inset(35% 0 35% 0); transform: translateX(-3px); }
+}
+@keyframes nv-glitch-2 {
+  0%,  90%, 100% { clip-path: inset(0 0 100% 0); transform: translateX(0); }
+  91%            { clip-path: inset(60% 0 10% 0); transform: translateX(7px); }
+  94%            { clip-path: inset(20% 0 60% 0); transform: translateX(-4px); }
+  97%            { clip-path: inset(45% 0 25% 0); transform: translateX(2px); }
+}
+.nv-glitch {
+  position: relative;
+}
+.nv-glitch::before,
+.nv-glitch::after {
+  content: attr(data-text);
+  position: absolute;
+  inset: 0;
+  color: inherit;
+  font: inherit;
+  letter-spacing: inherit;
+}
+.nv-glitch::before {
+  color: rgba(255,255,255,0.7);
+  animation: nv-glitch-1 6s 2s infinite;
+}
+.nv-glitch::after {
+  color: rgba(200,200,200,0.5);
+  animation: nv-glitch-2 6s 2.3s infinite;
+}
+
+/* ── Orbit ── */
+@keyframes nv-orbit {
+  from { transform: rotate(0deg) translateX(var(--orbit-r, 40px)) rotate(0deg); }
+  to   { transform: rotate(360deg) translateX(var(--orbit-r, 40px)) rotate(-360deg); }
+}
+
+@keyframes nv-blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
+}
+
+/* ────────────────────────────────────────────────────────────
+   CELEBRATION ANIMATIONS — for the landing page
+   ──────────────────────────────────────────────────────────── */
+
+/* ── Cap toss: parabolic launch + spin ── */
+@keyframes nv-cap-toss {
+  0%   { transform: translate3d(0, 0, 0) rotate(0deg) scale(1); opacity: 0; }
+  10%  { opacity: 1; }
+  50%  { transform: translate3d(var(--cap-x, 30vw), -55vh, 0) rotate(540deg) scale(1.05); opacity: 1; }
+  85%  { opacity: 0.9; }
+  100% { transform: translate3d(calc(var(--cap-x, 30vw) * 1.6), 30vh, 0) rotate(1080deg) scale(0.8); opacity: 0; }
+}
+.nv-cap-toss {
+  animation: nv-cap-toss var(--cap-dur, 3.4s) cubic-bezier(0.22, 0.61, 0.36, 1) var(--cap-delay, 0s) both;
+  will-change: transform, opacity;
+}
+
+/* ── Spotlight beam sweep (stadium) ── */
+@keyframes nv-spotlight {
+  0%   { transform: translateX(-100%) skewX(-12deg); opacity: 0; }
+  20%  { opacity: 0.85; }
+  80%  { opacity: 0.6; }
+  100% { transform: translateX(220%) skewX(-12deg); opacity: 0; }
+}
+.nv-spotlight {
+  animation: nv-spotlight var(--beam-dur, 4.5s) cubic-bezier(0.4, 0, 0.2, 1) var(--beam-delay, 0s) infinite;
+  will-change: transform, opacity;
+}
+
+/* ── Polaroid drop-in (yearbook) ── */
+@keyframes nv-polaroid-in {
+  0%   { transform: translateY(-60px) rotate(var(--rot-from, -8deg)) scale(0.92); opacity: 0; }
+  60%  { transform: translateY(6px) rotate(calc(var(--rot-to, 0deg) + 2deg)) scale(1.02); opacity: 1; }
+  100% { transform: translateY(0) rotate(var(--rot-to, 0deg)) scale(1); opacity: 1; }
+}
+.nv-polaroid-in {
+  animation: nv-polaroid-in 900ms cubic-bezier(0.34, 1.56, 0.64, 1) var(--pol-delay, 0s) both;
+  will-change: transform, opacity;
+}
+
+/* ── Scoreboard flip number ── */
+@keyframes nv-flip-down {
+  0%   { transform: rotateX(0deg); }
+  50%  { transform: rotateX(-90deg); }
+  51%  { transform: rotateX(90deg); }
+  100% { transform: rotateX(0deg); }
+}
+.nv-flip-num {
+  display: inline-block;
+  transform-origin: center;
+  animation: nv-flip-down 500ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* ── Typewriter caret ── */
+@keyframes nv-caret-blink {
+  0%, 49% { opacity: 1; }
+  50%, 100% { opacity: 0; }
+}
+.nv-caret {
+  display: inline-block;
+  width: 0.5ch;
+  background: currentColor;
+  animation: nv-caret-blink 900ms steps(1) infinite;
+}
+
+/* ── Shimmering gold text ── */
+@keyframes nv-shimmer {
+  0%   { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+.nv-shimmer-text {
+  background: linear-gradient(
+    100deg,
+    #FFD700 0%,
+    #FFF4B5 25%,
+    #FFD700 50%,
+    #FF8C42 75%,
+    #FFD700 100%
+  );
+  background-size: 200% 100%;
+  background-clip: text;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  animation: nv-shimmer 4s linear infinite;
+}
+
+/* ── Aurora cursor follow (subtle, fixed under content) ── */
+.nv-aurora {
+  position: fixed;
+  pointer-events: none;
+  width: 600px;
+  height: 600px;
+  border-radius: 50%;
+  background: radial-gradient(
+    circle at center,
+    rgba(255, 215, 0, 0.08) 0%,
+    rgba(255, 140, 66, 0.04) 40%,
+    transparent 70%
+  );
+  transform: translate(-50%, -50%);
+  z-index: 0;
+  mix-blend-mode: screen;
+  transition: opacity 300ms ease;
+  filter: blur(40px);
+}
+
+/* ── Confetti burst on scroll trigger ── */
+@keyframes nv-confetti-pop {
+  0%   { transform: translate(0, 0) rotate(0deg) scale(0); opacity: 1; }
+  60%  { opacity: 1; }
+  100% { transform: translate(var(--cf-x, 80px), var(--cf-y, -120px)) rotate(var(--cf-r, 360deg)) scale(1); opacity: 0; }
+}
+.nv-confetti {
+  position: absolute;
+  width: 8px;
+  height: 14px;
+  border-radius: 2px;
+  animation: nv-confetti-pop 1500ms cubic-bezier(0.22, 0.61, 0.36, 1) var(--cf-delay, 0s) both;
+  will-change: transform, opacity;
+}
+
+/* ── Stretch hype text (stadium feel) ── */
+@keyframes nv-stretch {
+  0%, 100% { letter-spacing: -0.04em; transform: scaleX(1); }
+  50%      { letter-spacing: 0.02em; transform: scaleX(1.04); }
+}
+.nv-stretch {
+  display: inline-block;
+  transform-origin: center;
+  animation: nv-stretch 5s ease-in-out infinite;
+}
+
+/* ── Tape strip (scrapbook detail) ── */
+.nv-tape {
+  position: absolute;
+  width: 60px;
+  height: 18px;
+  background:
+    linear-gradient(180deg, rgba(255,235,150,0.55), rgba(255,215,0,0.35));
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,0.4),
+    0 2px 6px rgba(0,0,0,0.25);
+  border-radius: 1px;
+}
+.nv-tape::before,
+.nv-tape::after {
+  content: "";
+  position: absolute;
+  top: 0; bottom: 0;
+  width: 6px;
+  background:
+    linear-gradient(90deg, transparent 0 50%, rgba(0,0,0,0.05) 50% 100%);
+}
+.nv-tape::before { left: -3px; clip-path: polygon(0 0, 100% 20%, 100% 80%, 0 100%); }
+.nv-tape::after  { right: -3px; clip-path: polygon(0 20%, 100% 0, 100% 100%, 0 80%); }
+
+/* ── Cinematic letterbox bars (load-in reveal) ── */
+@keyframes nv-letterbox-in {
+  0%   { transform: scaleY(1); }
+  100% { transform: scaleY(0); }
+}
+.nv-letterbox-top, .nv-letterbox-bottom {
+  position: fixed;
+  left: 0; right: 0;
+  height: 18vh;
+  background: #000;
+  z-index: 80;
+  pointer-events: none;
+  transform-origin: top;
+  animation: nv-letterbox-in 1.3s cubic-bezier(0.86, 0, 0.07, 1) 1.6s both;
+}
+.nv-letterbox-top    { top: 0; transform-origin: top; }
+.nv-letterbox-bottom { bottom: 0; transform-origin: bottom; }
+
+/* ── Marquee speed boost on scroll (via JS-set --marquee-speed) ── */
+.nv-marquee-track,
+.nv-marquee-track-rev {
+  animation-duration: var(--marquee-speed, 28s) !important;
+}
+
+/* ── Ticket stub (memory lane finale) ── */
+.nv-ticket {
+  position: relative;
+  background: linear-gradient(180deg, #1a1408, #0d0a04);
+  border: 1px solid rgba(255,215,0,0.3);
+  border-radius: 8px;
+  padding: 24px 32px;
+}
+.nv-ticket::before,
+.nv-ticket::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  width: 16px;
+  height: 16px;
+  background: #050505;
+  border: 1px solid rgba(255,215,0,0.3);
+  border-radius: 50%;
+  transform: translateY(-50%);
+}
+.nv-ticket::before { left: -9px; }
+.nv-ticket::after  { right: -9px; }
+
+/* ── Underline draw (timeline accent) ── */
+@keyframes nv-draw {
+  0%   { transform: scaleX(0); }
+  100% { transform: scaleX(1); }
+}
+.nv-draw {
+  display: inline-block;
+  transform-origin: left center;
+  animation: nv-draw 800ms cubic-bezier(0.65, 0, 0.35, 1) var(--draw-delay, 0s) forwards;
+}
+
+/* ── How-It-Works demos ── */
+
+/* Pick: cards shuffle / forward-step */
+@keyframes nv-pick-cycle {
+  0%, 22%   { transform: translate(var(--rest-x, 0px), var(--rest-y, 0px)) rotate(var(--rest-rot, 0deg)) scale(1); z-index: 1; }
+  30%, 60%  { transform: translate(0, -14px) rotate(0deg) scale(1.06); z-index: 5; box-shadow: 0 0 0 2px var(--pick-accent, #FFD700), 0 22px 40px rgba(0,0,0,0.5); }
+  72%, 100% { transform: translate(var(--rest-x, 0px), var(--rest-y, 0px)) rotate(var(--rest-rot, 0deg)) scale(1); z-index: 1; }
+}
+.nv-pick-card {
+  animation: nv-pick-cycle 7.2s cubic-bezier(0.4, 0, 0.2, 1) var(--pick-delay, 0s) infinite;
+  transform-origin: center bottom;
+  will-change: transform, box-shadow;
+}
+
+/* Fill: typewriter caret */
+@keyframes nv-fill-caret {
+  0%, 50% { opacity: 1; }
+  51%, 100% { opacity: 0; }
+}
+
+/* Export: progress fill loop */
+@keyframes nv-export-fill {
+  0%, 8%   { width: 0%; }
+  60%, 70% { width: 100%; }
+  100%     { width: 100%; }
+}
+.nv-export-bar-fill {
+  animation: nv-export-fill 4s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+}
+
+/* Export: success badge pop */
+@keyframes nv-export-pop {
+  0%, 65%  { opacity: 0; transform: scale(0.6); }
+  72%, 92% { opacity: 1; transform: scale(1); }
+  100%     { opacity: 0; transform: scale(0.9); }
+}
+.nv-export-pop {
+  animation: nv-export-pop 4s cubic-bezier(0.34, 1.56, 0.64, 1) infinite;
+}
+
+/* Export: download file pill slide-in */
+@keyframes nv-export-file {
+  0%, 70%  { opacity: 0; transform: translateY(20px); }
+  78%, 96% { opacity: 1; transform: translateY(0); }
+  100%     { opacity: 0; transform: translateY(-8px); }
+}
+.nv-export-file {
+  animation: nv-export-file 4s cubic-bezier(0.34, 1.56, 0.64, 1) infinite;
+}
+
+/* Connecting rail (between steps, animated dash) */
+@keyframes nv-rail-dash {
+  to { background-position: 24px 0; }
+}
+.nv-rail {
+  background-image: linear-gradient(
+    90deg,
+    rgba(255,215,0,0.4) 50%,
+    transparent 50%
+  );
+  background-size: 12px 2px;
+  background-repeat: repeat-x;
+  background-position: 0 0;
+  height: 2px;
+  animation: nv-rail-dash 1.2s linear infinite;
+}
+
+/* Big scoreboard digit (LED-ish) */
+.nv-led-digit {
+  font-family: var(--font-geist-mono), monospace;
+  font-weight: 900;
+  font-variant-numeric: tabular-nums;
+  background: linear-gradient(180deg, #FFD700, #FF8C42 70%, #FF6B6B);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  text-shadow: none;
+  filter: drop-shadow(0 0 24px rgba(255,180,0,0.35));
+}
+
+/* Step card hover lift */
+.nv-step-card {
+  transition: transform 400ms cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 400ms ease, border-color 400ms ease;
+}
+.nv-step-card:hover {
+  transform: translateY(-6px);
+}
+
+/* ── Memory Lane mobile layout ── */
+@media (max-width: 720px) {
+  .memory-lane-spine {
+    left: 18px !important;
+    transform: none !important;
+  }
+  .memory-stop {
+    grid-template-columns: 36px 1fr !important;
+    gap: 12px !important;
+    margin-bottom: 28px !important;
+  }
+  .memory-dot-col {
+    grid-column: 1 / 2 !important;
+    justify-content: flex-start !important;
+  }
+  .memory-card-slot[data-empty="true"] {
+    display: none !important;
+  }
+  .memory-card-slot {
+    grid-column: 2 / 3 !important;
+    justify-self: stretch !important;
+    text-align: left !important;
+    max-width: 100% !important;
+    visibility: visible !important;
+    /* Reset translate on mobile so cards always fully visible */
+    transform: none !important;
+  }
+}
+
+/* ── Pricing comparison rows: stack on small screens ── */
+@media (max-width: 520px) {
+  .price-compare-row {
+    grid-template-columns: 1fr auto !important;
+    gap: 6px 12px !important;
+    padding: 14px 16px !important;
+  }
+  .price-compare-row > span:first-child {
+    grid-column: 1 / -1 !important;
+  }
+  .price-compare-price {
+    grid-column: 1 / 2 !important;
+    text-align: left !important;
+  }
+  .price-compare-revision {
+    grid-column: 2 / 3 !important;
+    text-align: right !important;
+  }
+}
+
+/* ── Ticket stub tighter on small screens ── */
+@media (max-width: 520px) {
+  .nv-ticket {
+    padding: 18px 22px !important;
+  }
+}
+
+/* ── Prevent any decorative absolute element from causing horizontal scroll ── */
+html, body { overflow-x: hidden; }
+
+/* ── Hero stack: ensure stage content always fits 320px viewport ── */
+@media (max-width: 380px) {
+  /* Tighten the hero LED/headlines on the smallest screens to prevent overflow */
+  .nv-shimmer-text {
+    background-size: 250% 100% !important;
+  }
+}
+
+
+/* ── Cap toss arc helper (for the cinematic moment after hero) ── */
+@keyframes nv-cap-arc {
+  0%   { transform: translate(-50%, 100vh) rotate(0deg); opacity: 0; }
+  10%  { opacity: 1; }
+  50%  { transform: translate(-50%, -10vh) rotate(540deg); }
+  90%  { opacity: 1; }
+  100% { transform: translate(-50%, 100vh) rotate(1080deg); opacity: 0; }
+}
+.nv-cap-arc {
+  position: fixed;
+  left: 50%;
+  bottom: 0;
+  z-index: 5;
+  pointer-events: none;
+  animation: nv-cap-arc 2.4s cubic-bezier(0.32, 0, 0.18, 1) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .nv-float, .nv-float-slow, .nv-float-slower, .nv-float-sm,
+  .nv-spin-slow, .nv-spin-rev, .nv-spin-fast,
+  .nv-pulse-ring, .nv-pulse-ring-2,
+  .nv-marquee-track,
+  .nv-word-inner,
+  .nv-glitch::before, .nv-glitch::after,
+  .nv-cap-toss, .nv-spotlight, .nv-polaroid-in, .nv-shimmer-text,
+  .nv-stretch, .nv-flip-num, .nv-caret, .nv-confetti, .nv-cap-arc,
+  .nv-letterbox-top, .nv-letterbox-bottom, .nv-draw,
+  .nv-pick-card, .nv-export-bar-fill, .nv-export-pop, .nv-export-file, .nv-rail {
+    animation: none !important;
+  }
+  .nv-word-inner { opacity: 1; }
+  .nv-stagger > * { opacity: 1; transform: none; }
+  .nv-letterbox-top, .nv-letterbox-bottom { display: none; }
+  .nv-polaroid-in { opacity: 1; }
 }

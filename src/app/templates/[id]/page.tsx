@@ -8,6 +8,10 @@ import { createLocalTemplateRepository } from "@/lib/storage/templateRepo";
 import type { TemplateRecord } from "@/lib/storage/types";
 import { ProgressModal } from "@/components/ui/ProgressModal";
 import { useSimulatedProgress } from "@/components/ui/useSimulatedProgress";
+import { TopNav } from "@/components/ui/TopNav";
+import { Card } from "@/components/ui/Card";
+import { ButtonLink } from "@/components/ui/Button";
+import { headline, bodySm, caption } from "@/lib/ui/typography";
 
 export default function TemplatePreviewPage({
   params,
@@ -44,7 +48,7 @@ export default function TemplatePreviewPage({
 
   if (!record) {
     return (
-      <div className="min-h-dvh bg-zinc-50 dark:bg-zinc-950">
+      <div className="min-h-dvh" style={{ background: "var(--canvas)" }}>
         <ProgressModal
           open
           title="Loading template"
@@ -58,52 +62,66 @@ export default function TemplatePreviewPage({
 
   if (record.status !== "published") {
     return (
-      <div className="min-h-screen bg-zinc-50 p-6 dark:bg-zinc-950">
-        <div className="rounded-2xl border border-zinc-200 bg-white p-6 text-sm text-zinc-700 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-200">
-          This template is not published.
-        </div>
+      <div className="min-h-dvh p-6" style={{ background: "var(--canvas)", color: "var(--ink)" }}>
+        <Card variant="surface-1" padding={20} radius={15}>
+          <span style={{ ...bodySm, color: "var(--ink-muted)" }}>
+            This template is not published.
+          </span>
+        </Card>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-zinc-50 dark:bg-zinc-950">
-      <header className="sticky top-0 z-10 border-b border-zinc-200 bg-white/90 backdrop-blur dark:border-zinc-800 dark:bg-zinc-900/80">
-        <div className="mx-auto flex max-w-5xl items-center justify-between px-4 py-3">
-          <div className="text-sm font-semibold text-zinc-950 dark:text-zinc-100">{record.name}</div>
-          <Link href="/templates" className="text-sm font-medium text-zinc-700 hover:text-zinc-900 dark:text-zinc-200 dark:hover:text-zinc-50">
+    <div className="min-h-dvh" style={{ background: "var(--canvas)", color: "var(--ink)" }}>
+      <TopNav cta={undefined} />
+
+      <header
+        className="sticky top-14 z-10 backdrop-blur-md"
+        style={{ background: "rgba(9,9,9,0.85)", borderBottom: "1px solid var(--hairline-soft)" }}
+      >
+        <div className="mx-auto flex max-w-[1200px] items-center justify-between px-5 py-3 sm:px-8">
+          <div style={{ ...bodySm, color: "var(--ink)", fontWeight: 600 }}>{record.name}</div>
+          <Link href="/templates" style={{ ...caption, color: "var(--ink-muted)" }}>
             Back
           </Link>
         </div>
       </header>
 
-      <main className="mx-auto grid max-w-5xl gap-4 px-4 py-6 lg:grid-cols-[1fr_280px]">
-        <div className="rounded-2xl border border-zinc-200 bg-white p-3 dark:border-zinc-800 dark:bg-zinc-900">
+      <main className="mx-auto grid w-full max-w-[1200px] gap-6 px-5 py-8 sm:px-8 lg:grid-cols-[1fr_320px]">
+        <Card variant="surface-1" padding={12} radius={20}>
           <div className="relative w-full">
-            <div className="aspect-4/5 w-full" />
+            <div className="aspect-[4/5] w-full" />
             {previewUrl ? (
               // eslint-disable-next-line @next/next/no-img-element
-              <img src={previewUrl} alt="Template preview" className="absolute inset-0 h-full w-full object-contain" />
+              <img
+                src={previewUrl}
+                alt="Template preview"
+                className="absolute inset-0 h-full w-full object-contain"
+              />
             ) : (
-              <div className="absolute inset-0 flex items-center justify-center text-sm text-zinc-500 dark:text-zinc-400">
+              <div
+                className="absolute inset-0 flex items-center justify-center"
+                style={{ ...bodySm, color: "var(--ink-faint)" }}
+              >
                 No preview available yet.
               </div>
             )}
           </div>
-        </div>
+        </Card>
 
-        <div className="rounded-2xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900">
-          <div className="text-sm font-semibold text-zinc-950 dark:text-zinc-100">Use this template</div>
-          <div className="mt-1 text-xs text-zinc-600 dark:text-zinc-300">Fill the form and preview live.</div>
-          <Link
-            href={`/templates/${record.id}/use`}
-            className="mt-4 inline-flex h-10 w-full items-center justify-center rounded-xl bg-zinc-900 px-4 text-sm font-medium text-white hover:bg-zinc-800 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-white"
-          >
-            Use Template
-          </Link>
-        </div>
+        <Card variant="surface-1" padding={20} radius={20}>
+          <h2 style={{ ...headline, fontSize: 18 }}>Use this template</h2>
+          <p className="mt-1" style={{ ...caption, color: "var(--ink-muted)" }}>
+            Fill the form and preview live.
+          </p>
+          <div className="mt-4">
+            <ButtonLink href={`/templates/${record.id}/use`} variant="primary" size="lg" fullWidth>
+              Use Template
+            </ButtonLink>
+          </div>
+        </Card>
       </main>
     </div>
   );
 }
-

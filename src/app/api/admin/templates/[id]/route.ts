@@ -49,23 +49,6 @@ export const PATCH = withErrorHandler(async (req, ctx) => {
     };
   }
 
-  const replaceAssets: Array<{ nodeId: string; buffer: Buffer; mime: string }> = [];
-  for (const nodeId of meta.replaceAssetNodeIds) {
-    const file = form.get(`asset:${nodeId}`);
-    if (!(file instanceof File)) {
-      throw new AppError(
-        "VALIDATION_ERROR",
-        `Missing asset file for node '${nodeId}'`,
-        422
-      );
-    }
-    replaceAssets.push({
-      nodeId,
-      buffer: Buffer.from(await file.arrayBuffer()),
-      mime: file.type || "image/png",
-    });
-  }
-
   const updated = await updatePublishedTemplate({
     templateId: id,
     name: meta.name,
@@ -74,8 +57,6 @@ export const PATCH = withErrorHandler(async (req, ctx) => {
     normalized: meta.normalized,
     fieldConfig: meta.fieldConfig,
     replaceCover,
-    replaceAssets,
-    removeAssetNodeIds: meta.removeAssetNodeIds,
   });
 
   return NextResponse.json({ template: updated });

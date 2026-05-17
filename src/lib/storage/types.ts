@@ -28,7 +28,7 @@ export type TemplateMeta = {
  * UI falls back to a generic folder icon.
  *
  * Old configs without `sections` render as a single virtual "Details"
- * section — no migration required.
+ * section - no migration required.
  */
 export type FieldSection = {
   id: string;
@@ -39,7 +39,7 @@ export type FieldSection = {
 
 export type FieldConfig = {
   version: 1;
-  /** Optional grouping of fields. Backward-compatible — undefined → single default section. */
+  /** Optional grouping of fields. Backward-compatible - undefined → single default section. */
   sections?: FieldSection[];
   fields: Array<
     | {
@@ -52,6 +52,8 @@ export type FieldConfig = {
         lockTypography?: boolean;
         lockColor?: boolean;
         lockAlignment?: boolean;
+        /** Placeholder text shown in the input when empty. */
+        placeholder?: string;
         /** ID of the FieldSection this field belongs to. Undefined → default section. */
         sectionId?: string;
 

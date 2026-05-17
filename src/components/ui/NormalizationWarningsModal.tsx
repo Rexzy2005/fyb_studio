@@ -81,11 +81,11 @@ export function NormalizationWarningsModal({
 		>
 			<div className="absolute inset-0 bg-black/40" />
 
-			<div className="relative w-full max-w-2xl overflow-hidden rounded-3xl border border-zinc-200 bg-white shadow-xl dark:border-zinc-800 dark:bg-zinc-900">
-				<div className="flex items-start justify-between gap-4 border-b border-zinc-200 p-5 dark:border-zinc-800">
+			<div className="relative w-full max-w-2xl overflow-hidden rounded-3xl border border-hairline bg-surface-1 shadow-xl dark:border-hairline dark:bg-surface-1">
+				<div className="flex items-start justify-between gap-4 border-b border-hairline p-5 dark:border-hairline">
 					<div className="min-w-0">
-						<div className="text-sm font-semibold text-zinc-950 dark:text-zinc-100">{title}</div>
-						<div className="mt-1 text-sm text-zinc-600 dark:text-zinc-300">
+						<div className="text-sm font-semibold text-ink dark:text-ink">{title}</div>
+						<div className="mt-1 text-sm text-ink-muted dark:text-ink-muted">
 							{warnings.length} warning{warnings.length === 1 ? "" : "s"} found.
 						</div>
 					</div>
@@ -94,14 +94,14 @@ export function NormalizationWarningsModal({
 						<button
 							type="button"
 							onClick={copyWarnings}
-							className="inline-flex h-9 items-center justify-center rounded-2xl border border-zinc-200 bg-white px-3 text-xs font-medium text-zinc-900 shadow-sm transition hover:bg-zinc-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/40 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-100 dark:hover:bg-zinc-800"
+							className="inline-flex h-9 items-center justify-center rounded-2xl border border-hairline bg-surface-1 px-3 text-xs font-medium text-ink shadow-sm transition hover:bg-canvas focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent-blue-ring)] dark:border-hairline dark:bg-surface-1 dark:text-ink dark:hover:bg-surface-2"
 						>
 							{copied ? "Copied" : "Copy"}
 						</button>
 						<button
 							type="button"
 							onClick={onClose}
-							className="inline-flex h-9 items-center justify-center rounded-2xl bg-zinc-900 px-3 text-xs font-medium text-white shadow-sm transition hover:bg-zinc-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/40 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-white"
+							className="inline-flex h-9 items-center justify-center rounded-2xl bg-surface-1 px-3 text-xs font-medium text-white shadow-sm transition hover:bg-surface-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent-blue-ring)] dark:bg-surface-2 dark:text-ink dark:hover:bg-surface-1"
 						>
 							Close
 						</button>
@@ -110,7 +110,7 @@ export function NormalizationWarningsModal({
 
 				<div className="max-h-[70vh] overflow-y-auto p-5">
 					{warnings.length === 0 ? (
-						<div className="rounded-2xl border border-zinc-200 bg-zinc-50 p-4 text-sm text-zinc-700 dark:border-zinc-800 dark:bg-zinc-950/30 dark:text-zinc-200">
+						<div className="rounded-2xl border border-hairline bg-canvas p-4 text-sm text-ink-muted dark:border-hairline dark:bg-surface-1 dark:text-ink">
 							No warnings.
 						</div>
 					) : (
@@ -118,14 +118,14 @@ export function NormalizationWarningsModal({
 							{warnings.map((w, idx) => (
 								<li
 									key={`${w.code}-${w.nodeId ?? ""}-${idx}`}
-									className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-950 dark:border-amber-900/40 dark:bg-amber-950/30 dark:text-amber-100"
+									className="rounded-2xl border border-[rgba(245,158,11,0.28)] bg-[rgba(245,158,11,0.08)] p-4 text-sm text-warning dark:border-[rgba(245,158,11,0.28)] dark:bg-[rgba(245,158,11,0.12)] dark:text-warning"
 								>
 									<div className="flex flex-wrap items-center gap-2">
-										<span className="rounded-full border border-amber-200 bg-white px-2.5 py-0.5 text-[11px] font-semibold text-amber-900 dark:border-amber-900/40 dark:bg-zinc-950/30 dark:text-amber-100">
+										<span className="rounded-full border border-[rgba(245,158,11,0.28)] bg-surface-1 px-2.5 py-0.5 text-[11px] font-semibold text-warning dark:border-[rgba(245,158,11,0.28)] dark:bg-surface-1 dark:text-warning">
 											{w.code}
 										</span>
 										{w.nodeId ? (
-											<span className="text-[11px] font-medium text-amber-900/80 dark:text-amber-100/80">
+											<span className="text-[11px] font-medium text-warning/80 dark:text-warning/80">
 												node: {resolveNodeLabel?.(w.nodeId) ?? w.nodeId}
 												{resolveNodeLabel?.(w.nodeId) ? (
 													<span className="ml-1 opacity-60">[{w.nodeId}]</span>

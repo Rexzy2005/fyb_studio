@@ -12,7 +12,7 @@ export async function sendWelcomeEmail(input: SendWelcomeInput): Promise<void> {
   const transport = getMailTransport();
   if (!transport) {
     console.warn(
-      "[email] SMTP not configured — skipping welcome email for",
+      "[email] SMTP not configured - skipping welcome email for",
       input.email
     );
     return;

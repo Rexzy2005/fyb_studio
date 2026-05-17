@@ -19,7 +19,7 @@ const verifyBodySchema = z.object({
  * payment server-side via Paystack's API, marks our local payment row as
  * `success`, and issues a download grant.
  *
- * Idempotent — safe to call multiple times for the same reference. The
+ * Idempotent - safe to call multiple times for the same reference. The
  * webhook also calls confirmPaymentByReference, so whichever lands first
  * wins and the other becomes a no-op.
  *

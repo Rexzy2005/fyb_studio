@@ -8,7 +8,7 @@ export type ReceiptTemplateInput = {
 };
 
 /**
- * Plain, professional receipt — minimal HTML so it survives every mail client
+ * Plain, professional receipt - minimal HTML so it survives every mail client
  * including the dark-mode-aggressive ones (Outlook, Gmail mobile).
  */
 export function renderReceiptEmail(input: ReceiptTemplateInput): {
@@ -26,7 +26,7 @@ export function renderReceiptEmail(input: ReceiptTemplateInput): {
     hour: "2-digit",
     minute: "2-digit",
   });
-  const subject = `Receipt — ${input.templateName} (${formattedAmount})`;
+  const subject = `Receipt - ${input.templateName} (${formattedAmount})`;
 
   const text = [
     `Hi ${firstName},`,
@@ -43,7 +43,7 @@ export function renderReceiptEmail(input: ReceiptTemplateInput): {
     `Re-download or pick a new design at:`,
     input.dashboardUrl,
     ``,
-    `— FYB Studio`,
+    `- FYB Studio`,
   ].join("\n");
 
   const html = `<!DOCTYPE html>
@@ -81,7 +81,7 @@ export function renderReceiptEmail(input: ReceiptTemplateInput): {
               </td>
             </tr>
           </table>
-          <div style="font-size:11px;color:#a1a1aa;margin-top:14px;">FYB Studio — design by fybstudio.art</div>
+          <div style="font-size:11px;color:#a1a1aa;margin-top:14px;">FYB Studio - design by fybstudio.art</div>
         </td>
       </tr>
     </table>

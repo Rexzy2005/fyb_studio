@@ -10,6 +10,6 @@ export type NormalizeCtx = {
   fonts: Set<string>;
   offsetX: number;
   offsetY: number;
-  /** Background of the nearest ancestor with a solid paint — used to infer a contrasting text color when TEXT has no fills. */
+  /** Background of the nearest ancestor with a solid paint - used to infer a contrasting text color when TEXT has no fills. */
   inheritedBg?: { r: number; g: number; b: number };
 };

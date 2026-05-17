@@ -17,7 +17,7 @@ export function renderWelcomeEmail(input: WelcomeTemplateInput): {
   const text = [
     `Hi ${firstName},`,
     ``,
-    `Welcome to FYB Studio — your FYB week, designed like a brand.`,
+    `Welcome to FYB Studio - your FYB week, designed like a brand.`,
     ``,
     `Your username is @${input.username}.`,
     ``,
@@ -28,11 +28,11 @@ export function renderWelcomeEmail(input: WelcomeTemplateInput): {
     input.templatesUrl,
     ``,
     `What's next:`,
-    `1. Pick a template — sign-out tee, face cap, poster, or banner.`,
+    `1. Pick a template - sign-out tee, face cap, poster, or banner.`,
     `2. Add your name, department, and details.`,
     `3. Export a high-quality PNG you can print or share.`,
     ``,
-    `— The FYB Studio team`,
+    `- The FYB Studio team`,
   ].join("\n");
 
   const safeName = escapeHtml(firstName);
@@ -140,7 +140,7 @@ export function renderWelcomeEmail(input: WelcomeTemplateInput): {
               <div style="border-top:1px solid #e4e4e7;padding-top:18px;font-size:12px;color:#71717a;line-height:18px;">
                 You're getting this because you just signed up to FYB Studio as
                 <strong style="color:#52525b;font-weight:600;">${safeFullName}</strong>.
-                If this wasn't you, you can ignore this email — your account won't be activated for sign-in without your Google login.
+                If this wasn't you, you can ignore this email - your account won't be activated for sign-in without your Google login.
               </div>
             </td>
           </tr>

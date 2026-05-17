@@ -83,7 +83,7 @@ function buildLinearGradient(
  * Native canvas radials are always perfectly circular. Figma radials are
  * elliptical: handle[1] defines the X-axis endpoint, handle[2] the Y-axis
  * endpoint, and the two axes can have different lengths and arbitrary rotation.
- * We only take the native path when the ellipse degenerates to a circle —
+ * We only take the native path when the ellipse degenerates to a circle -
  * i.e. the two semi-axis vectors are perpendicular AND equal length. Anything
  * else is routed through the procedural raster, which paints the true ellipse.
  */
@@ -108,7 +108,7 @@ function tryNativeRadial(
   if (r1 < 1 || r2 < 1) return false;
 
   // Orthogonality check (cross product near zero relative to magnitudes) and
-  // equal-radius check (within 0.5% — sub-pixel difference for any sane size).
+  // equal-radius check (within 0.5% - sub-pixel difference for any sane size).
   const cross = Math.abs(v1x * v2y - v1y * v2x);
   const dotMagnitude = r1 * r2;
   const orthogonal = dotMagnitude > 0 && cross / dotMagnitude > 0.999;
@@ -123,7 +123,7 @@ function tryNativeRadial(
 }
 
 /* ============================================================
- * Native angular (conic) gradient — fast path
+ * Native angular (conic) gradient - fast path
  * ============================================================ */
 
 function tryNativeConicGradient(
@@ -164,7 +164,7 @@ function tryNativeConicGradient(
  * Strategy: render the gradient into an offscreen canvas at the destination's
  * exact canvas-pixel resolution, then save → clip(path) → drawImage at the
  * frame's design-unit position. The active ctx transform handles the design→
- * pixel scaling, so source pixels and destination pixels are 1:1 — no
+ * pixel scaling, so source pixels and destination pixels are 1:1 - no
  * CanvasPattern transform interactions, no bilinear softness.
  * ============================================================ */
 
@@ -179,7 +179,7 @@ function blitProceduralGradient(
 ): boolean {
   const t = ctx.getTransform();
   // Use the linear scale from each axis; for rotated nodes this is the
-  // dominant axis scale (good enough — gradients are rotation-invariant
+  // dominant axis scale (good enough - gradients are rotation-invariant
   // patterns, only their bounding rect matters).
   const scaleX = Math.hypot(t.a, t.b);
   const scaleY = Math.hypot(t.c, t.d);
@@ -195,7 +195,7 @@ function blitProceduralGradient(
     const h0 = fill.handlePositions?.[0] ?? { x: 0.5, y: 0.5 };
     const h1 = fill.handlePositions?.[1] ?? { x: 0.5, y: 0 };
     // Center the angular sweep at the actual handle position (not just the
-    // bbox center) — rotates correctly whether or not h0 is at (0.5, 0.5).
+    // bbox center) - rotates correctly whether or not h0 is at (0.5, 0.5).
     const cxOff = h0.x * targetW;
     const cyOff = h0.y * targetH;
     const dx = (h1.x - h0.x) * frame.width;
@@ -217,7 +217,7 @@ function blitProceduralGradient(
     }
   }
 
-  // Direct blit through path clip — pixel-exact, no pattern transform.
+  // Direct blit through path clip - pixel-exact, no pattern transform.
   ctx.save();
   ctx.clip(path);
   // Toggle off image smoothing for this single drawImage so the source pixels
@@ -241,7 +241,7 @@ function blitProceduralGradient(
  *   - radial:  t = sqrt(u² + v²)   (1 on the ellipse boundary)
  *   - diamond: t = |u| + |v|       (1 on the diamond boundary)
  *
- * Returns null when the two axes are colinear (degenerate basis — the source
+ * Returns null when the two axes are colinear (degenerate basis - the source
  * gradient has zero area, so we can't paint anything meaningful).
  */
 function computeAxisVectors(
@@ -292,7 +292,7 @@ function computeAxisVectors(
 // produce on long, low-contrast transitions.
 //
 // Bigger offsets (e.g. ±5) DESTROY a smooth gradient by adding visible noise
-// that looks like sharp stops — that's the bug we had before.
+// that looks like sharp stops - that's the bug we had before.
 const BAYER_4X4 = new Int8Array([
   0,  8,  2, 10,
   12, 4, 14, 6,

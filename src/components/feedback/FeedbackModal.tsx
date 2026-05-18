@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Check, X, Sparkles } from "lucide-react";
+import { Check, X } from "lucide-react";
 
 import {
   FEEDBACK_CATEGORY_KEYS,
@@ -228,31 +228,32 @@ export function FeedbackModal({
           </div>
         ) : (
           <div
-            className="overflow-y-auto"
-            style={{ maxHeight: "calc(100dvh - 32px)", padding: "24px 22px 22px" }}
+            className="fyb-feedback-scroll overflow-y-auto"
+            style={{
+              maxHeight: "calc(100dvh - 32px)",
+              padding: "24px 22px 22px",
+              // Hide native scrollbar (Firefox + IE) — WebKit handled by
+              // the .fyb-feedback-scroll class block below.
+              scrollbarWidth: "none",
+              msOverflowStyle: "none",
+            }}
           >
-            {/* Eyebrow */}
-            <div style={{ display: "inline-flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
-              <span
-                style={{
-                  display: "inline-flex", alignItems: "center", justifyContent: "center",
-                  width: 22, height: 22,
-                  borderRadius: 7,
-                  background: "rgba(255,215,0,0.12)",
-                  color: "#FFD700",
-                  border: "1px solid rgba(255,215,0,0.28)",
-                }}
-              >
-                <Sparkles className="h-3 w-3" />
-              </span>
-              <span
-                style={{
-                  fontFamily: FONT_MONO, fontSize: 9, letterSpacing: "0.26em",
-                  color: "rgba(255,215,0,0.8)", textTransform: "uppercase", fontWeight: 700,
-                }}
-              >
-                Studio feedback
-              </span>
+            {/* WebKit scrollbar hide — scoped to this modal's scroller. */}
+            <style>{`
+              .fyb-feedback-scroll::-webkit-scrollbar { display: none; }
+            `}</style>
+
+            {/* Eyebrow — centered, plain text only (no AI-ish icon). */}
+            <div
+              style={{
+                display: "block",
+                textAlign: "center",
+                fontFamily: FONT_MONO, fontSize: 9, letterSpacing: "0.26em",
+                color: "rgba(255,215,0,0.8)", textTransform: "uppercase", fontWeight: 700,
+                marginBottom: 10,
+              }}
+            >
+              Studio feedback
             </div>
 
             <h2
@@ -261,6 +262,7 @@ export function FeedbackModal({
                 fontSize: "clamp(20px, 4.6vw, 26px)",
                 color: "#fff", letterSpacing: "-0.025em",
                 lineHeight: 1.15, margin: 0,
+                textAlign: "center",
               }}
             >
               How&apos;s FYB Studio working for you?
@@ -270,6 +272,7 @@ export function FeedbackModal({
                 fontFamily: FONT_SANS, fontSize: 13.5, lineHeight: 1.55,
                 color: "rgba(255,255,255,0.5)",
                 marginTop: 8, marginBottom: 20,
+                textAlign: "center",
               }}
             >
               Honest feedback shapes the next release. Takes 30 seconds.

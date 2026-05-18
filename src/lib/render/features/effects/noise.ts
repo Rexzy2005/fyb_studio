@@ -1,4 +1,5 @@
 import type { BlendMode, NormalizedEffect } from "@/lib/figma";
+import { createDeterministicRandom } from "@/lib/render/features/deterministicRandom";
 
 type NoiseEffect = Extract<NormalizedEffect, { kind: "noise" }>;
 
@@ -57,6 +58,7 @@ export function applyNoiseOverlay(
 
   const pattern = ctx.createPattern(tile, "repeat");
   if (pattern) {
+    applyPatternScale(pattern, effect.noiseSize);
     ctx.fillStyle = pattern;
     ctx.fillRect(bbox.x, bbox.y, bbox.width, bbox.height);
   }
@@ -67,17 +69,17 @@ export function applyNoiseOverlay(
 /* ─── Tile cache ──────────────────────────────────────────── */
 // Module-level so multiple nodes with the same noise spec share a tile.
 const TILE_CACHE = new Map<string, HTMLCanvasElement | OffscreenCanvas>();
+const TILE_CELL_COUNT = 64;
 
 function buildNoiseTile(effect: NoiseEffect): HTMLCanvasElement | OffscreenCanvas | null {
-  // Tile size is bounded so very large noiseSize values don't allocate a
-  // multi-megabyte canvas. 64 is plenty for visible grain even on 4K exports.
-  const size = Math.max(2, Math.min(64, Math.round(effect.noiseSize * 4)));
+  // The tile's cell count is fixed; the JSON `noiseSize` is applied exactly
+  // as a pattern transform when the tile is painted.
+  const size = TILE_CELL_COUNT;
   const cacheKey = [
     effect.noiseType,
     effect.color,
     effect.secondaryColor ?? "",
-    effect.density.toFixed(3),
-    size,
+    String(effect.density),
   ].join("|");
 
   const hit = TILE_CACHE.get(cacheKey);
@@ -91,6 +93,7 @@ function buildNoiseTile(effect: NoiseEffect): HTMLCanvasElement | OffscreenCanva
     | null;
   if (!tctx) return null;
 
+  const random = createDeterministicRandom(cacheKey);
   const img = tctx.createImageData(size, size);
   const buf = img.data;
   const [r, g, b] = parseRgba(effect.color);
@@ -99,8 +102,8 @@ function buildNoiseTile(effect: NoiseEffect): HTMLCanvasElement | OffscreenCanva
     : [r, g, b, 1];
 
   for (let i = 0; i < buf.length; i += 4) {
-    // Density gate: random > (1 - density) → place a grain pixel.
-    const hit = Math.random() <= effect.density;
+    // Density gate: random <= density places a grain pixel.
+    const hit = random() <= effect.density;
     if (!hit) {
       buf[i] = 0;
       buf[i + 1] = 0;
@@ -110,7 +113,7 @@ function buildNoiseTile(effect: NoiseEffect): HTMLCanvasElement | OffscreenCanva
     }
     if (effect.noiseType === "duotone") {
       // Half the grains use the secondary colour.
-      const useSecondary = Math.random() < 0.5;
+      const useSecondary = random() < 0.5;
       buf[i] = useSecondary ? r2 : r;
       buf[i + 1] = useSecondary ? g2 : g;
       buf[i + 2] = useSecondary ? b2 : b;
@@ -118,7 +121,7 @@ function buildNoiseTile(effect: NoiseEffect): HTMLCanvasElement | OffscreenCanva
     } else {
       // Monotone/multitone - solid colour with random alpha for tonal jitter.
       const alpha = effect.noiseType === "multitone"
-        ? 180 + Math.floor(Math.random() * 75)
+        ? 180 + Math.floor(random() * 75)
         : 255;
       buf[i] = r;
       buf[i + 1] = g;
@@ -140,6 +143,13 @@ function createOffscreen(w: number, h: number): HTMLCanvasElement | OffscreenCan
   c.width = w;
   c.height = h;
   return c;
+}
+
+function applyPatternScale(pattern: CanvasPattern, noiseSize: number): void {
+  if (typeof DOMMatrix === "undefined") return;
+  if (typeof pattern.setTransform !== "function") return;
+  const scale = Number.isFinite(noiseSize) && noiseSize > 0 ? noiseSize : 1;
+  pattern.setTransform(new DOMMatrix([scale, 0, 0, scale, 0, 0]));
 }
 
 function parseRgba(css: string): [number, number, number, number] {

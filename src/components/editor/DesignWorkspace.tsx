@@ -723,9 +723,11 @@ function SvgTextLayer({
   const selected = selectedNodeId ? design.nodesById[selectedNodeId] : undefined;
 
   // Build the text layer SVG via the shared engine so editor and PNG export stay in lockstep.
+  // Editor guide rectangles are appended below for every configured field; keep
+  // them out of the shared text SVG so text fields do not get double outlines.
   const svgInner = useMemo(
-    () => buildTextSvg({ design, fieldConfig, previewTextByNodeId, includeGuides: showGuides }),
-    [design, fieldConfig, previewTextByNodeId, showGuides],
+    () => buildTextSvg({ design, fieldConfig, previewTextByNodeId, includeGuides: false }),
+    [design, fieldConfig, previewTextByNodeId],
   );
 
   // The shared builder returns a full <svg ...>...</svg> string with its own viewBox.

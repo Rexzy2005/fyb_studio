@@ -87,24 +87,25 @@ async function walkChildren(
   // First pass: detect mask siblings. In Figma, a child marked `isMask` clips
   // all siblings rendered after it (within the same parent), until the parent
   // ends or another mask resets it. We honour that lazily here.
-  let activeMaskId: string | null = null;
+  let activeMaskClipPushed = false;
   for (const cid of childIds) {
     const node = design.nodesById[cid];
     if (!node) continue;
     if (node.isMask) {
       // End any previous mask, push a new one.
-      if (activeMaskId) backend.popClip();
-      activeMaskId = cid;
+      if (activeMaskClipPushed) backend.popClip();
+      activeMaskClipPushed = false;
       // For ALPHA/LUMINANCE masks the renderer uses the mask node's frame as a
       // path-based clip. (Vector masks in arbitrary paths fall back to the
       // node's bounding rect for now - a follow-up will route them through
       // applyMask.ts when full alpha-channel masking lands.)
       if (node.kind !== "text") {
         backend.pushClip({ kind: "frame", node });
+        activeMaskClipPushed = true;
       }
       continue;
     }
     await walk(cid, design, backend, opts, alpha);
   }
-  if (activeMaskId) backend.popClip();
+  if (activeMaskClipPushed) backend.popClip();
 }

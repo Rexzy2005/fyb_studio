@@ -53,7 +53,7 @@ function deriveCategoryLabel(name: string, explicit: string | null): string {
 
 
 /**
- * Standard export scale for every download. 2× hits the modern HD sweet spot:
+ * Standard export scale for capable devices. 2× hits the modern HD sweet spot:
  *   - Sharp on retina/4K phones and laptops
  *   - Within Instagram and WhatsApp's preserved-quality ceilings
  *   - Crisp enough for small-format prints (~7×9 inches at 300 dpi)
@@ -61,14 +61,14 @@ function deriveCategoryLabel(name: string, explicit: string | null): string {
  * One quality preset = one consistent, professional output. No size pickers,
  * no risk of users accidentally exporting a low-resolution file.
  */
+const STANDARD_EXPORT_SCALE = 2;
+
 // Mobile devices (particularly iOS) have stricter canvas memory limits.
 // Use 1× on small screens so large canvases don't OOM the tab.
 function getExportScale(): 1 | 2 {
   if (typeof window !== "undefined" && window.innerWidth < 768) return 1;
-  return 2;
+  return STANDARD_EXPORT_SCALE;
 }
-
-const STANDARD_EXPORT_SCALE = 2;
 
 export default function UseTemplatePage({
   params,

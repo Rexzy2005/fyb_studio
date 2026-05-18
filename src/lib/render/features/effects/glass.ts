@@ -24,8 +24,10 @@ export function applyGlassOverlay(
   if (typeof OffscreenCanvas === "undefined") return; // best-effort only
 
   const xform = ctx.getTransform();
-  const sx = Math.max(1, Math.floor(bbox.width * Math.abs(xform.a)));
-  const sy = Math.max(1, Math.floor(bbox.height * Math.abs(xform.d)));
+  const sourceW = Math.max(1, bbox.width * Math.abs(xform.a));
+  const sourceH = Math.max(1, bbox.height * Math.abs(xform.d));
+  const sx = Math.max(1, Math.ceil(sourceW));
+  const sy = Math.max(1, Math.ceil(sourceH));
 
   const back = new OffscreenCanvas(sx, sy);
   const bctx = back.getContext("2d");
@@ -36,7 +38,7 @@ export function applyGlassOverlay(
     ctx.canvas,
     bbox.x * xform.a + xform.e,
     bbox.y * xform.d + xform.f,
-    sx, sy,
+    sourceW, sourceH,
     0, 0, sx, sy,
   );
 

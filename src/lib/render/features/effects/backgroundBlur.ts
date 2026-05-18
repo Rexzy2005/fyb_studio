@@ -1,3 +1,5 @@
+import { figmaBlurRadiusToCanvasPx } from "@/lib/render/features/effects/blurRadius";
+
 /**
  * Background blur: capture the current canvas region under `path`, blur it,
  * paint it back inside the path. Caller must have already clipped to the path
@@ -12,8 +14,10 @@ export function applyBackgroundBlur(
   if (radius <= 0) return;
 
   const ratio = ctx.getTransform();
-  const sx = Math.max(1, Math.floor(bbox.width * Math.abs(ratio.a)));
-  const sy = Math.max(1, Math.floor(bbox.height * Math.abs(ratio.d)));
+  const sourceW = Math.max(1, bbox.width * Math.abs(ratio.a));
+  const sourceH = Math.max(1, bbox.height * Math.abs(ratio.d));
+  const sx = Math.max(1, Math.ceil(sourceW));
+  const sy = Math.max(1, Math.ceil(sourceH));
   if (typeof OffscreenCanvas === "undefined") {
     // Skip background blur if OffscreenCanvas isn't available.
     return;
@@ -25,8 +29,8 @@ export function applyBackgroundBlur(
     ctx.canvas,
     bbox.x * ratio.a + ratio.e,
     bbox.y * ratio.d + ratio.f,
-    sx,
-    sy,
+    sourceW,
+    sourceH,
     0,
     0,
     sx,
@@ -35,7 +39,8 @@ export function applyBackgroundBlur(
   ctx.save();
   ctx.clip(path);
   const prev = ctx.filter;
-  ctx.filter = `blur(${radius}px)`;
+  const blurPx = figmaBlurRadiusToCanvasPx(radius, ratio);
+  if (blurPx > 0) ctx.filter = `blur(${blurPx}px)`;
   ctx.drawImage(offscreen, bbox.x, bbox.y, bbox.width, bbox.height);
   ctx.filter = prev;
   ctx.restore();

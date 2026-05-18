@@ -1,3 +1,5 @@
+import { figmaBlurRadiusToCanvasPx } from "@/lib/render/features/effects/blurRadius";
+
 /**
  * Progressive blur: paints `path`-clipped content with blur strength that
  * ramps along the node's vertical axis from `startRadius` at `startOffset`
@@ -26,8 +28,10 @@ export function applyProgressiveLayerBlur(
   if (spec.endRadius <= 0 && spec.startRadius <= 0) return "skip";
 
   const xform = ctx.getTransform();
-  const sx = Math.max(1, Math.floor(bbox.width * Math.abs(xform.a)));
-  const sy = Math.max(1, Math.floor(bbox.height * Math.abs(xform.d)));
+  const sourceW = Math.max(1, bbox.width * Math.abs(xform.a));
+  const sourceH = Math.max(1, bbox.height * Math.abs(xform.d));
+  const sx = Math.max(1, Math.ceil(sourceW));
+  const sy = Math.max(1, Math.ceil(sourceH));
 
   // Capture what we've already drawn for this node's region. Note: this
   // must run *after* the node's fills are already on canvas. Caller is
@@ -39,7 +43,7 @@ export function applyProgressiveLayerBlur(
     ctx.canvas,
     bbox.x * xform.a + xform.e,
     bbox.y * xform.d + xform.f,
-    sx, sy,
+    sourceW, sourceH,
     0, 0, sx, sy,
   );
 
@@ -65,7 +69,8 @@ export function applyProgressiveLayerBlur(
     };
     const blurR = (radiusAt(t0) + radiusAt(t1)) / 2;
     ctx.save();
-    if (blurR > 0) ctx.filter = `blur(${blurR}px)`;
+    const blurPx = figmaBlurRadiusToCanvasPx(blurR, xform);
+    if (blurPx > 0) ctx.filter = `blur(${blurPx}px)`;
     // Clip to a horizontal slice of the bbox so each blur band only
     // paints its own region.
     ctx.beginPath();

@@ -1,3 +1,5 @@
+import { figmaBlurRadiusToCanvasPx } from "@/lib/render/features/effects/blurRadius";
+
 /**
  * Apply a layer blur by re-drawing the supplied source canvas through the
  * canvas filter API. Caller is responsible for clipping/transforming.
@@ -14,7 +16,8 @@ export function applyLayerBlur(
     return;
   }
   const prevFilter = destCtx.filter;
-  destCtx.filter = `blur(${radius}px)`;
+  const blurPx = figmaBlurRadiusToCanvasPx(radius, destCtx.getTransform());
+  if (blurPx > 0) destCtx.filter = `blur(${blurPx}px)`;
   destCtx.drawImage(source, destX, destY);
   destCtx.filter = prevFilter;
 }

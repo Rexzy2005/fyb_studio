@@ -1,4 +1,5 @@
 import type { NormalizedEffect } from "@/lib/figma";
+import { createDeterministicRandom } from "@/lib/render/features/deterministicRandom";
 
 type TextureEffect = Extract<NormalizedEffect, { kind: "texture" }>;
 
@@ -21,7 +22,7 @@ export function applyTextureOverlay(
   effect: TextureEffect,
 ): void {
   if (!effect.visible) return;
-  const tile = buildTextureTile(effect.noiseSize);
+  const tile = buildTextureTile();
   if (!tile) return;
 
   ctx.save();
@@ -32,6 +33,7 @@ export function applyTextureOverlay(
 
   const pattern = ctx.createPattern(tile, "repeat");
   if (pattern) {
+    applyPatternScale(pattern, effect.noiseSize);
     ctx.fillStyle = pattern;
     ctx.fillRect(bbox.x, bbox.y, bbox.width, bbox.height);
   }
@@ -39,9 +41,10 @@ export function applyTextureOverlay(
 }
 
 const TEXTURE_CACHE = new Map<number, HTMLCanvasElement | OffscreenCanvas>();
+const TEXTURE_CELL_COUNT = 96;
 
-function buildTextureTile(noiseSize: number): HTMLCanvasElement | OffscreenCanvas | null {
-  const size = Math.max(8, Math.min(96, Math.round(noiseSize * 6)));
+function buildTextureTile(): HTMLCanvasElement | OffscreenCanvas | null {
+  const size = TEXTURE_CELL_COUNT;
   const hit = TEXTURE_CACHE.get(size);
   if (hit) return hit;
 
@@ -53,12 +56,13 @@ function buildTextureTile(noiseSize: number): HTMLCanvasElement | OffscreenCanva
     | null;
   if (!tctx) return null;
 
+  const random = createDeterministicRandom(`texture|${size}`);
   const img = tctx.createImageData(size, size);
   const buf = img.data;
   for (let i = 0; i < buf.length; i += 4) {
     // Soft value-noise: centred around 128 so overlay blend leaves
     // midtones untouched and pushes highlights/shadows symmetrically.
-    const v = 96 + Math.floor(Math.random() * 64);
+    const v = 96 + Math.floor(random() * 64);
     buf[i] = v;
     buf[i + 1] = v;
     buf[i + 2] = v;
@@ -78,4 +82,11 @@ function createOffscreen(w: number, h: number): HTMLCanvasElement | OffscreenCan
   c.width = w;
   c.height = h;
   return c;
+}
+
+function applyPatternScale(pattern: CanvasPattern, noiseSize: number): void {
+  if (typeof DOMMatrix === "undefined") return;
+  if (typeof pattern.setTransform !== "function") return;
+  const scale = Number.isFinite(noiseSize) && noiseSize > 0 ? noiseSize : 1;
+  pattern.setTransform(new DOMMatrix([scale, 0, 0, scale, 0, 0]));
 }

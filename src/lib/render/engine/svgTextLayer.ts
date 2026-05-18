@@ -1,4 +1,5 @@
-import type { NormalizedDesignV1, NormalizedNode, NormalizedTextNode, TextRun } from "@/lib/figma";
+import type { BlendMode, NormalizedDesignV1, NormalizedNode, NormalizedTextNode, TextRun } from "@/lib/figma";
+import { figmaBlurRadiusToSigma } from "@/lib/render/features/effects/blurRadius";
 import { escapeAttr, escapeText } from "@/lib/render/features/svgEscape";
 import { isLikelyLocalSvgPath } from "@/lib/render/features/path2d";
 import { applyTextCase, resolveEffectiveTextCase } from "@/lib/render/textCase";
@@ -139,16 +140,24 @@ export function buildTextSvg(input: BuildTextSvgInput): string {
     return out.length ? out : [""];
   }
 
-  function ensureClipPath(node: Extract<NormalizedNode, { kind: "container" }>) {
+  function ensureClipPath(node: Exclude<NormalizedNode, { kind: "text" }>) {
     const existing = clipIdByNodeId.get(node.id);
     if (existing) return existing;
     const clipId = `clip-${node.id}`;
     clipIdByNodeId.set(node.id, clipId);
     const r = node.cornerRadius;
-    const { x, y, width: w, height: h } = node.frame;
+    const hasMatrix = Boolean(node.transform && node.size);
+    const x = hasMatrix ? 0 : node.frame.x;
+    const y = hasMatrix ? 0 : node.frame.y;
+    const w = hasMatrix ? (node.size?.width ?? node.frame.width) : node.frame.width;
+    const h = hasMatrix ? (node.size?.height ?? node.frame.height) : node.frame.height;
+    const transform =
+      hasMatrix && node.transform
+        ? ` transform="matrix(${node.transform.a} ${node.transform.b} ${node.transform.c} ${node.transform.d} ${node.transform.tx} ${node.transform.ty})"`
+        : "";
     let shape: string;
     if (!r || (r.tl === 0 && r.tr === 0 && r.bl === 0 && r.br === 0)) {
-      shape = `<rect x="${x}" y="${y}" width="${w}" height="${h}" />`;
+      shape = `<rect x="${x}" y="${y}" width="${w}" height="${h}"${transform} />`;
     } else {
       // Build an SVG path with individual corner radii - SVG <rect rx/ry> only
       // supports uniform corners, so we need an explicit path for asymmetric radii.
@@ -156,9 +165,9 @@ export function buildTextSvg(input: BuildTextSvgInput): string {
       const tr = Math.min(r.tr, w / 2, h / 2);
       const br = Math.min(r.br, w / 2, h / 2);
       const bl = Math.min(r.bl, w / 2, h / 2);
-      shape = `<path d="M${x + tl},${y} H${x + w - tr} Q${x + w},${y} ${x + w},${y + tr} V${y + h - br} Q${x + w},${y + h} ${x + w - br},${y + h} H${x + bl} Q${x},${y + h} ${x},${y + h - bl} V${y + tl} Q${x},${y} ${x + tl},${y} Z" />`;
+      shape = `<path d="M${x + tl},${y} H${x + w - tr} Q${x + w},${y} ${x + w},${y + tr} V${y + h - br} Q${x + w},${y + h} ${x + w - br},${y + h} H${x + bl} Q${x},${y + h} ${x},${y + h - bl} V${y + tl} Q${x},${y} ${x + tl},${y} Z"${transform} />`;
     }
-    defs.push(`<clipPath id="${escapeAttr(clipId)}">${shape}</clipPath>`);
+    defs.push(`<clipPath id="${escapeAttr(clipId)}" clipPathUnits="userSpaceOnUse">${shape}</clipPath>`);
     return clipId;
   }
 
@@ -189,16 +198,16 @@ export function buildTextSvg(input: BuildTextSvgInput): string {
   }
 
   /**
-   * Build an SVG <filter> equivalent of Figma's drop-shadow + inner-shadow
-   * effects on a text node, returns the `filter="url(#...)"` attribute (or
-   * empty string when the node has no visible shadows).
+   * Build an SVG <filter> equivalent of Figma's text effects that can be
+   * represented inside the SVG text layer: drop-shadow, inner-shadow, and
+   * layer-blur. Returns the `filter="url(#...)"` attribute or empty string.
    *
    * Why this lives here: shape/container shadows are painted by the canvas
    * backend, but text glyphs render in the SVG layer - so the SVG layer needs
    * its own shadow path. SVG's <feDropShadow> is GPU-accelerated and matches
    * the Figma sigma → radius mapping at radius/2.
    */
-  function ensureTextShadowFilter(node: NormalizedTextNode): string {
+  function ensureTextEffectFilter(node: NormalizedTextNode): string {
     const dropShadows = node.effects.filter(
       (e): e is Extract<NormalizedNode["effects"][number], { kind: "drop-shadow" }> =>
         e.kind === "drop-shadow" && e.visible,
@@ -207,9 +216,21 @@ export function buildTextSvg(input: BuildTextSvgInput): string {
       (e): e is Extract<NormalizedNode["effects"][number], { kind: "inner-shadow" }> =>
         e.kind === "inner-shadow" && e.visible,
     );
-    if (dropShadows.length === 0 && innerShadows.length === 0) return "";
+    const layerBlur = node.effects.find(
+      (e): e is Extract<NormalizedNode["effects"][number], { kind: "layer-blur" }> =>
+        e.kind === "layer-blur" && e.visible && e.radius > 0,
+    );
+    if (dropShadows.length === 0 && innerShadows.length === 0 && !layerBlur) return "";
 
-    const filterId = `text-shadow-${node.id}`;
+    const filterId = `text-effect-${node.id}`;
+    const sourceGraphic = layerBlur ? "textLayerBlur" : "SourceGraphic";
+    const sourceAlpha = layerBlur ? "textLayerBlurAlpha" : "SourceAlpha";
+    const blurParts = layerBlur
+      ? [
+          `<feGaussianBlur in="SourceGraphic" stdDeviation="${figmaBlurRadiusToSigma(layerBlur.radius)}" result="textLayerBlur" />`,
+          `<feColorMatrix in="textLayerBlur" type="matrix" values="0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 1 0" result="textLayerBlurAlpha" />`,
+        ].join("")
+      : "";
     // Each shadow is its own <feGaussianBlur>+<feOffset>+<feFlood>+<feComposite>
     // chain; we merge them all back together with the source on top so the text
     // glyphs themselves stay sharp.
@@ -219,7 +240,7 @@ export function buildTextSvg(input: BuildTextSvgInput): string {
       const dx = eff.offset.x;
       const dy = eff.offset.y;
       const flood = `<feFlood flood-color="${escapeAttr(eff.color)}" result="dropFlood${idx}" />`;
-      const offset = `<feOffset dx="${dx}" dy="${dy}" in="SourceAlpha" result="dropOffset${idx}" />`;
+      const offset = `<feOffset dx="${dx}" dy="${dy}" in="${sourceAlpha}" result="dropOffset${idx}" />`;
       const blur = `<feGaussianBlur stdDeviation="${sigma}" in="dropOffset${idx}" result="dropBlur${idx}" />`;
       const composite = `<feComposite in="dropFlood${idx}" in2="dropBlur${idx}" operator="in" result="dropShadow${idx}" />`;
       return `${flood}${offset}${blur}${composite}`;
@@ -233,22 +254,22 @@ export function buildTextSvg(input: BuildTextSvgInput): string {
       // shape using `in` so it only shows within the glyph.
       return [
         `<feFlood flood-color="${escapeAttr(eff.color)}" result="innerFlood${idx}" />`,
-        `<feComposite in="innerFlood${idx}" in2="SourceAlpha" operator="out" result="innerColored${idx}" />`,
+        `<feComposite in="innerFlood${idx}" in2="${sourceAlpha}" operator="out" result="innerColored${idx}" />`,
         `<feOffset in="innerColored${idx}" dx="${dx}" dy="${dy}" result="innerOffset${idx}" />`,
         `<feGaussianBlur in="innerOffset${idx}" stdDeviation="${sigma}" result="innerBlur${idx}" />`,
-        `<feComposite in="innerBlur${idx}" in2="SourceAlpha" operator="in" result="innerShadow${idx}" />`,
+        `<feComposite in="innerBlur${idx}" in2="${sourceAlpha}" operator="in" result="innerShadow${idx}" />`,
       ].join("");
     });
 
     // Stack drop shadows behind the source, then the source, then inner shadows on top.
     const mergeChildren = [
       ...dropShadows.map((_, i) => `<feMergeNode in="dropShadow${i}" />`),
-      `<feMergeNode in="SourceGraphic" />`,
+      `<feMergeNode in="${sourceGraphic}" />`,
       ...innerShadows.map((_, i) => `<feMergeNode in="innerShadow${i}" />`),
     ].join("");
 
     defs.push(
-      `<filter id="${escapeAttr(filterId)}" x="-50%" y="-50%" width="200%" height="200%" filterUnits="objectBoundingBox" primitiveUnits="userSpaceOnUse">${dropParts.join("")}${innerParts.join("")}<feMerge>${mergeChildren}</feMerge></filter>`,
+      `<filter id="${escapeAttr(filterId)}" x="-50%" y="-50%" width="200%" height="200%" filterUnits="objectBoundingBox" primitiveUnits="userSpaceOnUse">${blurParts}${dropParts.join("")}${innerParts.join("")}<feMerge>${mergeChildren}</feMerge></filter>`,
     );
     return ` filter="url(#${escapeAttr(filterId)})"`;
   }
@@ -409,7 +430,7 @@ export function buildTextSvg(input: BuildTextSvgInput): string {
         )
         .join("");
 
-      const shadowFilterAttr = ensureTextShadowFilter(node);
+      const shadowFilterAttr = ensureTextEffectFilter(node);
 
       if (local && m) {
         const matrix = `matrix(${m.a} ${m.b} ${m.c} ${m.d} ${m.tx} ${m.ty})`;
@@ -691,7 +712,7 @@ export function buildTextSvg(input: BuildTextSvgInput): string {
         })()
       : "";
 
-    const shadowFilterAttr = ensureTextShadowFilter(node);
+    const shadowFilterAttr = ensureTextEffectFilter(node);
 
     const textEl = `<text xml:space="preserve" x="${x}" y="${y}" fill="${escapeAttr(fillCss)}" font-size="${layout.fontSize}" font-weight="${resolvedText.fontWeight}" font-style="${fontStyle}" text-decoration="${textDecoration}" text-anchor="${anchor}" dominant-baseline="text-before-edge"${strokeAttrs}${shadowFilterAttr} ${transform ? `transform="${escapeAttr(transform)}"` : ""} style="white-space:pre;font-family:${escapeAttr(fontFamily)};letter-spacing:${escapeAttr(letterSpacingCss)};">${tspans}</text>`;
 
@@ -716,19 +737,85 @@ export function buildTextSvg(input: BuildTextSvgInput): string {
     return `<rect x="${node.frame.x}" y="${node.frame.y}" width="${node.frame.width}" height="${node.frame.height}" fill="none" stroke="rgba(16,185,129,0.9)" stroke-width="1" stroke-dasharray="4 3"/>`;
   }
 
+  function svgBlendMode(mode: BlendMode): string | null {
+    switch (mode) {
+      case "MULTIPLY":
+        return "multiply";
+      case "SCREEN":
+        return "screen";
+      case "OVERLAY":
+        return "overlay";
+      case "DARKEN":
+        return "darken";
+      case "LIGHTEN":
+        return "lighten";
+      case "COLOR_DODGE":
+        return "color-dodge";
+      case "COLOR_BURN":
+        return "color-burn";
+      case "HARD_LIGHT":
+        return "hard-light";
+      case "SOFT_LIGHT":
+        return "soft-light";
+      case "DIFFERENCE":
+        return "difference";
+      case "EXCLUSION":
+        return "exclusion";
+      case "HUE":
+        return "hue";
+      case "SATURATION":
+        return "saturation";
+      case "COLOR":
+        return "color";
+      case "LUMINOSITY":
+        return "luminosity";
+      default:
+        return null;
+    }
+  }
+
+  function renderChildren(parentId: string): string {
+    const childIds = design.childrenById[parentId] ?? [];
+    let activeMask: Exclude<NormalizedNode, { kind: "text" }> | null = null;
+    const out: string[] = [];
+
+    for (const childId of childIds) {
+      const child = design.nodesById[childId] as NormalizedNode | undefined;
+      if (!child) continue;
+      if (child.isMask) {
+        activeMask = child.kind === "text" ? null : child;
+        continue;
+      }
+
+      const rendered = renderGroup(childId);
+      if (!rendered) continue;
+      if (activeMask) {
+        const clip = ensureClipPath(activeMask);
+        out.push(`<g clip-path="url(#${escapeAttr(clip)})">${rendered}</g>`);
+      } else {
+        out.push(rendered);
+      }
+    }
+
+    return out.join("");
+  }
+
   function renderGroup(id: string): string {
     const node = design.nodesById[id] as NormalizedNode | undefined;
     if (!node) return "";
     if (!node.visible) return "";
     if (node.opacity <= 0) return "";
+    if (node.isMask) return "";
     const self = node.kind === "text" ? renderTextNode(node) + renderGuidesForText(node) : "";
-    const children = (design.childrenById[id] ?? []).map((cid) => renderGroup(cid)).join("");
+    const children = renderChildren(id);
     if (!self && !children) return "";
     const clipPath =
       node.kind === "container" && node.clipsContent
         ? ` clip-path="url(#${escapeAttr(ensureClipPath(node))})"`
         : "";
-    return `<g opacity="${node.opacity}"${clipPath}>${self}${children}</g>`;
+    const blendMode = svgBlendMode(node.blendMode);
+    const blendStyle = blendMode ? ` style="mix-blend-mode:${blendMode};"` : "";
+    return `<g opacity="${node.opacity}"${clipPath}${blendStyle}>${self}${children}</g>`;
   }
 
   const body = design.rootIds.map((rid) => renderGroup(rid)).join("\n");

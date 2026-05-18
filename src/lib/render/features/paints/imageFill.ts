@@ -134,23 +134,42 @@ function drawCrop(
     drawCoverContain(ctx, source, sw, sh, frame, "cover");
     return;
   }
-  // Compute source rectangle in image-pixel coords from the matrix.
+
+  // Figma stores CROP as an affine transform from destination unit-square
+  // coordinates to source image unit-square coordinates. Instead of reducing
+  // that matrix to an axis-aligned source rect, invert the full matrix and
+  // draw the complete image through it while clipping to the destination
+  // frame. This preserves rotated and skewed crop transforms.
   const m = imageTransform;
-  const sxStart = m.tx * sw;
-  const syStart = m.ty * sh;
-  const cropW = m.a * sw;
-  const cropH = m.d * sh;
-  ctx.drawImage(
-    source,
-    sxStart,
-    syStart,
-    cropW,
-    cropH,
-    frame.x,
-    frame.y,
-    frame.width,
-    frame.height,
+  const det = m.a * m.d - m.b * m.c;
+  if (Math.abs(det) < 1e-8) {
+    drawCoverContain(ctx, source, sw, sh, frame, "cover");
+    return;
+  }
+
+  const inv = {
+    a: m.d / det,
+    b: -m.b / det,
+    c: -m.c / det,
+    d: m.a / det,
+    tx: (m.c * m.ty - m.d * m.tx) / det,
+    ty: (m.b * m.tx - m.a * m.ty) / det,
+  };
+
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(frame.x, frame.y, frame.width, frame.height);
+  ctx.clip();
+  ctx.transform(
+    (frame.width * inv.a) / sw,
+    (frame.height * inv.b) / sw,
+    (frame.width * inv.c) / sh,
+    (frame.height * inv.d) / sh,
+    frame.x + frame.width * inv.tx,
+    frame.y + frame.height * inv.ty,
   );
+  ctx.drawImage(source, 0, 0, sw, sh);
+  ctx.restore();
 }
 
 function drawTile(
@@ -201,4 +220,3 @@ function imageHeight(source: CanvasImageSource): number {
     return source.videoHeight;
   return Number((source as { height?: number }).height ?? 0);
 }
-

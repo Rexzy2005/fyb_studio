@@ -12,6 +12,7 @@ import { drawImageCoverContain, drawImagePlaceholder } from "@/lib/render/drawIm
 import { applyDropShadow } from "@/lib/render/features/effects/dropShadow";
 import { applyInnerShadow } from "@/lib/render/features/effects/innerShadow";
 import { applyBackgroundBlur } from "@/lib/render/features/effects/backgroundBlur";
+import { figmaBlurRadiusToCanvasPx } from "@/lib/render/features/effects/blurRadius";
 import { applyNoiseOverlay } from "@/lib/render/features/effects/noise";
 import { applyTextureOverlay } from "@/lib/render/features/effects/texture";
 import { applyGlassOverlay } from "@/lib/render/features/effects/glass";
@@ -326,8 +327,8 @@ export class CanvasBackend implements RenderBackend {
 
     // Layer blur: set filter before fills so all subsequent draws appear blurred.
     if (layerBlurRadius > 0) {
-      const pxScale = Math.abs(ctx.getTransform().a) || 1;
-      ctx.filter = `blur(${layerBlurRadius * pxScale}px)`;
+      const blurPx = figmaBlurRadiusToCanvasPx(layerBlurRadius, ctx.getTransform());
+      if (blurPx > 0) ctx.filter = `blur(${blurPx}px)`;
     }
 
     // Fills

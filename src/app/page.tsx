@@ -153,7 +153,7 @@ export default function Home() {
 
   // Ceremony state machine. Curtain (`loading`) plays on every visit so the
   // brand entrance is consistent. The celebration modal only shows for
-  // first-time visitors — returning users skip straight to `done` once the
+  // first-time visitors - returning users skip straight to `done` once the
   // curtain finishes.
   const [phase, setPhase] = useState<"loading" | "celebration" | "done">("loading");
 
@@ -280,7 +280,7 @@ function TopNav() {
         <div className="mx-auto flex h-16 items-center justify-between gap-3 px-4 sm:gap-6 sm:px-8 lg:px-10"
           style={{ maxWidth: 1480 }}>
 
-          {/* Brand mark — logo is the "FYB" so it reads `[logo]studio` as one
+          {/* Brand mark - logo is the "FYB" so it reads `[logo]studio` as one
               continuous unit. Class-year micro-text sits below. */}
           <Link href="/" className="flex shrink-0 items-center gap-1.5 group">
             <span
@@ -291,7 +291,6 @@ function TopNav() {
                 width: 36, height: 36,
                 borderRadius: 8,
                 overflow: "hidden",
-                boxShadow: "0 6px 18px rgba(255,180,0,0.22)",
               }}
             >
               {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -299,11 +298,6 @@ function TopNav() {
                 src="/logo.jpg"
                 alt="FYB"
                 style={{ width: "100%", height: "100%", objectFit: "cover" }}
-              />
-              <span
-                aria-hidden
-                className="nv-pulse-ring"
-                style={{ position: "absolute", inset: -3, border: "1.5px solid rgba(255,215,0,0.45)", borderRadius: 11 }}
               />
             </span>
             <span style={{ ...jkt, fontSize: 18, fontWeight: 700, color: "#fff", letterSpacing: "-0.02em", lineHeight: 1 }}>
@@ -341,7 +335,7 @@ function TopNav() {
 
           {/* Right cluster */}
           <div className="flex shrink-0 items-center gap-2">
-            {/* Avatar slot is only rendered once authenticated — the unauth
+            {/* Avatar slot is only rendered once authenticated - the unauth
                 "Sign in" fallback is intentionally hidden here so the navbar
                 shows just one CTA ("Get started"). */}
             {isAuthed && (
@@ -499,7 +493,7 @@ function FloatingHats() {
 }
 
 /* ─── Cap toss launch (initial load - 14 caps fly across the sky) ── */
-// Deterministic seeded values — Math.random would cause SSR/CSR hydration
+// Deterministic seeded values - Math.random would cause SSR/CSR hydration
 // mismatches because the module re-evaluates on the client with new values.
 const TOSS_CAPS = Array.from({ length: 14 }).map((_, i) => {
   const seedA = Math.sin(i * 12.9898 + 1) * 43758.5453;
@@ -1621,7 +1615,7 @@ function FileIcon({ color }: { color: string }) {
 
 
 /* ─── Sign-Out Week Lineup ───────────────────────────────────
-   A festival-lineup-style program for sign-out week — every day of the
+   A festival-lineup-style program for sign-out week - every day of the
    final week as a styled card, like a music-festival playbill. No
    photos required, all typographic. */
 const SIGNOUT_WEEK: Array<{
@@ -1669,11 +1663,11 @@ function WallOfClass({ classYear }: { classYear: number }) {
             Sign-out week <span className="nv-shimmer-text">{classYear}</span>
           </h2>
           <p style={{ ...sans, fontSize: "clamp(14px,1.3vw,17px)", color: "rgba(255,255,255,0.4)", marginTop: 18, maxWidth: "60ch", marginLeft: "auto", marginRight: "auto", lineHeight: 1.65 }}>
-            The week your campus turns into a stage. Every day deserves a poster — a flyer for the hangout, a banner for the photoshoot, a save-the-date for the party.
+            The week your campus turns into a stage. Every day deserves a poster - a flyer for the hangout, a banner for the photoshoot, a save-the-date for the party.
           </p>
         </div>
 
-        {/* Festival-lineup grid — flex so wrapped rows centre instead of
+        {/* Festival-lineup grid - flex so wrapped rows centre instead of
             stretching their last items full-width. */}
         <div
           style={{
@@ -1991,7 +1985,7 @@ function MemoryStop({
         marginBottom: "clamp(40px, 6vw, 72px)",
       }}
     >
-      {/* Left card — emerges from the center spine and slides outward */}
+      {/* Left card - emerges from the center spine and slides outward */}
       <div
         className="memory-card-slot memory-card-slot-left"
         data-empty={!isLeft}
@@ -2016,7 +2010,7 @@ function MemoryStop({
         {isLeft && <MemoryCard year={year} level={level} title={title} line={line} color={color} emoji={emoji} side="left" />}
       </div>
 
-      {/* Center dot — pulse appears with the card */}
+      {/* Center dot - pulse appears with the card */}
       <div className="memory-dot-col" style={{ gridColumn: 2, display: "flex", justifyContent: "center", position: "relative" }}>
         <div style={{ position: "relative", display: "inline-flex", alignItems: "center", justifyContent: "center" }}>
           {/* Glow halo */}
@@ -2031,7 +2025,7 @@ function MemoryStop({
               filter: "blur(5px)",
             }}
           />
-          {/* Burst ring — flashes outward as the card emerges */}
+          {/* Burst ring - flashes outward as the card emerges */}
           <span
             aria-hidden
             style={{
@@ -2063,7 +2057,7 @@ function MemoryStop({
         </div>
       </div>
 
-      {/* Right card — emerges from center spine sliding right */}
+      {/* Right card - emerges from center spine sliding right */}
       <div
         className="memory-card-slot memory-card-slot-right"
         data-empty={isLeft}
@@ -2877,8 +2871,6 @@ function FooterSection({ classYear }: { classYear: number }) {
                   width: 36, height: 36,
                   borderRadius: 10,
                   overflow: "hidden",
-                  border: "1px solid rgba(255,215,0,0.3)",
-                  boxShadow: "0 6px 16px rgba(255,180,0,0.18)",
                 }}
               >
                 {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -2987,12 +2979,18 @@ function FLink({ href, children }: { href: string; children: ReactNode }) {
 
 /* ─── Mobile Bottom Nav ──────────────────────────────────── */
 function MobileBottomNav() {
-  // Only appears once the user scrolls past the hero. Visible on every screen
-  // size — small floating pill nav for quick jumps from anywhere on the page.
+  // Appears once the user scrolls past the hero. Per-item stagger on
+  // first reveal, auth-aware items (Sign in collapses into Dashboard for
+  // logged-in users), and an animated active-state highlight tied to the
+  // current hash so the user always sees "where they are".
   const [visible, setVisible] = useState(false);
+  const [pressedKey, setPressedKey] = useState<string | null>(null);
+  const [activeHash, setActiveHash] = useState<string>("");
+  const { status } = useSession();
+  const isAuthed = status === "authenticated";
 
   useEffect(() => {
-    const threshold = 220; // px — beyond the fold
+    const threshold = 220;
     let raf = 0;
     const update = () => {
       raf = 0;
@@ -3010,47 +3008,186 @@ function MobileBottomNav() {
     };
   }, []);
 
+  // Track which in-page section is in view so the matching pill highlights.
+  useEffect(() => {
+    const sections = ["pricing", "departments", "memory", "how"]
+      .map((id) => document.getElementById(id))
+      .filter((el): el is HTMLElement => !!el);
+    if (sections.length === 0) return;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        for (const entry of entries) {
+          if (entry.isIntersecting && entry.intersectionRatio > 0.3) {
+            setActiveHash("#" + entry.target.id);
+          }
+        }
+      },
+      { threshold: [0.3, 0.6] },
+    );
+    sections.forEach((s) => observer.observe(s));
+    return () => observer.disconnect();
+  }, []);
+
+  // Item set is auth-aware. Signed-in users see Dashboard instead of Sign in,
+  // and the Templates / Pricing / Home shortcuts stay the same.
+  const items: Array<{ key: string; label: string; href: string; icon: ReactNode }> = isAuthed
+    ? [
+        { key: "home", label: "Home", href: "/", icon: <NavIconHome /> },
+        { key: "templates", label: "Templates", href: "/templates", icon: <NavIconLayers /> },
+        { key: "pricing", label: "Pricing", href: "#pricing", icon: <NavIconTag /> },
+        { key: "dashboard", label: "Studio", href: "/dashboard", icon: <NavIconStar /> },
+      ]
+    : [
+        { key: "home", label: "Home", href: "/", icon: <NavIconHome /> },
+        { key: "templates", label: "Templates", href: "/templates", icon: <NavIconLayers /> },
+        { key: "pricing", label: "Pricing", href: "#pricing", icon: <NavIconTag /> },
+      ];
+
   return (
     <nav
       aria-label="Page navigation"
       style={{
         position: "fixed", bottom: 18, left: "50%",
-        transform: visible ? "translateX(-50%) translateY(0)" : "translateX(-50%) translateY(120%)",
+        transform: visible ? "translateX(-50%) translateY(0)" : "translateX(-50%) translateY(140%)",
         zIndex: 40,
-        backdropFilter: "blur(20px)",
-        WebkitBackdropFilter: "blur(20px)",
-        background: "rgba(12,12,12,0.92)",
-        border: "1px solid rgba(255,215,0,0.18)",
+        backdropFilter: "blur(24px)",
+        WebkitBackdropFilter: "blur(24px)",
+        background: "linear-gradient(180deg, rgba(20,16,4,0.88), rgba(8,8,8,0.92))",
+        border: "1px solid rgba(255,215,0,0.22)",
         borderRadius: 100,
         display: "flex", alignItems: "center",
-        height: 52, padding: "0 6px",
-        boxShadow: "0 18px 50px rgba(0,0,0,0.7), 0 0 40px rgba(255,180,0,0.06), 0 1px 0 rgba(255,255,255,0.06) inset",
+        height: 56, padding: "0 6px",
+        boxShadow:
+          "0 24px 60px rgba(0,0,0,0.7), 0 0 50px rgba(255,180,0,0.08), 0 1px 0 rgba(255,255,255,0.06) inset",
         opacity: visible ? 1 : 0,
         pointerEvents: visible ? "auto" : "none",
-        transition: "transform 500ms cubic-bezier(0.34, 1.56, 0.64, 1), opacity 400ms cubic-bezier(0.4, 0, 0.2, 1)",
+        transition:
+          "transform 600ms cubic-bezier(0.34, 1.56, 0.64, 1), opacity 400ms cubic-bezier(0.4, 0, 0.2, 1)",
       }}
     >
-      {([["Home", "/"], ["Templates", "/templates"], ["Pricing", "#pricing"], ["Sign in", "/signin"]] as const).map(([label, href]) => (
-        <Link
-          key={label}
-          href={href}
-          style={{
-            ...mono, fontSize: 10, letterSpacing: "0.08em",
-            color: "rgba(255,255,255,0.5)",
-            textDecoration: "none", textTransform: "uppercase",
-            display: "flex", alignItems: "center", justifyContent: "center",
-            minHeight: 44, minWidth: 56,
-            padding: "0 14px", borderRadius: 100,
-            transition: "color 200ms, background 200ms",
-            whiteSpace: "nowrap",
-          }}
-          onMouseEnter={(e) => { e.currentTarget.style.color = "#FFD700"; e.currentTarget.style.background = "rgba(255,215,0,0.06)"; }}
-          onMouseLeave={(e) => { e.currentTarget.style.color = "rgba(255,255,255,0.5)"; e.currentTarget.style.background = "transparent"; }}
-        >
-          {label}
-        </Link>
-      ))}
+      {/* Subtle gold rim that animates with the nav reveal */}
+      <span
+        aria-hidden
+        style={{
+          position: "absolute", inset: -1,
+          borderRadius: 100,
+          background:
+            "linear-gradient(90deg, transparent 0%, rgba(255,215,0,0.35) 50%, transparent 100%)",
+          opacity: visible ? 0.6 : 0,
+          filter: "blur(1px)",
+          transition: "opacity 600ms 200ms ease",
+          pointerEvents: "none",
+        }}
+      />
+
+      {items.map((item, i) => {
+        const isActive = item.href.startsWith("#")
+          ? activeHash === item.href
+          : false;
+        const isPressed = pressedKey === item.key;
+        return (
+          <Link
+            key={item.key}
+            href={item.href}
+            onPointerDown={() => setPressedKey(item.key)}
+            onPointerUp={() => setPressedKey(null)}
+            onPointerLeave={() => setPressedKey(null)}
+            style={{
+              ...mono,
+              fontSize: 10,
+              letterSpacing: "0.1em",
+              color: isActive ? "#000" : "rgba(255,255,255,0.62)",
+              textDecoration: "none",
+              textTransform: "uppercase",
+              fontWeight: 700,
+              position: "relative",
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 6,
+              minHeight: 44,
+              padding: "0 14px",
+              borderRadius: 100,
+              background: isActive
+                ? "linear-gradient(140deg, #FFD700, #FFB400)"
+                : "transparent",
+              boxShadow: isActive
+                ? "0 6px 16px rgba(255,180,0,0.35), inset 0 1px 0 rgba(255,255,255,0.3)"
+                : "none",
+              transform: isPressed ? "scale(0.92)" : "scale(1)",
+              transition:
+                "transform 200ms cubic-bezier(0.34, 1.56, 0.64, 1), color 200ms, background 250ms, box-shadow 250ms",
+              whiteSpace: "nowrap",
+              animation: visible
+                ? `nv-bottomnav-in 500ms cubic-bezier(0.34, 1.56, 0.64, 1) both ${i * 70}ms`
+                : undefined,
+            }}
+            onMouseEnter={(e) => {
+              if (isActive) return;
+              e.currentTarget.style.color = "#FFD700";
+              e.currentTarget.style.background = "rgba(255,215,0,0.08)";
+            }}
+            onMouseLeave={(e) => {
+              if (isActive) return;
+              e.currentTarget.style.color = "rgba(255,255,255,0.62)";
+              e.currentTarget.style.background = "transparent";
+            }}
+          >
+            <span
+              aria-hidden
+              style={{
+                display: "inline-flex",
+                transform: isPressed ? "rotate(-8deg)" : "rotate(0deg)",
+                transition: "transform 250ms cubic-bezier(0.34, 1.56, 0.64, 1)",
+              }}
+            >
+              {item.icon}
+            </span>
+            {item.label}
+          </Link>
+        );
+      })}
+      <style>{`
+        @keyframes nv-bottomnav-in {
+          0%   { opacity: 0; transform: translateY(12px) scale(0.85); }
+          60%  { opacity: 1; transform: translateY(0) scale(1.04); }
+          100% { opacity: 1; transform: translateY(0) scale(1); }
+        }
+      `}</style>
     </nav>
+  );
+}
+
+/* ─── Bottom nav icons ─────────────────────────────────── */
+function NavIconHome() {
+  return (
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <path d="M3 11l9-8 9 8" />
+      <path d="M5 10v10a1 1 0 0 0 1 1h4v-6h4v6h4a1 1 0 0 0 1-1V10" />
+    </svg>
+  );
+}
+function NavIconLayers() {
+  return (
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <polygon points="12 2 22 7 12 12 2 7 12 2" />
+      <polyline points="2 17 12 22 22 17" />
+      <polyline points="2 12 12 17 22 12" />
+    </svg>
+  );
+}
+function NavIconTag() {
+  return (
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <path d="M20.59 13.41 13.42 20.58a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82Z" />
+      <circle cx="7" cy="7" r="1.5" fill="currentColor" />
+    </svg>
+  );
+}
+function NavIconStar() {
+  return (
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" strokeWidth="1" strokeLinejoin="round" aria-hidden>
+      <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
+    </svg>
   );
 }
 
@@ -3256,7 +3393,7 @@ function AnimatedWords({ text, delay = 0, style }: { text: string; delay?: numbe
 /* ── Loading screen (first-visit only) - ceremony prelude ── */
 /* ── Cinematic intro: curtain open → confetti puff → trigger welcome ── */
 function LoadingScreen({ onDone }: { onDone: () => void }) {
-  // Phase timing — celebration countdown → curtain opens → confetti puff
+  // Phase timing - celebration countdown → curtain opens → confetti puff
   //   0–2700ms  : "3, 2, 1" countdown over the closed curtains
   //   2700ms    : curtains start opening
   //   3300ms    : confetti puff bursts from center as curtains pass mid-point
@@ -3310,7 +3447,7 @@ function LoadingScreen({ onDone }: { onDone: () => void }) {
       }}
       aria-hidden
     >
-      {/* Backdrop behind the curtains — soft gold radial */}
+      {/* Backdrop behind the curtains - soft gold radial */}
       <div
         style={{
           position: "absolute", inset: 0,
@@ -3319,7 +3456,7 @@ function LoadingScreen({ onDone }: { onDone: () => void }) {
         }}
       />
 
-      {/* Confetti puff canvas — rendered behind the curtains so the puff is
+      {/* Confetti puff canvas - rendered behind the curtains so the puff is
           REVEALED as the curtains open over it */}
       <canvas
         ref={puffCanvasRef}
@@ -3330,7 +3467,7 @@ function LoadingScreen({ onDone }: { onDone: () => void }) {
         }}
       />
 
-      {/* Brand mark — small, top-center, fades out as curtains start to open */}
+      {/* Brand mark - small, top-center, fades out as curtains start to open */}
       <div
         style={{
           position: "absolute",
@@ -3351,7 +3488,6 @@ function LoadingScreen({ onDone }: { onDone: () => void }) {
               width: 32, height: 32,
               borderRadius: 8,
               overflow: "hidden",
-              boxShadow: "0 4px 14px rgba(255,180,0,0.3)",
             }}
           >
             {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -3368,7 +3504,7 @@ function LoadingScreen({ onDone }: { onDone: () => void }) {
         </div>
       </div>
 
-      {/* Celebration countdown — big "3, 2, 1" with ring + tagline */}
+      {/* Celebration countdown - big "3, 2, 1" with ring + tagline */}
       <div
         style={{
           position: "absolute", inset: 0,
@@ -3471,7 +3607,7 @@ function LoadingScreen({ onDone }: { onDone: () => void }) {
         </div>
       </div>
 
-      {/* LEFT curtain — solid then slides off-screen left */}
+      {/* LEFT curtain - solid then slides off-screen left */}
       <div
         style={{
           position: "absolute", top: 0, bottom: 0, left: 0,
@@ -3498,7 +3634,7 @@ function LoadingScreen({ onDone }: { onDone: () => void }) {
         }}
       />
 
-      {/* Top rim light — appears as curtains begin to part */}
+      {/* Top rim light - appears as curtains begin to part */}
       <div
         style={{
           position: "absolute", top: 0, left: 0, right: 0,

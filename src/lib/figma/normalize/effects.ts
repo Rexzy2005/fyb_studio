@@ -57,7 +57,12 @@ export function parseEffects(node: AnyRecord): NormalizedEffect[] {
     }
 
     if (type === "LAYER_BLUR") {
-      out.push({ kind: "layer-blur", radius: asNumber(e.radius, 0), visible });
+      out.push({
+        kind: "layer-blur",
+        radius: asNumber(e.radius, 0),
+        visible,
+        progressive: extractProgressive(e),
+      });
       continue;
     }
 
@@ -66,10 +71,90 @@ export function parseEffects(node: AnyRecord): NormalizedEffect[] {
         kind: "background-blur",
         radius: asNumber(e.radius, 0),
         visible,
+        progressive: extractProgressive(e),
+      });
+      continue;
+    }
+
+    if (type === "NOISE") {
+      const color = isRecord(e.color) ? (e.color as AnyRecord) : {};
+      const secondary = isRecord(e.secondaryColor) ? (e.secondaryColor as AnyRecord) : null;
+      const noiseTypeRaw = asString(e.noiseType)?.toLowerCase() ?? "monotone";
+      const noiseType: "monotone" | "duotone" | "multitone" =
+        noiseTypeRaw === "duotone"
+          ? "duotone"
+          : noiseTypeRaw === "multitone"
+            ? "multitone"
+            : "monotone";
+      out.push({
+        kind: "noise",
+        noiseType,
+        color: rgbaCss({
+          r: asNumber(color.r, 0),
+          g: asNumber(color.g, 0),
+          b: asNumber(color.b, 0),
+          a: asNumber(color.a, 1),
+        }),
+        secondaryColor: secondary
+          ? rgbaCss({
+              r: asNumber(secondary.r, 0),
+              g: asNumber(secondary.g, 0),
+              b: asNumber(secondary.b, 0),
+              a: asNumber(secondary.a, 1),
+            })
+          : undefined,
+        noiseSize: asNumber(e.noiseSize, 1),
+        density: asNumber(e.density, 0.5),
+        opacity: asNumber(e.opacity, 1),
+        blendMode,
+        visible,
+      });
+      continue;
+    }
+
+    if (type === "TEXTURE") {
+      out.push({
+        kind: "texture",
+        noiseSize: asNumber(e.noiseSize, 1),
+        radius: asNumber(e.radius, 0),
+        clipToShape: e.clipToShape !== false,
+        visible,
+      });
+      continue;
+    }
+
+    if (type === "GLASS") {
+      out.push({
+        kind: "glass",
+        lightIntensity: asNumber(e.lightIntensity, 0.5),
+        lightAngle: asNumber(e.lightAngle, 45),
+        refraction: asNumber(e.refraction, 0.5),
+        depth: asNumber(e.depth, 4),
+        dispersion: asNumber(e.dispersion, 0),
+        radius: asNumber(e.radius, 0),
+        visible,
       });
       continue;
     }
   }
 
   return out;
+}
+
+/**
+ * Pull a PROGRESSIVE blur descriptor off a LAYER_BLUR/BACKGROUND_BLUR effect.
+ * Returns undefined for NORMAL blurs (the plugin omits the offset fields).
+ */
+function extractProgressive(e: AnyRecord):
+  | { startRadius: number; startOffset: number; endOffset: number }
+  | undefined {
+  const blurType = asString(e.blurType);
+  if (blurType !== "PROGRESSIVE") return undefined;
+  // We rely on either explicit start/end offsets OR fall back to a sensible
+  // top-to-bottom ramp (0 → 1) when only the start radius is provided.
+  return {
+    startRadius: asNumber(e.startRadius, 0),
+    startOffset: asNumber(e.startOffset, 0),
+    endOffset: asNumber(e.endOffset, 1),
+  };
 }

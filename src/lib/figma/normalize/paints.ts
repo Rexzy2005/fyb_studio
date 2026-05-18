@@ -51,6 +51,61 @@ function parseImageTransform(raw: unknown): AffineMatrix | undefined {
   return { a, b, c, d, tx, ty };
 }
 
+/**
+ * Convert Figma's `gradientTransform` (the form emitted by the new FYB
+ * Extractor plugin) into the three canonical handle positions:
+ *
+ *   handles[0] = start of the gradient    (gradient-space 0)
+ *   handles[1] = end of the gradient      (gradient-space 1)
+ *   handles[2] = perpendicular width      (controls radial/diamond axis)
+ *
+ * The plugin matrix is [[a, c, tx], [b, d, ty]] and maps unit-square
+ * gradient coordinates to node bbox coordinates. To recover handle
+ * positions in node space we apply the INVERSE of the matrix to the
+ * canonical gradient-space anchor points (0, 0.5), (1, 0.5), (0, 1).
+ *
+ * Returns null on a degenerate (zero-determinant) matrix so the caller
+ * can fall back to the default horizontal sweep.
+ */
+function deriveHandlesFromTransform(
+  raw: unknown,
+): Array<{ x: number; y: number }> | null {
+  if (!Array.isArray(raw) || raw.length < 2) return null;
+  const r0 = Array.isArray(raw[0]) ? (raw[0] as unknown[]) : null;
+  const r1 = Array.isArray(raw[1]) ? (raw[1] as unknown[]) : null;
+  if (!r0 || !r1 || r0.length < 3 || r1.length < 3) return null;
+  const a = asNumber(r0[0], NaN);
+  const c = asNumber(r0[1], NaN);
+  const tx = asNumber(r0[2], NaN);
+  const b = asNumber(r1[0], NaN);
+  const d = asNumber(r1[1], NaN);
+  const ty = asNumber(r1[2], NaN);
+  if (![a, b, c, d, tx, ty].every(Number.isFinite)) return null;
+
+  // 2x2 affine inverse (the translation is handled separately).
+  const det = a * d - b * c;
+  if (Math.abs(det) < 1e-9) return null;
+  const invDet = 1 / det;
+  const iA = d * invDet;
+  const iB = -b * invDet;
+  const iC = -c * invDet;
+  const iD = a * invDet;
+  const iTx = (c * ty - d * tx) * invDet;
+  const iTy = (b * tx - a * ty) * invDet;
+
+  // Apply the inverse to each canonical gradient-space anchor.
+  const apply = (gx: number, gy: number): { x: number; y: number } => ({
+    x: iA * gx + iC * gy + iTx,
+    y: iB * gx + iD * gy + iTy,
+  });
+
+  return [
+    apply(0, 0.5),  // start
+    apply(1, 0.5),  // end
+    apply(0, 1.5),  // perpendicular width control
+  ];
+}
+
 export function parseFills(
   node: AnyRecord,
   warnings: NormalizedDesignV1["warnings"],
@@ -141,7 +196,7 @@ export function parseFills(
         })
         .filter((v): v is NonNullable<typeof v> => Boolean(v));
 
-      const handles = handlePositions
+      let handles = handlePositions
         .map((p) => {
           if (!isRecord(p)) return null;
           const x = asNumber(p.x, NaN);
@@ -150,6 +205,18 @@ export function parseFills(
           return { x, y };
         })
         .filter((v): v is NonNullable<typeof v> => Boolean(v));
+
+      // The new FYB extractor plugin emits `gradientTransform` (a 2x3
+      // affine matrix mapping unit-square gradient space → node bbox
+      // space) instead of `gradientHandlePositions`. When the legacy
+      // array is absent we derive the equivalent handles by inverting
+      // the transform and applying it to the canonical unit-gradient
+      // anchor points. Without this, every gradient from the new
+      // plugin defaulted to a horizontal left-to-right sweep.
+      if (handles.length === 0) {
+        const derived = deriveHandlesFromTransform(fill.gradientTransform);
+        if (derived) handles = derived;
+      }
 
       const gradientType =
         type === "GRADIENT_LINEAR"

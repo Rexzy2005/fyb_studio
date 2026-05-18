@@ -2,9 +2,11 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Image from "next/image";
-import { Search } from "lucide-react";
+import { ChevronLeft, ChevronRight, Search } from "lucide-react";
 
 import type { AdminUserListItem } from "@/backend/services/user.service";
+
+const PAGE_SIZE = 20;
 
 type ApiResponse =
   | { users: AdminUserListItem[] }
@@ -35,6 +37,7 @@ export default function AdminUsersPage() {
   const [users, setUsers] = useState<AdminUserListItem[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
+  const [page, setPage] = useState(1);
 
   useEffect(() => {
     let cancelled = false;
@@ -76,6 +79,25 @@ export default function AdminUsersPage() {
       );
     });
   }, [users, search]);
+
+  // Reset to page 1 whenever the filter set shrinks (new search) so the
+  // table doesn't show an empty page that's beyond the new last page.
+  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  const safePage = Math.min(page, totalPages);
+  useEffect(() => {
+    if (safePage !== page) setPage(safePage);
+  }, [safePage, page]);
+
+  // Snap back to page 1 when the search term changes so users land on
+  // matching results instead of an empty trailing page.
+  useEffect(() => {
+    setPage(1);
+  }, [search]);
+
+  const pageStart = (safePage - 1) * PAGE_SIZE;
+  const pageRows = filtered.slice(pageStart, pageStart + PAGE_SIZE);
+  const visibleFrom = filtered.length === 0 ? 0 : pageStart + 1;
+  const visibleTo = Math.min(filtered.length, pageStart + PAGE_SIZE);
 
   const onboardedCount = useMemo(
     () => users.filter((u) => u.isOnboarded).length,
@@ -163,7 +185,7 @@ export default function AdminUsersPage() {
                     </td>
                   </tr>
                 ) : (
-                  filtered.map((u) => (
+                  pageRows.map((u) => (
                     <tr
                       key={u.id}
                       className="hover:bg-canvas dark:hover:bg-surface-2/40"
@@ -212,6 +234,50 @@ export default function AdminUsersPage() {
               </tbody>
             </table>
           </div>
+
+          {/* Pager - only when there's something to page through. Page-N-of-M
+              label sits opposite the prev/next controls; both stack on
+              narrow screens via flex-wrap. */}
+          {!loading && filtered.length > 0 ? (
+            <div className="flex flex-wrap items-center justify-between gap-3 border-t border-hairline px-4 py-3 dark:border-hairline">
+              <div className="text-xs text-ink-muted dark:text-ink-muted">
+                Showing{" "}
+                <span className="font-semibold text-ink dark:text-ink tabular-nums">
+                  {visibleFrom}–{visibleTo}
+                </span>{" "}
+                of{" "}
+                <span className="font-semibold text-ink dark:text-ink tabular-nums">
+                  {filtered.length}
+                </span>
+                {search.trim() ? " filtered" : ""}
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setPage((p) => Math.max(1, p - 1))}
+                  disabled={safePage <= 1}
+                  aria-label="Previous page"
+                  className="inline-flex h-9 items-center justify-center gap-1.5 rounded-xl border border-hairline bg-surface-1 px-3 text-xs font-medium text-ink-muted transition hover:bg-canvas hover:text-ink disabled:cursor-not-allowed disabled:opacity-40 dark:border-hairline dark:bg-surface-1 dark:text-ink-muted dark:hover:bg-surface-2 dark:hover:text-ink"
+                >
+                  <ChevronLeft className="h-3.5 w-3.5" />
+                  <span className="hidden sm:inline">Prev</span>
+                </button>
+                <div className="inline-flex h-9 min-w-[5rem] items-center justify-center rounded-xl border border-hairline bg-canvas px-3 text-xs font-semibold tabular-nums text-ink dark:border-hairline dark:bg-surface-2 dark:text-ink">
+                  Page {safePage} / {totalPages}
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                  disabled={safePage >= totalPages}
+                  aria-label="Next page"
+                  className="inline-flex h-9 items-center justify-center gap-1.5 rounded-xl border border-hairline bg-surface-1 px-3 text-xs font-medium text-ink-muted transition hover:bg-canvas hover:text-ink disabled:cursor-not-allowed disabled:opacity-40 dark:border-hairline dark:bg-surface-1 dark:text-ink-muted dark:hover:bg-surface-2 dark:hover:text-ink"
+                >
+                  <span className="hidden sm:inline">Next</span>
+                  <ChevronRight className="h-3.5 w-3.5" />
+                </button>
+              </div>
+            </div>
+          ) : null}
         </div>
       </div>
     </div>

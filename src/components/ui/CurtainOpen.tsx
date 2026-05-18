@@ -67,7 +67,7 @@ export function CurtainOpen({
         overflow: "hidden",
       }}
     >
-      {/* Backdrop — gold radial behind the curtains */}
+      {/* Backdrop - gold radial behind the curtains */}
       <div
         style={{
           position: "absolute", inset: 0,
@@ -76,7 +76,7 @@ export function CurtainOpen({
         }}
       />
 
-      {/* Confetti puff canvas — sits behind the curtains so it's
+      {/* Confetti puff canvas - sits behind the curtains so it's
           REVEALED as they pull apart. */}
       <canvas
         ref={puffCanvasRef}
@@ -88,7 +88,7 @@ export function CurtainOpen({
         }}
       />
 
-      {/* Brand mark — fades out as curtains open */}
+      {/* Brand mark - fades out as curtains open */}
       <div
         style={{
           position: "absolute", inset: 0,
@@ -107,7 +107,6 @@ export function CurtainOpen({
               width: 40, height: 40,
               borderRadius: 9,
               overflow: "hidden",
-              boxShadow: "0 6px 18px rgba(255,180,0,0.35)",
             }}
           >
             {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -158,7 +157,7 @@ export function CurtainOpen({
         }}
       />
 
-      {/* Gold rim light along the seam — flashes on as curtains begin to part */}
+      {/* Gold rim light along the seam - flashes on as curtains begin to part */}
       <div
         style={{
           position: "absolute", top: 0, left: 0, right: 0,

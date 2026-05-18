@@ -50,7 +50,7 @@ export function TopNav({
         }}
       >
         <div className="mx-auto flex h-full max-w-[1200px] items-center justify-between gap-4 px-5 sm:px-8">
-          {/* Brand mark — logo IS the "FYB" so the wordmark reads `[logo]Studio`
+          {/* Brand mark - logo IS the "FYB" so the wordmark reads `[logo]Studio`
               as a continuous unit. No gap, no separator. */}
           <Link href={brandHref} className="flex items-center gap-1.5">
             <span
@@ -61,7 +61,6 @@ export function TopNav({
                 width: 32, height: 32,
                 borderRadius: 7,
                 overflow: "hidden",
-                boxShadow: "0 4px 12px rgba(255,180,0,0.18)",
                 flexShrink: 0,
               }}
             >
@@ -96,7 +95,7 @@ export function TopNav({
 
           <div className="flex items-center gap-2">
             {rightSlot}
-            {/* Auth slot — avatar visible on every screen size when signed in */}
+            {/* Auth slot - avatar visible on every screen size when signed in */}
             {showAuth && (
               <div>
                 <HeaderAuthSlot />

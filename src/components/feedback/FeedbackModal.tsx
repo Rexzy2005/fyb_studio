@@ -275,7 +275,7 @@ export function FeedbackModal({
               Honest feedback shapes the next release. Takes 30 seconds.
             </p>
 
-            {/* Rating picker — emoji row, larger touch targets on mobile */}
+            {/* Rating picker - emoji row, larger touch targets on mobile */}
             <div
               role="radiogroup"
               aria-label="Overall rating"

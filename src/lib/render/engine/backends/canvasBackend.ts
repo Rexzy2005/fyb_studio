@@ -12,6 +12,10 @@ import { drawImageCoverContain, drawImagePlaceholder } from "@/lib/render/drawIm
 import { applyDropShadow } from "@/lib/render/features/effects/dropShadow";
 import { applyInnerShadow } from "@/lib/render/features/effects/innerShadow";
 import { applyBackgroundBlur } from "@/lib/render/features/effects/backgroundBlur";
+import { applyNoiseOverlay } from "@/lib/render/features/effects/noise";
+import { applyTextureOverlay } from "@/lib/render/features/effects/texture";
+import { applyGlassOverlay } from "@/lib/render/features/effects/glass";
+import { applyProgressiveLayerBlur } from "@/lib/render/features/effects/progressiveBlur";
 import { applyImageFill } from "@/lib/render/features/paints/imageFill";
 import { paintGradientFill } from "@/lib/render/features/canvasGradient";
 import { clipNode, fillNode, strokeNode } from "@/lib/render/features/canvasNode";
@@ -272,11 +276,21 @@ export class CanvasBackend implements RenderBackend {
       (e): e is Extract<NormalizedNode["effects"][number], { kind: "inner-shadow" }> =>
         e.kind === "inner-shadow" && e.visible,
     );
-    // Layer blur: blurs the node's own content. Approximate by setting ctx.filter
-    // before all fills so every drawing operation appears blurred.
-    const layerBlurRadius = (node.effects ?? []).reduce(
-      (max, e) => e.kind === "layer-blur" && e.visible && e.radius > max ? e.radius : max,
+    // Layer blur: blurs the node's own content. Two flavours:
+    //   - NORMAL: ctx.filter before fills so every draw appears blurred.
+    //   - PROGRESSIVE: capture rendered result, then ramp blur across the
+    //     node - handled separately after fills/strokes paint.
+    const layerBlurNormal = (node.effects ?? []).reduce(
+      (max, e) =>
+        e.kind === "layer-blur" && e.visible && !e.progressive && e.radius > max
+          ? e.radius
+          : max,
       0,
+    );
+    const layerBlurRadius = layerBlurNormal;
+    const progressiveLayerBlur = (node.effects ?? []).find(
+      (e): e is Extract<NormalizedNode["effects"][number], { kind: "layer-blur" }> =>
+        e.kind === "layer-blur" && e.visible && Boolean(e.progressive),
     );
     // Background blur: blurs canvas content that lies behind this node, then
     // paints it back clipped to the node shape. Must run before fills.
@@ -298,6 +312,16 @@ export class CanvasBackend implements RenderBackend {
     // Background blur: capture and blur what's already on canvas under the node.
     if (bgBlurEffect && bgBlurEffect.radius > 0) {
       applyBackgroundBlur(ctx, fillPath, fillFrame, bgBlurEffect.radius);
+    }
+
+    // Glass effect: samples the backdrop, refracts + light-sweeps. Must run
+    // BEFORE fills (it composites the refracted backdrop where the node sits).
+    const glassEffect = (node.effects ?? []).find(
+      (e): e is Extract<NormalizedNode["effects"][number], { kind: "glass" }> =>
+        e.kind === "glass" && e.visible,
+    );
+    if (glassEffect) {
+      applyGlassOverlay(ctx, fillPath, fillFrame, glassEffect);
     }
 
     // Layer blur: set filter before fills so all subsequent draws appear blurred.
@@ -374,7 +398,22 @@ export class CanvasBackend implements RenderBackend {
     //   - else: stroke around fillPath using canvas line-rendering with
     //     INSIDE/CENTER/OUTSIDE alignment.
     for (const stroke of node.strokes) {
-      if (stroke.weight <= 0) continue;
+      // Per-side weights override the flat `weight` field - render each
+      // side as its own segment so asymmetric borders look right.
+      const hasPerSide =
+        stroke.individualWeights &&
+        // Skip the work when all sides equal the flat weight already.
+        !(stroke.individualWeights.top === stroke.weight &&
+          stroke.individualWeights.right === stroke.weight &&
+          stroke.individualWeights.bottom === stroke.weight &&
+          stroke.individualWeights.left === stroke.weight);
+
+      if (hasPerSide && !strokeFillPath) {
+        this.strokePerSide(ctx, stroke, fillFrame, canUseMatrix, localW, localH);
+        continue;
+      }
+
+      if (stroke.weight <= 0 && !hasPerSide) continue;
       if (!stroke.paint.visible) continue;
       if (strokeFillPath) {
         ctx.save();
@@ -397,6 +436,41 @@ export class CanvasBackend implements RenderBackend {
     // Inner shadows are painted on top of fills (clipped to the shape).
     for (const eff of innerShadows) {
       applyInnerShadow(ctx, fillPath, eff);
+    }
+
+    // Progressive layer blur - captures the rendered fills+strokes+inner
+    // shadows for this node and re-paints them with a ramped blur radius.
+    if (progressiveLayerBlur && progressiveLayerBlur.progressive) {
+      applyProgressiveLayerBlur(ctx, fillPath, fillFrame, {
+        startRadius: progressiveLayerBlur.progressive.startRadius,
+        endRadius: progressiveLayerBlur.radius,
+        startOffset: progressiveLayerBlur.progressive.startOffset,
+        endOffset: progressiveLayerBlur.progressive.endOffset,
+      });
+    }
+
+    // Noise overlays - painted on top of fills + inner shadows, clipped
+    // to the node silhouette. Multiple noise effects compose (each with
+    // its own blendMode).
+    const noiseEffects = (node.effects ?? []).filter(
+      (e): e is Extract<NormalizedNode["effects"][number], { kind: "noise" }> =>
+        e.kind === "noise" && e.visible,
+    );
+    if (noiseEffects.length > 0) {
+      for (const eff of noiseEffects) {
+        applyNoiseOverlay(ctx, fillPath, fillFrame, eff);
+      }
+    }
+
+    // Texture overlays - embossed grain via overlay-blend value noise.
+    const textureEffects = (node.effects ?? []).filter(
+      (e): e is Extract<NormalizedNode["effects"][number], { kind: "texture" }> =>
+        e.kind === "texture" && e.visible,
+    );
+    if (textureEffects.length > 0) {
+      for (const eff of textureEffects) {
+        applyTextureOverlay(ctx, fillPath, fillFrame, eff);
+      }
     }
 
     ctx.restore();
@@ -455,6 +529,56 @@ export class CanvasBackend implements RenderBackend {
     } else {
       // Legacy non-matrix fallback retains the old behavior (CENTER alignment).
       strokeNode(ctx, node);
+    }
+    ctx.restore();
+  }
+
+  /**
+   * Paint each side of an asymmetric border (Figma's "individual stroke
+   * weights") independently. Each side is rendered as a thin rectangle
+   * placed against the corresponding edge of the node frame so designers
+   * who use 0px top + 4px bottom (etc.) get the exact silhouette Figma
+   * does. Works for axis-aligned rectangles; for vectors the side-stroke
+   * concept doesn't apply and the caller falls back to flat-weight mode.
+   */
+  private strokePerSide(
+    ctx: CanvasRenderingContext2D,
+    stroke: NormalizedStroke,
+    fillFrame: { x: number; y: number; width: number; height: number },
+    canUseMatrix: boolean,
+    localW: number,
+    localH: number,
+  ): void {
+    const w = stroke.individualWeights;
+    if (!w) return;
+
+    // When the node is being rendered in its local matrix the frame origin
+    // is at (0,0); otherwise we paint at the absolute frame origin.
+    const fx = canUseMatrix ? 0 : fillFrame.x;
+    const fy = canUseMatrix ? 0 : fillFrame.y;
+    const fw = canUseMatrix ? localW : fillFrame.width;
+    const fh = canUseMatrix ? localH : fillFrame.height;
+
+    ctx.save();
+    ctx.fillStyle = stroke.css;
+    if (stroke.align === "INSIDE") {
+      // Strips sit fully inside the frame.
+      if (w.top > 0) ctx.fillRect(fx, fy, fw, w.top);
+      if (w.bottom > 0) ctx.fillRect(fx, fy + fh - w.bottom, fw, w.bottom);
+      if (w.left > 0) ctx.fillRect(fx, fy, w.left, fh);
+      if (w.right > 0) ctx.fillRect(fx + fw - w.right, fy, w.right, fh);
+    } else if (stroke.align === "OUTSIDE") {
+      // Strips sit fully outside the frame.
+      if (w.top > 0) ctx.fillRect(fx - w.left, fy - w.top, fw + w.left + w.right, w.top);
+      if (w.bottom > 0) ctx.fillRect(fx - w.left, fy + fh, fw + w.left + w.right, w.bottom);
+      if (w.left > 0) ctx.fillRect(fx - w.left, fy, w.left, fh);
+      if (w.right > 0) ctx.fillRect(fx + fw, fy, w.right, fh);
+    } else {
+      // CENTER: each strip straddles its edge by half the weight on each side.
+      if (w.top > 0) ctx.fillRect(fx, fy - w.top / 2, fw, w.top);
+      if (w.bottom > 0) ctx.fillRect(fx, fy + fh - w.bottom / 2, fw, w.bottom);
+      if (w.left > 0) ctx.fillRect(fx - w.left / 2, fy, w.left, fh);
+      if (w.right > 0) ctx.fillRect(fx + fw - w.right / 2, fy, w.right, fh);
     }
     ctx.restore();
   }

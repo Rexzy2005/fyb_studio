@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { X } from "lucide-react";
+import { ShieldCheck, X } from "lucide-react";
 
 import {
   initializePayment,
@@ -185,7 +185,7 @@ export function PaymentModal({
           />
         </div>
 
-        {/* Close button — top-right */}
+        {/* Close button - top-right */}
         <button
           type="button"
           aria-label="Close"
@@ -211,41 +211,104 @@ export function PaymentModal({
             paddingBottom: "calc(env(safe-area-inset-bottom) + 16px)",
           }}
         >
-          {/* Compact header — template name + big price, nothing else. */}
-          <div className="px-5 pt-5 pb-5 sm:px-6 sm:pt-6 text-center">
+          {/* Checkout-style header: title + small eyebrow. */}
+          <div className="px-5 pt-5 pb-4 sm:px-6 sm:pt-6">
             <div
               style={{
                 fontFamily: FONT_MONO, fontSize: 9, letterSpacing: "0.28em",
                 color: "rgba(255,215,0,0.7)", textTransform: "uppercase",
-                fontWeight: 700, marginBottom: 12,
+                fontWeight: 700, marginBottom: 10,
               }}
             >
-              Unlock download
+              Checkout
             </div>
             <h2
-              className="truncate"
               style={{
                 fontFamily: FONT_JKT, fontWeight: 800,
-                fontSize: "clamp(18px, 4.4vw, 22px)",
-                color: "#fff", letterSpacing: "-0.02em",
-                lineHeight: 1.2, margin: 0,
+                fontSize: "clamp(20px, 4.6vw, 24px)",
+                color: "#fff", letterSpacing: "-0.025em",
+                lineHeight: 1.15, margin: 0,
               }}
             >
-              {templateName}
+              Download your design
             </h2>
+          </div>
+
+          {/* Order summary line + total - clean financial-document feel. */}
+          <div className="mx-5 mb-5 sm:mx-6">
             <div
               style={{
-                fontFamily: FONT_JKT,
-                fontSize: "clamp(44px, 11vw, 56px)",
-                fontWeight: 900,
-                letterSpacing: "-0.04em",
-                lineHeight: 1,
-                marginTop: 16,
-                color: "#fff",
-                fontVariantNumeric: "tabular-nums",
+                borderRadius: 14,
+                border: "1px solid rgba(255,215,0,0.18)",
+                background: "rgba(255,255,255,0.025)",
+                overflow: "hidden",
               }}
             >
-              ₦{(priceNgn ?? 1000).toLocaleString()}
+              {/* Item row */}
+              <div
+                style={{
+                  display: "flex", alignItems: "center", justifyContent: "space-between",
+                  gap: 12, padding: "14px 16px",
+                }}
+              >
+                <div style={{ minWidth: 0, flex: 1 }}>
+                  <div
+                    className="truncate"
+                    style={{
+                      fontFamily: FONT_SANS, fontSize: 14, fontWeight: 600,
+                      color: "#fff", letterSpacing: "-0.01em",
+                    }}
+                  >
+                    {templateName}
+                  </div>
+                  <div
+                    style={{
+                      fontFamily: FONT_SANS, fontSize: 12, color: "rgba(255,255,255,0.5)",
+                      marginTop: 2,
+                    }}
+                  >
+                    Print-ready PNG · one-time unlock
+                  </div>
+                </div>
+                <div
+                  style={{
+                    fontFamily: FONT_JKT, fontVariantNumeric: "tabular-nums",
+                    fontSize: 16, fontWeight: 700, color: "rgba(255,255,255,0.85)",
+                    letterSpacing: "-0.01em",
+                  }}
+                >
+                  ₦{(priceNgn ?? 1000).toLocaleString()}
+                </div>
+              </div>
+
+              {/* Total row */}
+              <div
+                style={{
+                  display: "flex", alignItems: "center", justifyContent: "space-between",
+                  gap: 12, padding: "14px 16px",
+                  borderTop: "1px dashed rgba(255,215,0,0.18)",
+                  background: "linear-gradient(180deg, rgba(255,215,0,0.05), rgba(255,140,66,0.02))",
+                }}
+              >
+                <span
+                  style={{
+                    fontFamily: FONT_MONO, fontSize: 10, letterSpacing: "0.24em",
+                    color: "rgba(255,215,0,0.75)", textTransform: "uppercase", fontWeight: 700,
+                  }}
+                >
+                  Total due
+                </span>
+                <span
+                  style={{
+                    fontFamily: FONT_JKT, fontWeight: 900,
+                    fontSize: "clamp(26px, 6vw, 30px)",
+                    letterSpacing: "-0.03em", lineHeight: 1,
+                    color: "#fff", fontVariantNumeric: "tabular-nums",
+                  }}
+                >
+                  ₦{(priceNgn ?? 1000).toLocaleString()}
+                </span>
+              </div>
             </div>
           </div>
 
@@ -289,20 +352,20 @@ export function PaymentModal({
               </div>
             ) : null}
 
-            {/* CTA stack — gap and button padding both bump up on mobile
-                so the row feels less cramped against the modal edges and
-                each tap target has comfortable breathing room. */}
-            <div className="payment-cta-row flex flex-col gap-3 sm:flex-row-reverse sm:gap-2">
+            {/* CTA row - side-by-side on every viewport. Pay (primary)
+                sits on the right via flex-row-reverse so it lines up with
+                the user's thumb on right-handed mobile use. */}
+            <div className="mt-1 flex flex-row-reverse gap-2.5">
               <button
                 type="button"
                 onClick={startPayment}
                 disabled={submitting}
-                className="payment-cta-btn inline-flex flex-1 items-center justify-center rounded-2xl transition active:scale-95 disabled:cursor-not-allowed disabled:opacity-60"
+                className="inline-flex flex-1 items-center justify-center rounded-2xl transition active:scale-95 disabled:cursor-not-allowed disabled:opacity-60 h-[56px] px-4 sm:h-[50px] sm:px-5"
                 style={{
                   fontFamily: FONT_MONO,
                   fontSize: 12,
                   fontWeight: 800,
-                  letterSpacing: "0.12em",
+                  letterSpacing: "0.08em",
                   textTransform: "uppercase",
                   background: submitting
                     ? "rgba(255,215,0,0.18)"
@@ -311,6 +374,7 @@ export function PaymentModal({
                   boxShadow: submitting
                     ? "none"
                     : "0 12px 30px rgba(255,180,0,0.4), inset 0 1px 0 rgba(255,255,255,0.25)",
+                  whiteSpace: "nowrap",
                 }}
               >
                 {btnLabel}
@@ -319,36 +383,35 @@ export function PaymentModal({
                 type="button"
                 onClick={onClose}
                 disabled={submitting}
-                className="payment-cta-btn inline-flex flex-1 items-center justify-center rounded-2xl transition active:scale-95 disabled:opacity-50"
+                className="inline-flex flex-1 items-center justify-center rounded-2xl transition active:scale-95 disabled:opacity-50 h-[56px] px-4 sm:h-[50px] sm:px-5"
                 style={{
                   fontFamily: FONT_MONO,
                   fontSize: 11,
                   fontWeight: 700,
-                  letterSpacing: "0.14em",
+                  letterSpacing: "0.1em",
                   textTransform: "uppercase",
                   background: "rgba(255,255,255,0.04)",
                   color: "rgba(255,255,255,0.7)",
                   border: "1px solid rgba(255,215,0,0.15)",
+                  whiteSpace: "nowrap",
                 }}
               >
                 Not now
               </button>
             </div>
-            {/* Mobile padding — taller tap targets + roomier h-padding.
-                Desktop keeps the tighter 52px height we had before. */}
-            <style>{`
-              .payment-cta-btn {
-                height: 58px;
-                padding: 0 28px;
-              }
-              @media (min-width: 640px) {
-                .payment-cta-btn {
-                  height: 52px;
-                  padding: 0 22px;
-                }
-              }
-            `}</style>
 
+            {/* Trust line - small, single row, no clutter. */}
+            <div
+              style={{
+                marginTop: 18,
+                display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
+                fontFamily: FONT_MONO, fontSize: 9.5, letterSpacing: "0.18em",
+                color: "rgba(255,255,255,0.4)", textTransform: "uppercase", fontWeight: 700,
+              }}
+            >
+              <ShieldCheck size={11} style={{ color: "#FFD700" }} />
+              <span>Secured by Paystack</span>
+            </div>
           </div>
         </div>
       </div>

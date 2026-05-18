@@ -24,7 +24,7 @@ export const GET = withErrorHandler(async () => {
     getRevenueSummary(),
     getRevenueDailyBuckets(30),
     getTopTemplates(5),
-    getRecentPayments(20),
+    getRecentPayments(10),
   ]);
   return NextResponse.json({
     summary,

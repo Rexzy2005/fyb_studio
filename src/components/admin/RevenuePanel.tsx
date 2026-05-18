@@ -73,19 +73,27 @@ export function RevenuePanel() {
   }
 
   return (
-    <section className="space-y-4">
-      <header className="flex items-end justify-between gap-3">
-        <div>
-          <h2 className="text-base font-semibold tracking-tight text-ink dark:text-ink">
-            Revenue & downloads
+    <section className="space-y-4 sm:space-y-5">
+      <header className="flex flex-wrap items-end justify-between gap-3">
+        <div className="min-w-0">
+          <div className="flex items-center gap-2 text-[10.5px] font-semibold uppercase tracking-[0.22em] text-ink-faint dark:text-ink-faint">
+            <span aria-hidden className="inline-block h-px w-5 bg-[var(--accent-blue)] opacity-60" />
+            Revenue
+          </div>
+          <h2 className="mt-1 text-base font-semibold tracking-tight text-ink sm:text-lg dark:text-ink">
+            Revenue &amp; downloads
           </h2>
-          <p className="text-xs text-ink-muted dark:text-ink-faint">
+          <p className="mt-1 max-w-2xl text-xs leading-relaxed text-ink-muted sm:text-[13px] dark:text-ink-muted">
             Paystack-confirmed earnings and customer download activity.
           </p>
         </div>
         {data ? (
-          <span className="text-[11px] uppercase tracking-wide text-ink-faint dark:text-ink-faint">
-            Last 30 days · {formatNgn(data.summary.last30Days.revenueNgn)}
+          <span className="inline-flex items-center gap-1.5 rounded-full border border-hairline bg-surface-1 px-3 py-1 text-[10.5px] font-semibold uppercase tracking-wider text-ink-muted dark:border-hairline dark:bg-surface-1 dark:text-ink-muted">
+            <span
+              aria-hidden
+              className="inline-block h-1.5 w-1.5 rounded-full bg-[var(--accent-blue)]"
+            />
+            30 days · {formatNgn(data.summary.last30Days.revenueNgn)}
           </span>
         ) : null}
       </header>
@@ -269,15 +277,15 @@ function RevenueStat({
   sub: string;
 }) {
   return (
-    <div className="rounded-2xl border border-hairline bg-surface-1 p-4 dark:border-hairline dark:bg-surface-1">
-      <div className="text-[11px] uppercase tracking-wide text-ink-faint dark:text-ink-faint">
+    <div className="rounded-2xl border border-hairline bg-surface-1 p-3 transition-all hover:-translate-y-0.5 hover:shadow-sm sm:p-4 dark:border-hairline dark:bg-surface-1">
+      <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-ink-faint sm:text-[10.5px] dark:text-ink-faint">
         {label}
       </div>
-      <div className="mt-1 text-xl font-semibold tracking-tight text-ink dark:text-ink">
+      <div className="mt-1 truncate text-xl font-semibold tracking-tight text-ink sm:text-2xl dark:text-ink">
         {value}
       </div>
       {sub ? (
-        <div className="mt-0.5 truncate text-[11px] text-ink-faint dark:text-ink-faint">{sub}</div>
+        <div className="mt-0.5 truncate text-[10.5px] text-ink-muted sm:text-[11.5px] dark:text-ink-muted">{sub}</div>
       ) : null}
     </div>
   );

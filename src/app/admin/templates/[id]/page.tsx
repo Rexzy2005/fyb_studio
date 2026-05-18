@@ -13,7 +13,7 @@ import type { TemplateRecord } from "@/lib/storage/types";
 import { DesignWorkspace } from "@/components/editor/DesignWorkspace";
 import { FieldConfigPanel } from "@/components/editor/FieldConfigPanel";
 import { PreviewFormModal } from "@/components/editor/PreviewFormModal";
-import { Eye } from "lucide-react";
+import { ChevronLeft, Eye, Sliders, X } from "lucide-react";
 import { useTemplateEditorStore } from "@/lib/stores/templateEditorStore";
 import { useEditorDirty } from "@/lib/stores/editorDirtyStore";
 import { useGoogleFonts } from "@/components/editor/useGoogleFonts";
@@ -88,6 +88,18 @@ export default function TemplateEditorPage({
 
   const [warningsModalOpen, setWarningsModalOpen] = useState(false);
   const [previewModalOpen, setPreviewModalOpen] = useState(false);
+  // Mobile-only: opens the FieldConfigPanel as a bottom sheet. Desktop
+  // keeps the always-visible right sidebar untouched.
+  const [mobileFieldsOpen, setMobileFieldsOpen] = useState(false);
+
+  // Lock body scroll while the mobile fields sheet is up so the canvas
+  // behind it doesn't pan under the user's finger.
+  useEffect(() => {
+    if (!mobileFieldsOpen) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => { document.body.style.overflow = prev; };
+  }, [mobileFieldsOpen]);
 
   const normalizeProgress = useSimulatedProgress(normalizing);
   const publishProgress = useSimulatedProgress(publishing);
@@ -637,15 +649,25 @@ export default function TemplateEditorPage({
 
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <header className="flex flex-col gap-3 border-b border-hairline bg-surface-1 px-4 py-3 sm:flex-row sm:items-center sm:justify-between dark:border-hairline dark:bg-surface-1">
-        <div className="flex min-w-0 flex-1 items-center gap-2">
+      {/* Two-tier header - top identifies the template, bottom hosts the
+          actions. Stacks cleanly on mobile, returns to a single row at sm+. */}
+      <header className="flex flex-col border-b border-hairline bg-surface-1 dark:border-hairline dark:bg-surface-1">
+        {/* Tier 1 - breadcrumb + name + status */}
+        <div className="flex items-center gap-2 px-3 pt-2.5 pb-1 sm:px-4 sm:pt-3 sm:pb-2">
           <Link
             href="/admin/templates"
-            className="shrink-0 text-sm font-medium text-ink-muted hover:text-ink dark:text-ink-muted dark:hover:text-ink"
+            aria-label="Back to templates"
+            className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-hairline bg-surface-1 text-ink-muted transition hover:bg-canvas hover:text-ink active:scale-95 sm:hidden dark:border-hairline dark:bg-surface-1 dark:text-ink-muted dark:hover:bg-surface-2 dark:hover:text-ink"
+          >
+            <ChevronLeft className="h-4 w-4" />
+          </Link>
+          <Link
+            href="/admin/templates"
+            className="hidden shrink-0 text-sm font-medium text-ink-muted hover:text-ink sm:inline dark:text-ink-muted dark:hover:text-ink"
           >
             Templates
           </Link>
-          <span className="shrink-0 text-sm text-ink-faint dark:text-ink-faint">/</span>
+          <span className="hidden shrink-0 text-sm text-ink-faint sm:inline dark:text-ink-faint">/</span>
           <input
             type="text"
             value={record.name}
@@ -653,27 +675,46 @@ export default function TemplateEditorPage({
             disabled={mode !== "draft"}
             placeholder="Untitled template"
             aria-label="Template name"
-            className="min-w-0 flex-1 rounded-lg border border-transparent bg-transparent px-2 py-1 text-lg font-semibold tracking-tight text-ink outline-none transition focus:border-hairline hover:border-hairline disabled:cursor-not-allowed disabled:hover:border-transparent dark:text-ink dark:hover:border-hairline dark:focus:border-accent-blue"
+            className="min-w-0 flex-1 rounded-lg border border-transparent bg-transparent px-2 py-1 text-base font-semibold tracking-tight text-ink outline-none transition focus:border-hairline hover:border-hairline disabled:cursor-not-allowed disabled:hover:border-transparent sm:text-lg dark:text-ink dark:hover:border-hairline dark:focus:border-accent-blue"
           />
-          <span className="shrink-0 rounded-full bg-surface-2 px-2 py-1 text-xs font-medium text-ink-muted dark:bg-surface-2 dark:text-ink">
+          <span
+            className={
+              "shrink-0 inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider " +
+              (mode === "published"
+                ? "border border-[rgba(0,153,255,0.28)] bg-[var(--accent-blue-soft)] text-[var(--accent-blue)] dark:border-[rgba(0,153,255,0.28)] dark:bg-[var(--accent-blue-soft)] dark:text-[var(--accent-blue)]"
+                : "border border-[rgba(245,158,11,0.28)] bg-[rgba(245,158,11,0.10)] text-warning dark:border-[rgba(245,158,11,0.28)] dark:bg-[rgba(245,158,11,0.12)] dark:text-warning")
+            }
+          >
+            <span
+              aria-hidden
+              className={
+                "h-1.5 w-1.5 rounded-full " +
+                (mode === "published" ? "bg-[var(--accent-blue)]" : "bg-warning")
+              }
+            />
             {record.status}
           </span>
           {savingConfig ? (
-            <span className="shrink-0 rounded-full bg-surface-2 px-2 py-1 text-[11px] font-medium text-ink-muted dark:bg-surface-2 dark:text-ink">
-              Saving…
+            <span className="hidden shrink-0 items-center gap-1.5 rounded-full bg-canvas px-2.5 py-1 text-[10.5px] font-medium text-ink-muted sm:inline-flex dark:bg-surface-2 dark:text-ink-muted">
+              <span className="fyb-dots" aria-hidden>
+                <span /><span /><span />
+              </span>
+              Saving
             </span>
           ) : null}
         </div>
 
-        <div className="flex flex-wrap items-center gap-2">
+        {/* Tier 2 - actions. Horizontally scrollable on mobile so every
+            button stays one-tap reachable without wrapping into 3 rows. */}
+        <div className="flex items-center gap-2 overflow-x-auto px-3 pb-2.5 sm:flex-wrap sm:px-4 sm:pb-3" style={{ scrollbarWidth: "none" }}>
           {warnings.length ? (
             <button
               type="button"
               onClick={() => setWarningsModalOpen(true)}
-              className="inline-flex h-9 items-center justify-center rounded-xl border border-[rgba(245,158,11,0.28)] bg-[rgba(245,158,11,0.08)] px-3 text-xs font-medium text-warning hover:bg-[rgba(245,158,11,0.16)] dark:border-[rgba(245,158,11,0.28)] dark:bg-[rgba(245,158,11,0.12)] dark:text-warning dark:hover:bg-[rgba(245,158,11,0.16)]"
+              className="inline-flex h-9 shrink-0 items-center justify-center gap-1.5 rounded-xl border border-[rgba(245,158,11,0.28)] bg-[rgba(245,158,11,0.08)] px-3 text-xs font-semibold text-warning transition hover:bg-[rgba(245,158,11,0.16)] active:scale-95 dark:border-[rgba(245,158,11,0.28)] dark:bg-[rgba(245,158,11,0.12)] dark:text-warning dark:hover:bg-[rgba(245,158,11,0.16)]"
               title="View normalization warnings"
             >
-              Warnings ({warnings.length})
+              ⚠ Warnings · {warnings.length}
             </button>
           ) : null}
 
@@ -682,7 +723,7 @@ export default function TemplateEditorPage({
               type="button"
               onClick={() => setPreviewModalOpen(true)}
               disabled={busy}
-              className="inline-flex h-9 items-center justify-center gap-1.5 rounded-xl border border-hairline bg-surface-1 px-3 text-xs font-medium text-ink hover:bg-canvas disabled:opacity-50 dark:border-hairline dark:bg-surface-1 dark:text-ink dark:hover:bg-surface-2"
+              className="inline-flex h-9 shrink-0 items-center justify-center gap-1.5 rounded-xl border border-hairline bg-surface-1 px-3 text-xs font-medium text-ink transition hover:bg-canvas active:scale-95 disabled:opacity-50 dark:border-hairline dark:bg-surface-1 dark:text-ink dark:hover:bg-surface-2"
               title="Open the preview form to test how users will fill it"
             >
               <Eye className="h-3.5 w-3.5" />
@@ -695,7 +736,7 @@ export default function TemplateEditorPage({
               type="button"
               onClick={normalizeNow}
               disabled={busy}
-              className="inline-flex h-9 items-center justify-center rounded-xl bg-surface-1 px-3 text-xs font-medium text-white disabled:opacity-50"
+              className="inline-flex h-9 shrink-0 items-center justify-center rounded-xl bg-[var(--accent-blue)] px-3 text-xs font-semibold text-white transition hover:opacity-90 active:scale-95 disabled:opacity-50"
             >
               {busy ? "Normalizing…" : "Normalize"}
             </button>
@@ -704,7 +745,7 @@ export default function TemplateEditorPage({
               type="button"
               onClick={normalizeNow}
               disabled={busy}
-              className="inline-flex h-9 items-center justify-center rounded-xl border border-hairline bg-surface-1 px-3 text-xs font-medium text-ink hover:bg-canvas disabled:opacity-50 dark:border-hairline dark:bg-surface-1 dark:text-ink dark:hover:bg-surface-2"
+              className="inline-flex h-9 shrink-0 items-center justify-center rounded-xl border border-hairline bg-surface-1 px-3 text-xs font-medium text-ink transition hover:bg-canvas active:scale-95 disabled:opacity-50 dark:border-hairline dark:bg-surface-1 dark:text-ink dark:hover:bg-surface-2"
               title="Re-run normalization (updates fonts/assets/bounds from design JSON)"
             >
               Re-normalize
@@ -713,11 +754,13 @@ export default function TemplateEditorPage({
 
           {mode === "draft" ? (
             <>
+              {/* Spacer pushes the primary actions to the right on desktop */}
+              <span className="hidden sm:block flex-1" aria-hidden />
               <button
                 type="button"
                 onClick={cancelAndStartOver}
                 disabled={busy}
-                className="inline-flex h-9 items-center justify-center rounded-xl border border-hairline bg-surface-1 px-3 text-xs font-medium text-ink hover:bg-canvas disabled:opacity-50 dark:border-hairline dark:bg-surface-1 dark:text-ink dark:hover:bg-surface-2"
+                className="inline-flex h-9 shrink-0 items-center justify-center rounded-xl border border-hairline bg-surface-1 px-3 text-xs font-medium text-ink-muted transition hover:bg-canvas hover:text-ink active:scale-95 disabled:opacity-50 dark:border-hairline dark:bg-surface-1 dark:text-ink-muted dark:hover:bg-surface-2 dark:hover:text-ink"
                 title="Discard this session and upload a new design"
               >
                 Cancel
@@ -726,7 +769,7 @@ export default function TemplateEditorPage({
                 type="button"
                 onClick={saveDraftAndExit}
                 disabled={busy || savingConfig}
-                className="inline-flex h-9 items-center justify-center rounded-xl border border-hairline bg-surface-1 px-3 text-xs font-medium text-ink hover:bg-canvas disabled:opacity-50 dark:border-hairline dark:bg-surface-1 dark:text-ink dark:hover:bg-surface-2"
+                className="inline-flex h-9 shrink-0 items-center justify-center rounded-xl border border-hairline bg-surface-1 px-3 text-xs font-medium text-ink transition hover:bg-canvas active:scale-95 disabled:opacity-50 dark:border-hairline dark:bg-surface-1 dark:text-ink dark:hover:bg-surface-2"
                 title="Save current state and return to the templates list"
               >
                 Save to draft
@@ -735,7 +778,7 @@ export default function TemplateEditorPage({
                 type="button"
                 onClick={openPublishModal}
                 disabled={busy || !normalized}
-                className="inline-flex h-9 items-center justify-center rounded-xl bg-[var(--accent-blue)] px-3 text-xs font-medium text-white disabled:opacity-50"
+                className="inline-flex h-9 shrink-0 items-center justify-center rounded-xl bg-[var(--accent-blue)] px-4 text-xs font-semibold text-white shadow-xs transition hover:opacity-90 active:scale-95 disabled:opacity-50"
                 title={!normalized ? "Normalize before publishing" : undefined}
               >
                 Publish
@@ -745,11 +788,12 @@ export default function TemplateEditorPage({
 
           {mode === "published" ? (
             <>
+              <span className="hidden sm:block flex-1" aria-hidden />
               <button
                 type="button"
                 onClick={openUpdateModal}
                 disabled={busy}
-                className="inline-flex h-9 items-center justify-center rounded-xl bg-[var(--accent-blue)] px-3 text-xs font-medium text-white disabled:opacity-50"
+                className="inline-flex h-9 shrink-0 items-center justify-center rounded-xl bg-[var(--accent-blue)] px-4 text-xs font-semibold text-white shadow-xs transition hover:opacity-90 active:scale-95 disabled:opacity-50"
               >
                 Update
               </button>
@@ -757,7 +801,7 @@ export default function TemplateEditorPage({
                 type="button"
                 onClick={openUnpublishModal}
                 disabled={busy}
-                className="inline-flex h-9 items-center justify-center rounded-xl border border-[rgba(239,68,68,0.28)] bg-[rgba(239,68,68,0.08)] px-3 text-xs font-medium text-danger hover:bg-[rgba(239,68,68,0.12)] disabled:opacity-50 dark:border-[rgba(239,68,68,0.28)] dark:bg-[rgba(239,68,68,0.12)] dark:text-danger dark:hover:bg-red-950/50"
+                className="inline-flex h-9 shrink-0 items-center justify-center rounded-xl border border-[rgba(239,68,68,0.28)] bg-[rgba(239,68,68,0.08)] px-3 text-xs font-medium text-danger transition hover:bg-[rgba(239,68,68,0.12)] active:scale-95 disabled:opacity-50 dark:border-[rgba(239,68,68,0.28)] dark:bg-[rgba(239,68,68,0.12)] dark:text-danger dark:hover:bg-red-950/50"
               >
                 Unpublish
               </button>
@@ -791,7 +835,7 @@ export default function TemplateEditorPage({
         </div>
       ) : (
         <div className="flex min-h-0 flex-1 min-w-0">
-          <div className="flex min-w-0 flex-1 flex-col overflow-hidden p-2 lg:basis-3/4 lg:max-w-[75%]">
+          <div className="relative flex min-w-0 flex-1 flex-col overflow-hidden p-2 lg:basis-3/4 lg:max-w-[75%]">
             <div className="h-full min-h-0 overflow-hidden rounded-2xl border border-hairline bg-surface-1 dark:border-hairline dark:bg-surface-1">
               <DesignWorkspace
                 design={normalized}
@@ -802,6 +846,25 @@ export default function TemplateEditorPage({
                 selectedNodeId={selectedNodeId}
               />
             </div>
+
+            {/* Mobile-only floating "Fields" button - the desktop sidebar
+                is hidden on small screens so this is the only entry into
+                the FieldConfigPanel on a phone. */}
+            <button
+              type="button"
+              onClick={() => setMobileFieldsOpen(true)}
+              className="absolute right-4 bottom-4 inline-flex h-12 items-center gap-2 rounded-full bg-[var(--accent-blue)] px-4 text-sm font-semibold text-white shadow-lg transition active:scale-95 lg:hidden"
+              style={{ paddingBottom: "calc(env(safe-area-inset-bottom) * 0)" }}
+              aria-label="Open fields panel"
+            >
+              <Sliders className="h-4 w-4" />
+              Fields
+              {record.fieldConfig?.fields?.length ? (
+                <span className="rounded-full bg-white/25 px-1.5 py-0.5 text-[10px] font-semibold tabular-nums">
+                  {record.fieldConfig.fields.length}
+                </span>
+              ) : null}
+            </button>
           </div>
 
           <aside className="hidden h-full flex-col border-l border-hairline bg-surface-1 lg:flex lg:basis-1/4 lg:max-w-[25%] dark:border-hairline dark:bg-surface-1">
@@ -822,6 +885,78 @@ export default function TemplateEditorPage({
               />
             </div>
           </aside>
+
+          {/* Mobile-only bottom-sheet drawer for the field config panel.
+              Mirrors the desktop sidebar's contents but stacks the canvas
+              underneath, dimmed and inert. */}
+          {mobileFieldsOpen && normalized ? (
+            <div
+              className="fixed inset-0 z-50 flex flex-col lg:hidden"
+              role="dialog"
+              aria-modal="true"
+              aria-label="Field configuration"
+              style={{ height: "100dvh" }}
+            >
+              <button
+                type="button"
+                className="absolute inset-0 bg-black/45 backdrop-blur-sm"
+                aria-label="Close fields panel"
+                onClick={() => setMobileFieldsOpen(false)}
+              />
+              <div
+                className="relative mt-auto flex max-h-[88dvh] min-h-[60dvh] flex-col overflow-hidden rounded-t-3xl border border-hairline bg-surface-1 shadow-2xl dark:border-hairline dark:bg-surface-1"
+              >
+                {/* Drag handle */}
+                <div className="flex shrink-0 justify-center pt-2.5 pb-1">
+                  <div
+                    aria-hidden
+                    className="h-1 w-10 rounded-full bg-hairline dark:bg-surface-2"
+                  />
+                </div>
+                {/* Header */}
+                <div className="flex shrink-0 items-center justify-between gap-3 border-b border-hairline px-4 py-3 dark:border-hairline">
+                  <div className="flex items-center gap-2">
+                    <span className="grid h-8 w-8 place-items-center rounded-xl bg-[var(--accent-blue-soft)] text-[var(--accent-blue)] dark:bg-[var(--accent-blue-soft)] dark:text-[var(--accent-blue)]">
+                      <Sliders className="h-4 w-4" />
+                    </span>
+                    <div className="min-w-0">
+                      <div className="text-sm font-semibold text-ink dark:text-ink">
+                        Fields
+                      </div>
+                      <div className="text-[11px] text-ink-muted dark:text-ink-muted">
+                        Configure what users can edit
+                      </div>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setMobileFieldsOpen(false)}
+                    aria-label="Close"
+                    className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-hairline bg-surface-1 text-ink hover:bg-canvas active:scale-95 dark:border-hairline dark:bg-surface-1 dark:text-ink dark:hover:bg-surface-2"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                </div>
+                {/* Scrollable body */}
+                <div className="flex-1 min-h-0 overflow-y-auto p-4">
+                  <FieldConfigPanel
+                    design={normalized}
+                    config={record.fieldConfig}
+                    onChange={updateFieldConfig}
+                    selectedNodeId={selectedNodeId}
+                    onSelectNodeId={setSelectedNodeId}
+                    previewTextByNodeId={previewTextByNodeId}
+                    onPreviewTextChange={onPreviewTextChange}
+                    onPreviewImageChange={onPreviewImageChange}
+                    previewColorByNodeId={previewColorByNodeId}
+                    onPreviewColorChange={onPreviewColorChange}
+                    templateId={mode === "draft" ? id : null}
+                    onDesignAssetsChanged={reloadDesignAssets}
+                  />
+                </div>
+              </div>
+            </div>
+          ) : null}
         </div>
       )}
 

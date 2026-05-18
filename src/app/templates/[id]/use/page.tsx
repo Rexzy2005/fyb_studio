@@ -454,10 +454,36 @@ export default function UseTemplatePage({
     setExporting(true);
     setExportStage("Preparing images");
     try {
+      // Image precedence (lowest → highest) — must match composeImageMap so
+      // the export is pixel-identical to the editor preview:
+      //   1. Plugin-original images baked into the Figma design
+      //   2. User-uploaded preview overrides
+      //   3. Admin design assets (only when the field is bound to one)
+      //
+      // The export was previously missing layer 1, so any node whose photo
+      // was supplied by the plugin (logos, decorative imagery, default
+      // portraits) rendered as a transparent placeholder in the PNG even
+      // though the editor showed it correctly.
       const imageBlobs: Record<string, { blob: Blob; objectFit: "cover" | "contain" }> = {};
+
+      // 1. Plugin originals — these are data URLs; fetch them into Blobs.
+      await Promise.all(
+        Object.entries(pluginImageByNodeId).map(async ([nodeId, entry]) => {
+          const blob = await dataUrlToBlob(entry.url);
+          if (blob) {
+            imageBlobs[nodeId] = { blob, objectFit: entry.objectFit };
+          }
+        })
+      );
+
+      // 2. User-uploaded previews override plugin originals.
       for (const [nodeId, v] of Object.entries(previewImageByNodeId)) {
-        imageBlobs[nodeId] = { blob: v.blob, objectFit: v.objectFit };
+        if (v.blob) {
+          imageBlobs[nodeId] = { blob: v.blob, objectFit: v.objectFit };
+        }
       }
+
+      // 3. Admin design assets — overrides per field.imageSource setting.
       for (const f of fieldConfig.fields) {
         if (f.kind !== "image") continue;
         if (f.imageSource !== "design_asset") continue;
@@ -487,12 +513,20 @@ export default function UseTemplatePage({
       });
 
       setExportStage("Preparing download");
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `${recordName.replaceAll(/[^a-z0-9-_ ]/gi, "").trim() || "template"}.png`;
-      a.click();
-      URL.revokeObjectURL(url);
+      // System-controlled download — we drive the file save end-to-end
+      // instead of letting the browser hijack it:
+      //   - Build the blob URL.
+      //   - Mount the <a> in the DOM (some browsers ignore .click() on a
+      //     detached anchor; Safari requires the element to be in the tree).
+      //   - Fire a synthesised click event so the popup-blocker doesn't
+      //     classify it as an unprompted navigation.
+      //   - Defer the URL revoke long enough for the download to commit
+      //     (Safari occasionally races the revoke and produces a 0-byte
+      //     file otherwise).
+      triggerSystemDownload(
+        blob,
+        `${recordName.replaceAll(/[^a-z0-9-_ ]/gi, "").trim() || "template"}.png`,
+      );
 
       // Save a thumbnail at scale 1 for the dashboard recents.
       let thumbnail: { blob: Blob; mime: string; width: number; height: number } | null = null;
@@ -604,9 +638,9 @@ export default function UseTemplatePage({
 
   return (
     <div className="flex h-dvh min-w-0 flex-col bg-canvas dark:bg-canvas">
-      {/* Cinematic transition — plays once the workspace is ready */}
+      {/* Cinematic transition - plays once the workspace is ready */}
       <CurtainOpen brand="WORKSPACE READY" />
-      {/* Shared-with-you banner — only when ?via=share and dismissible */}
+      {/* Shared-with-you banner - only when ?via=share and dismissible */}
       {shareBannerOpen && (
         <div
           className="flex items-center justify-between gap-3 px-4 py-2.5"
@@ -839,7 +873,7 @@ export default function UseTemplatePage({
         </aside>
 
         <main className="flex h-full min-w-0 flex-1 flex-col overflow-hidden">
-          {/* Workspace top bar — hosts Reset + Download for prominence */}
+          {/* Workspace top bar - hosts Reset + Download for prominence */}
           <div
             className="hidden items-center justify-between gap-4 px-4 py-2.5 lg:flex"
             style={{
@@ -946,7 +980,7 @@ export default function UseTemplatePage({
           className="hidden h-full w-80 flex-col bg-surface-1 lg:flex xl:w-95"
           style={{ borderLeft: "1px solid rgba(255,215,0,0.12)" }}
         >
-          {/* Header — title + section indicator */}
+          {/* Header - title + section indicator */}
           <div
             className="px-4 py-3"
             style={{ borderBottom: "1px solid rgba(255,215,0,0.12)" }}
@@ -992,7 +1026,7 @@ export default function UseTemplatePage({
                 {currentDesktopSection?.fields.length ?? 0}
               </span>
             </div>
-            {/* Section dots — tappable */}
+            {/* Section dots - tappable */}
             {desktopSectionCount > 1 && (
               <div className="mt-3 flex items-center gap-1.5">
                 {desktopGroups.map((g, idx) => {
@@ -1143,7 +1177,7 @@ export default function UseTemplatePage({
           role="dialog"
           aria-modal="true"
           /* Use 100dvh so when the on-screen keyboard opens the visible
-             viewport shrinks and the sheet shrinks with it — keeping the
+             viewport shrinks and the sheet shrinks with it - keeping the
              Back/Next buttons above the keyboard at all times. */
           style={{ height: "100dvh" }}
         >
@@ -1160,7 +1194,7 @@ export default function UseTemplatePage({
                layout ensures the bottom action bar stays anchored. */
             style={{ maxHeight: "88dvh", minHeight: "240px" }}
           >
-            {/* Header — shrink-0 so it doesn't get squeezed */}
+            {/* Header - shrink-0 so it doesn't get squeezed */}
             <div className="flex shrink-0 items-center justify-between gap-3 border-b border-hairline px-4 py-3 dark:border-hairline">
               <div className="min-w-0">
                 <div className="flex items-center gap-2">
@@ -1215,7 +1249,7 @@ export default function UseTemplatePage({
               </div>
             ) : null}
 
-            {/* Scrollable form region — flex-1 fills remaining space.
+            {/* Scrollable form region - flex-1 fills remaining space.
                 Critical: this is what scrolls when keyboard pops up,
                 not the whole sheet. */}
             <div
@@ -1243,7 +1277,7 @@ export default function UseTemplatePage({
               </div>
             </div>
 
-            {/* Sticky action bar — anchored at the BOTTOM of the sheet
+            {/* Sticky action bar - anchored at the BOTTOM of the sheet
                 via flex layout, so the on-screen keyboard never covers
                 Back/Next. Safe-area padding accounts for iOS home bar. */}
             <div
@@ -1388,9 +1422,7 @@ export default function UseTemplatePage({
 
       {downloadSuccess && (
         <DownloadSuccessModal
-          designName={recordName}
           onContinue={() => router.push("/dashboard?justDownloaded=1")}
-          onDismiss={() => setDownloadSuccess(false)}
         />
       )}
     </div>
@@ -1398,47 +1430,39 @@ export default function UseTemplatePage({
 }
 
 function DownloadSuccessModal({
-  designName,
   onContinue,
-  onDismiss,
 }: {
-  designName: string;
   onContinue: () => void;
-  onDismiss: () => void;
 }) {
+  const puffCanvasRef = useRef<HTMLCanvasElement>(null);
+
+  // Fire a canvas-based confetti puff from the center the instant the
+  // modal mounts. Same physics as the landing-page cinematic — gravity +
+  // drag + colour mix — so the celebration feels brand-consistent.
+  useEffect(() => {
+    const cleanup = firePuff(puffCanvasRef.current);
+    return cleanup;
+  }, []);
+
   return (
     <div
       className="fixed inset-0 z-[90] flex items-center justify-center p-4"
       style={{ background: "rgba(0,0,0,0.8)", backdropFilter: "blur(10px)" }}
     >
-      {/* Confetti dots */}
-      <div className="pointer-events-none absolute inset-0 overflow-hidden" aria-hidden>
-        {[
-          ["#FFD700", "15%", "20%", "0.6s"],
-          ["#A855F7", "35%", "10%", "0.3s"],
-          ["#22c55e", "55%", "15%", "0.8s"],
-          ["#F97316", "75%", "12%", "0.1s"],
-          ["#06B6D4", "88%", "25%", "0.5s"],
-          ["#EC4899", "20%", "75%", "0.7s"],
-          ["#FFD700", "65%", "80%", "0.2s"],
-          ["#A855F7", "82%", "70%", "0.9s"],
-          ["#22c55e", "10%", "60%", "0.4s"],
-          ["#F97316", "45%", "85%", "0.6s"],
-        ].map(([color, left, top, delay], i) => (
-          <div
-            key={i}
-            className="absolute h-3 w-3 rounded-full animate-bounce"
-            style={{
-              background: color,
-              left,
-              top,
-              animationDelay: delay,
-              animationDuration: `${1.2 + i * 0.1}s`,
-              opacity: 0.8,
-            }}
-          />
-        ))}
-      </div>
+      {/* Canvas confetti puff — covers the full viewport so the burst
+          spans the whole celebration, not just behind the card. */}
+      <canvas
+        ref={puffCanvasRef}
+        aria-hidden
+        style={{
+          position: "absolute",
+          inset: 0,
+          width: "100%",
+          height: "100%",
+          pointerEvents: "none",
+          zIndex: 1,
+        }}
+      />
 
       <div
         className="relative w-full max-w-sm overflow-hidden text-center"
@@ -1447,6 +1471,7 @@ function DownloadSuccessModal({
           border: "1px solid var(--hairline)",
           borderRadius: 28,
           boxShadow: "0 40px 100px rgba(0,0,0,0.7)",
+          zIndex: 2,
         }}
       >
         {/* Gold top bar */}
@@ -1490,8 +1515,7 @@ function DownloadSuccessModal({
             className="mt-2 text-sm"
             style={{ color: "var(--ink-muted)", lineHeight: 1.6 }}
           >
-            <span style={{ color: "var(--ink)", fontWeight: 600 }}>{designName}</span> is saved to your
-            device. Your masterpiece is ready.
+            Your masterpiece is ready.
           </p>
 
           <div
@@ -1510,18 +1534,167 @@ function DownloadSuccessModal({
           >
             Continue to dashboard
           </button>
-
-          <button
-            type="button"
-            onClick={onDismiss}
-            className="mt-2 inline-flex h-10 w-full items-center justify-center rounded-2xl text-sm transition"
-            style={{ color: "var(--ink-muted)" }}
-          >
-            Stay in workspace
-          </button>
         </div>
       </div>
     </div>
   );
 }
 
+/* ─── Confetti puff (download celebration) ─────────────── */
+
+const SUCCESS_PUFF_COLORS = [
+  "#FFD700", "#FFED4A", "#FF8C42", "#FF6B6B",
+  "#4ECDC4", "#A855F7", "#84CC16", "#06B6D4", "#EC4899",
+];
+
+const SUCCESS_PUFF_SEEDS = Array.from({ length: 110 }).map((_, i) => {
+  // Deterministic seeds so React 19's strict mode (which double-invokes
+  // effects) doesn't see drifting positions and complain.
+  const a = Math.sin(i * 12.9898) * 43758.5453;
+  const b = Math.sin(i * 78.233) * 43758.5453;
+  const c = Math.sin(i * 39.346) * 43758.5453;
+  const ra = a - Math.floor(a);
+  const rb = b - Math.floor(b);
+  const rc = c - Math.floor(c);
+  const angle = ra * Math.PI * 2;
+  const speed = 6 + rb * 18;
+  return {
+    vx: Math.cos(angle) * speed,
+    vy: Math.sin(angle) * speed - 5, // upward bias for a celebratory rise
+    rotV: (rc - 0.5) * 0.45,
+    color: SUCCESS_PUFF_COLORS[i % SUCCESS_PUFF_COLORS.length],
+    w: 5 + rb * 8,
+    h: 7 + ra * 10,
+    shape: (["rect", "rect", "circle", "ribbon"] as const)[i % 4],
+  };
+});
+
+function firePuff(canvas: HTMLCanvasElement | null): (() => void) | void {
+  if (!canvas) return;
+  const W = canvas.clientWidth || window.innerWidth;
+  const H = canvas.clientHeight || window.innerHeight;
+  const dpr = Math.min(window.devicePixelRatio ?? 1, 2);
+  canvas.width = W * dpr;
+  canvas.height = H * dpr;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return;
+  ctx.scale(dpr, dpr);
+
+  const cx = W / 2;
+  const cy = H / 2;
+  const particles = SUCCESS_PUFF_SEEDS.map((p) => ({
+    x: cx,
+    y: cy,
+    vx: p.vx,
+    vy: p.vy,
+    rot: 0,
+    rotV: p.rotV,
+    w: p.w,
+    h: p.h,
+    color: p.color,
+    shape: p.shape,
+    opacity: 1,
+  }));
+
+  let lastTime = performance.now();
+  let raf = 0;
+  const draw = (now: number) => {
+    const dt = now - lastTime;
+    lastTime = now;
+    ctx.clearRect(0, 0, W, H);
+    let alive = false;
+    for (const p of particles) {
+      if (p.opacity <= 0) continue;
+      alive = true;
+      const f = dt / 16;
+      p.x += p.vx * f;
+      p.y += p.vy * f;
+      p.vy += 0.4 * f;
+      p.vx *= Math.pow(0.985, f);
+      p.rot += p.rotV * f;
+      if (p.y > H * 0.65) p.opacity = Math.max(0, p.opacity - 0.02 * f);
+
+      ctx.save();
+      ctx.globalAlpha = p.opacity;
+      ctx.translate(p.x, p.y);
+      ctx.rotate(p.rot);
+      ctx.fillStyle = p.color;
+      ctx.shadowColor = p.color;
+      ctx.shadowBlur = 8;
+      if (p.shape === "circle") {
+        ctx.beginPath();
+        ctx.arc(0, 0, p.w / 2, 0, Math.PI * 2);
+        ctx.fill();
+      } else if (p.shape === "ribbon") {
+        ctx.beginPath();
+        ctx.moveTo(-p.w / 2, -p.h / 5);
+        ctx.quadraticCurveTo(0, -p.h * 0.6, p.w / 2, -p.h / 5);
+        ctx.quadraticCurveTo(0, p.h * 0.6, -p.w / 2, p.h / 5);
+        ctx.closePath();
+        ctx.fill();
+      } else {
+        ctx.fillRect(-p.w / 2, -p.h / 2, p.w, p.h);
+      }
+      ctx.restore();
+    }
+    if (alive) raf = requestAnimationFrame(draw);
+  };
+  raf = requestAnimationFrame(draw);
+  return () => cancelAnimationFrame(raf);
+}
+
+/* ─── Download + image helpers ─────────────────────────── */
+
+/**
+ * Convert a `data:image/...;base64,...` URL into a Blob. Plugin-original
+ * images are emitted as data URLs by the FYB extractor; we need real
+ * Blobs to hand to the export pipeline (which calls `createImageBitmap`).
+ *
+ * Uses `fetch()` because every modern browser implements a same-document
+ * data: URL fetcher that's faster than manual atob() + Uint8Array assembly
+ * and handles all base64 padding edge cases for us. Returns null on any
+ * failure so the caller can fall back to a placeholder.
+ */
+async function dataUrlToBlob(dataUrl: string): Promise<Blob | null> {
+  try {
+    if (!dataUrl.startsWith("data:")) return null;
+    const res = await fetch(dataUrl);
+    return await res.blob();
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Programmatically save a Blob as a file. Bypasses the browser's default
+ * link-click heuristics by:
+ *   - Mounting the <a> inside <body> (Safari requires this for .click()).
+ *   - Firing a synthesised MouseEvent so popup-blockers treat it as a
+ *     user-driven action (we're already inside a user click handler so
+ *     this is legitimate).
+ *   - Revoking the Object URL on a 4-second delay — long enough for every
+ *     known browser to commit the download to disk, short enough that we
+ *     don't leak memory on heavy exports.
+ */
+function triggerSystemDownload(blob: Blob, filename: string): void {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  a.rel = "noopener";
+  a.style.display = "none";
+  document.body.appendChild(a);
+  try {
+    a.dispatchEvent(
+      new MouseEvent("click", { bubbles: true, cancelable: true, view: window }),
+    );
+  } catch {
+    // Older browsers without MouseEvent constructor — fall back to .click().
+    a.click();
+  }
+  // Detach and revoke after a beat. setTimeout 0 isn't enough on Safari.
+  window.setTimeout(() => {
+    if (a.parentNode) a.parentNode.removeChild(a);
+    URL.revokeObjectURL(url);
+  }, 4000);
+}

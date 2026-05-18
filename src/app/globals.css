@@ -6,7 +6,7 @@
  * ============================================================ */
 
 /* ============================================================
- * GLOBAL CURSOR — Figma-style "Move" tool arrow
+ * GLOBAL CURSOR - Figma-style "Move" tool arrow
  *
  * Black-filled arrow with white outline, hotspot at the tip.
  * Applied to the whole page; interactive elements override with
@@ -16,12 +16,12 @@
 :root {
   /* Encoded inline as data URLs so they render instantly with no
      extra HTTP request. The number after the URL is the hotspot
-     (x y) in image pixels — the point that actually "clicks". */
-  /* Figma "Move" (V) cursor — slim, angled black arrow with a thin white
+     (x y) in image pixels - the point that actually "clicks". */
+  /* Figma "Move" (V) cursor - slim, angled black arrow with a thin white
      outline. Hotspot is the very tip of the arrow (3, 2). Matches the
      top-left cursor shown in the Figma cursor reference image. */
   --cursor-default: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='20' height='20' viewBox='0 0 20 20'><path d='M3 2 L3 14.5 L6.2 11.5 L8 15.6 L9.8 14.8 L8 10.7 L12.2 10.7 Z' fill='%23000' stroke='%23fff' stroke-width='1.2' stroke-linejoin='round' stroke-linecap='round'/></svg>") 3 2;
-  /* Figma "insert / clickable" cursor — same arrow plus a GREEN circle with
+  /* Figma "insert / clickable" cursor - same arrow plus a GREEN circle with
      a white plus, mirroring the bottom-left cursor in the reference image
      (the affordance Figma shows when you can drop / interact with a node). */
   --cursor-pointer: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='26' height='26' viewBox='0 0 26 26'><path d='M3 2 L3 14.5 L6.2 11.5 L8 15.6 L9.8 14.8 L8 10.7 L12.2 10.7 Z' fill='%23000' stroke='%23fff' stroke-width='1.2' stroke-linejoin='round' stroke-linecap='round'/><circle cx='18' cy='18' r='5.5' fill='%2322C55E' stroke='%23fff' stroke-width='1.4'/><path d='M18 15.2 V20.8 M15.2 18 H20.8' stroke='%23fff' stroke-width='1.6' stroke-linecap='round'/></svg>") 3 2;
@@ -29,6 +29,27 @@
 
 html, body {
   cursor: var(--cursor-default), default;
+}
+
+/* ============================================================
+ * UNIFIED FONT FAMILY
+ *
+ * Form controls (button/input/select/textarea) do NOT inherit the
+ * body's font-family by default in most browsers - they fall back to
+ * the browser's UI font. Force them to inherit so the landing page's
+ * Plus Jakarta carries through the entire admin panel, modals, etc.
+ *
+ * Elements that explicitly opt into monospace (via the
+ * `--font-geist-mono` variable in inline styles or className="font-mono")
+ * are unaffected since they set their own font-family that wins over
+ * `inherit`.
+ * ============================================================ */
+button,
+input,
+optgroup,
+select,
+textarea {
+  font-family: inherit;
 }
 
 /* Pointer (hand) cursor for clickable elements */
@@ -89,7 +110,7 @@ textarea[disabled],
 }
 
 /* ============================================================
- * GLOBAL SCROLLBAR — slim, gold-accented, brand-matched
+ * GLOBAL SCROLLBAR - slim, gold-accented, brand-matched
  *
  * WebKit (Chrome/Edge/Safari) + Firefox in one go.
  * ============================================================ */

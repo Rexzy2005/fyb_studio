@@ -107,7 +107,7 @@ export function ShareButton({
     }
   }
 
-  // ICON variant — square, just an icon (good for tight spaces)
+  // ICON variant - square, just an icon (good for tight spaces)
   if (variant === "icon") {
     return (
       <button
@@ -130,7 +130,7 @@ export function ShareButton({
     );
   }
 
-  // PILL variant — wider with label
+  // PILL variant - wider with label
   return (
     <button
       type="button"

@@ -10,7 +10,7 @@ import { bodySm, caption } from "@/lib/ui/typography";
  * - Loading: shimmer placeholder.
  * - Unauthenticated: hidden (the rest of the navbar handles the CTA).
  * - Authenticated: a single avatar pill that links straight to /dashboard.
- *   No dropdown — direct click-through, per product decision.
+ *   No dropdown - direct click-through, per product decision.
  */
 export function HeaderAuthSlot() {
   const { data: session, status } = useSession();

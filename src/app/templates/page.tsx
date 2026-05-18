@@ -196,7 +196,7 @@ export default function UserTemplatesPage() {
             paddingTop: "clamp(36px,7vw,120px)", paddingBottom: "clamp(36px,6vw,100px)",
           }}
         >
-          {/* Gold eyebrow — count shown on sm+, label only on xs */}
+          {/* Gold eyebrow - count shown on sm+, label only on xs */}
           <div
             style={{
               display: "inline-flex", alignItems: "center", gap: 10,
@@ -237,7 +237,7 @@ export default function UserTemplatesPage() {
             </span>
           </h1>
 
-          {/* Tagline — shorter on mobile */}
+          {/* Tagline - shorter on mobile */}
           <p
             className="hidden sm:block"
             style={{
@@ -599,7 +599,7 @@ function TemplateCard({
             {cat}
           </span>
         </div>
-        {/* "Reserved for your dept" badge — top-left, shown only when applicable */}
+        {/* "Reserved for your dept" badge - top-left, shown only when applicable */}
         {t.reservedByMyDept && (
           <div className="absolute left-1.5 top-1.5 sm:left-2 sm:top-2">
             <span
@@ -631,7 +631,7 @@ function TemplateCard({
           }}
           className="group-hover:opacity-100"
         />
-        {/* Quick-share button — always visible, anyone can share */}
+        {/* Quick-share button - always visible, anyone can share */}
         <button
           type="button"
           onClick={handleShare}

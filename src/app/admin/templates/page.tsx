@@ -160,22 +160,28 @@ export default function AdminTemplatesPage() {
             </p>
           </div>
 
+          {/* Mobile: filter + search sit side-by-side on one row, then a
+              full-width "New template" button drops below. Desktop keeps
+              the original [filter] [search + new-button] split. */}
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <StatusTabs value={status} onChange={setStatus} counts={counts} />
+            <div className="flex items-center gap-2 sm:gap-3">
+              <StatusTabs value={status} onChange={setStatus} counts={counts} />
+              <div className="relative min-w-0 flex-1 sm:hidden">
+                <SearchInputIcon />
+                <input
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  placeholder="Search…"
+                  className="h-10 w-full rounded-xl border border-hairline bg-surface-1 pl-10 pr-3 text-sm text-ink shadow-xs outline-none transition focus-visible:ring-2 focus-visible:ring-[var(--accent-blue-ring)] dark:border-hairline dark:bg-surface-1 dark:text-ink"
+                  inputMode="search"
+                />
+              </div>
+            </div>
 
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-              <div className="relative w-full sm:w-72">
-                <div className="pointer-events-none absolute inset-y-0 left-3 grid place-items-center text-ink-faint">
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden>
-                    <path
-                      d="M10.5 18a7.5 7.5 0 1 1 0-15 7.5 7.5 0 0 1 0 15Z"
-                      stroke="currentColor"
-                      strokeWidth="2"
-                      strokeLinecap="round"
-                    />
-                    <path d="M21 21l-4.3-4.3" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-                  </svg>
-                </div>
+              {/* Desktop-only search - stays where it always was on sm+ */}
+              <div className="relative hidden w-full sm:block sm:w-72">
+                <SearchInputIcon />
                 <input
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
@@ -187,7 +193,7 @@ export default function AdminTemplatesPage() {
 
               <Link
                 href="/admin/templates/new"
-                className="inline-flex h-10 items-center justify-center gap-1.5 rounded-xl bg-surface-1 px-4 text-sm font-medium text-white shadow-xs transition hover:bg-surface-2 dark:bg-surface-2 dark:text-ink dark:hover:bg-surface-1"
+                className="inline-flex h-10 w-full items-center justify-center gap-1.5 rounded-xl bg-surface-1 px-4 text-sm font-medium text-white shadow-xs transition hover:bg-surface-2 sm:w-auto dark:bg-surface-2 dark:text-ink dark:hover:bg-surface-1"
               >
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden>
                   <path d="M12 5v14M5 12h14" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
@@ -267,8 +273,25 @@ export default function AdminTemplatesPage() {
 
 function CardGrid({ children }: { children: React.ReactNode }) {
   return (
-    <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+    <div className="grid grid-cols-2 gap-3 sm:gap-5 lg:grid-cols-3 xl:grid-cols-4">
       {children}
+    </div>
+  );
+}
+
+/** Shared magnifier icon used in both the mobile and desktop search inputs. */
+function SearchInputIcon() {
+  return (
+    <div className="pointer-events-none absolute inset-y-0 left-3 grid place-items-center text-ink-faint">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden>
+        <path
+          d="M10.5 18a7.5 7.5 0 1 1 0-15 7.5 7.5 0 0 1 0 15Z"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+        />
+        <path d="M21 21l-4.3-4.3" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+      </svg>
     </div>
   );
 }
@@ -372,7 +395,10 @@ function AdminTemplateCard({
           </span>
         </div>
 
-        <div className="absolute inset-x-0 bottom-0 flex items-end justify-end gap-1.5 bg-gradient-to-t from-black/45 via-black/0 to-transparent p-3 opacity-0 transition group-hover:opacity-100">
+        {/* Action overlay - always visible on touch (no hover state),
+            reveals on hover on desktop. The p-2 / gap-1 keeps the row
+            from running off the edge in the mobile 2-col grid. */}
+        <div className="absolute inset-x-0 bottom-0 flex items-end justify-end gap-1 bg-gradient-to-t from-black/55 via-black/10 to-transparent p-2 opacity-100 transition sm:gap-1.5 sm:p-3 md:opacity-0 md:group-hover:opacity-100">
           <IconLink href={`/admin/templates/${row.id}`} label="Edit template" icon="edit" />
           {isLocalDraft ? (
             <>
@@ -399,18 +425,18 @@ function AdminTemplateCard({
         </div>
       </div>
 
-      <div className="flex flex-col gap-1 border-t border-hairline-soft p-4 dark:border-hairline">
-        <div className="truncate text-sm font-semibold tracking-tight text-ink dark:text-ink">
+      <div className="flex flex-col gap-1 border-t border-hairline-soft p-3 sm:p-4 dark:border-hairline">
+        <div className="truncate text-xs sm:text-sm font-semibold tracking-tight text-ink dark:text-ink">
           {row.name}
         </div>
-        <div className="flex items-center gap-2 text-[11.5px] text-ink-faint dark:text-ink-faint">
-          <span className="inline-flex items-center rounded-md bg-surface-2 px-1.5 py-0.5 font-medium text-ink-muted dark:bg-surface-2 dark:text-ink-muted">
+        <div className="flex items-center gap-1.5 sm:gap-2 text-[10.5px] sm:text-[11.5px] text-ink-faint dark:text-ink-faint">
+          <span className="inline-flex shrink-0 items-center rounded-md bg-surface-2 px-1.5 py-0.5 font-medium text-ink-muted dark:bg-surface-2 dark:text-ink-muted">
             {categoryLabel}
           </span>
-          <span aria-hidden className="text-ink-faint dark:text-ink-muted">
+          <span aria-hidden className="hidden sm:inline text-ink-faint dark:text-ink-muted">
             •
           </span>
-          <span>Updated {updated}</span>
+          <span className="hidden sm:inline">Updated {updated}</span>
         </div>
       </div>
     </div>

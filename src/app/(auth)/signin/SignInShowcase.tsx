@@ -242,7 +242,7 @@ export function SignInShowcase({ classYear }: { classYear: number }) {
                 {slide.eyebrow}
               </div>
 
-              {/* Typographic mark — replaces generic iconography */}
+              {/* Typographic mark - replaces generic iconography */}
               <div
                 className="mb-5 lg:mb-7 inline-flex items-baseline gap-3"
                 style={{

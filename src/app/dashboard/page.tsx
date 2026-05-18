@@ -60,7 +60,7 @@ export default async function DashboardPage() {
       style={{ background: "#050505", color: "#fff", fontFamily: FONT_JKT }}
     >
       <CurtainOpen brand="YOUR DASHBOARD" />
-      {/* Subtle fractal noise — matches landing page atmosphere */}
+      {/* Subtle fractal noise - matches landing page atmosphere */}
       <div
         aria-hidden
         style={{
@@ -208,14 +208,14 @@ export default async function DashboardPage() {
               </div>
             </div>
 
-            {/* Sign-out — sits opposite the identity block on desktop,
+            {/* Sign-out - sits opposite the identity block on desktop,
                 stacks below on mobile. */}
             <div className="flex shrink-0 items-center">
               <SignOutButton />
             </div>
           </div>
 
-          {/* Quick stat tiles — Templates / "Open studio" intentionally
+          {/* Quick stat tiles - Templates / "Open studio" intentionally
               omitted since the Browse-templates pill in the navbar already
               covers that path. */}
           <div className="mt-10 grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4">

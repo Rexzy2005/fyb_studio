@@ -36,6 +36,12 @@ const schema = z.object({
   // their download. Grants are single-use - this is a safety net for
   // unredeemed grants, NOT a re-download window. Default 7 days.
   PAYMENT_GRANT_EXPIRY_HOURS: z.coerce.number().int().positive().default(168),
+
+  // Storage quota (in MB) for the MongoDB cluster the app talks to. Used
+  // by the admin dashboard's storage panel to render a % used / left bar.
+  // Defaults to 512 (Atlas M0 / Free tier). Override per-environment when
+  // you upgrade to a paid tier (e.g. 5120 for M10, 10240 for M20, etc.).
+  MONGODB_STORAGE_QUOTA_MB: z.coerce.number().int().positive().default(512),
 });
 
 const parsed = schema.safeParse(process.env);

@@ -53,7 +53,7 @@ export default async function SignInPage({
         className="relative flex w-full flex-col lg:hidden"
         style={{ height: "100dvh", zIndex: 1 }}
       >
-        {/* Floating top — minimal, non-blocking */}
+        {/* Floating top - minimal, non-blocking */}
         <header
           className="absolute top-0 right-0 left-0 z-20 flex items-center justify-between px-5"
           style={{
@@ -69,8 +69,6 @@ export default async function SignInPage({
                 width: 28, height: 28,
                 borderRadius: 7,
                 overflow: "hidden",
-                border: "1px solid rgba(255,215,0,0.35)",
-                boxShadow: "0 4px 12px rgba(255,180,0,0.22)",
               }}
             >
               {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -200,8 +198,6 @@ export default async function SignInPage({
                   width: 34, height: 34,
                   borderRadius: 9,
                   overflow: "hidden",
-                  border: "1px solid rgba(255,215,0,0.3)",
-                  boxShadow: "0 6px 16px rgba(255,180,0,0.18)",
                 }}
               >
                 {/* eslint-disable-next-line @next/next/no-img-element */}

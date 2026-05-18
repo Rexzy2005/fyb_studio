@@ -117,8 +117,53 @@ export type NormalizedEffect =
       blendMode: BlendMode;
       visible: boolean;
     }
-  | { kind: "layer-blur"; radius: number; visible: boolean }
-  | { kind: "background-blur"; radius: number; visible: boolean };
+  | {
+      kind: "layer-blur";
+      radius: number;
+      visible: boolean;
+      // PROGRESSIVE blur ramps from `startRadius` at startOffset toward
+      // `radius` at endOffset. Offsets are 0..1 along the node's primary
+      // axis (typically vertical). Absent fields mean a uniform NORMAL blur.
+      progressive?: { startRadius: number; startOffset: number; endOffset: number };
+    }
+  | {
+      kind: "background-blur";
+      radius: number;
+      visible: boolean;
+      progressive?: { startRadius: number; startOffset: number; endOffset: number };
+    }
+  | {
+      // Figma's NOISE effect - a grain/film overlay clipped to the node.
+      // `noiseType` discriminates the colour treatment.
+      kind: "noise";
+      noiseType: "monotone" | "duotone" | "multitone";
+      color: string;          // primary colour (rgba CSS)
+      secondaryColor?: string; // duotone only
+      noiseSize: number;       // grain size in pixels
+      density: number;         // 0..1 grain density
+      opacity: number;         // multitone only - overlay alpha
+      blendMode: BlendMode;
+      visible: boolean;
+    }
+  | {
+      // Figma's TEXTURE effect - surface roughness simulated as embossed grain.
+      kind: "texture";
+      noiseSize: number;
+      radius: number;          // bump softness
+      clipToShape: boolean;
+      visible: boolean;
+    }
+  | {
+      // Figma's GLASS effect - refraction + dispersion behind the node.
+      kind: "glass";
+      lightIntensity: number;   // 0..1
+      lightAngle: number;       // degrees
+      refraction: number;       // 0..1, index-of-refraction proxy
+      depth: number;            // px, perceived thickness
+      dispersion: number;       // 0..1, chromatic spread
+      radius: number;           // edge feather radius (px)
+      visible: boolean;
+    };
 
 export type NormalizedVectorPath = {
   data: string;

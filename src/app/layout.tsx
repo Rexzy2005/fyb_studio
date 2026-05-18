@@ -20,7 +20,9 @@ const geistMono = Geist_Mono({
 const plusJakarta = Plus_Jakarta_Sans({
   variable: "--font-plus-jakarta",
   subsets: ["latin"],
-  weight: ["400", "600", "800"],
+  // Full range so every Tailwind weight class (font-light → font-extrabold)
+  // resolves to a real Plus Jakarta face, no fake-bolding from the browser.
+  weight: ["300", "400", "500", "600", "700", "800"],
   display: "swap",
 });
 
@@ -38,7 +40,16 @@ export default function RootLayout({
     <html lang="en" className="dark" suppressHydrationWarning>
       <body
         className={`${geistSans.variable} ${geistMono.variable} ${plusJakarta.variable} min-h-screen antialiased`}
-        style={{ background: "var(--canvas)", color: "var(--ink)" }}
+        style={{
+          background: "var(--canvas)",
+          color: "var(--ink)",
+          // Site-wide default - every page, modal, and component that
+          // doesn't set its own font-family inherits Plus Jakarta Sans.
+          // Mono labels and Geist body usages keep working because they
+          // set their own font-family inline or via CSS vars.
+          fontFamily:
+            "var(--font-plus-jakarta, var(--font-geist-sans)), system-ui, sans-serif",
+        }}
       >
         <SessionProvider>
           <ToastProvider>

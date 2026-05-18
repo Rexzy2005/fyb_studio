@@ -62,7 +62,6 @@ export default async function OnboardingPage({
                 width: 30, height: 30,
                 borderRadius: 7,
                 overflow: "hidden",
-                boxShadow: "0 4px 12px rgba(255,180,0,0.18)",
                 flexShrink: 0,
               }}
             >
@@ -98,7 +97,7 @@ export default async function OnboardingPage({
         </div>
       </header>
 
-      {/* Atmospheric layer behind hero — spotlight beams + floating caps */}
+      {/* Atmospheric layer behind hero - spotlight beams + floating caps */}
       <div
         aria-hidden
         style={{
@@ -213,7 +212,7 @@ export default async function OnboardingPage({
           </span>
         </p>
 
-        {/* Class strip — small ceremonial flourish */}
+        {/* Class strip - small ceremonial flourish */}
         <div
           className="mb-6 inline-flex items-center gap-3 self-start"
           style={{

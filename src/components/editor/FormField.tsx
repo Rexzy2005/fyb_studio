@@ -56,7 +56,9 @@ export function FormField({
     ...INPUT_BASE,
     height: density === "compact" ? 38 : 44,
     padding: "0 14px",
-    fontSize: density === "compact" ? 13 : 14,
+    // iOS Safari zooms the page when focusing inputs below 16px.
+    fontSize: 16,
+    lineHeight: "20px",
   };
 
   if (field.kind === "text") {
@@ -143,6 +145,7 @@ export function FormField({
               width: density === "compact" ? 72 : 96,
               padding: 4,
               cursor: "pointer",
+              fontSize: 16,
             }}
           />
         )}

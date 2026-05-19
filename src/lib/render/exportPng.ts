@@ -3,6 +3,7 @@ import { CanvasBackend } from "@/lib/render/engine/backends/canvasBackend";
 import { renderTree } from "@/lib/render/engine/renderTree";
 import { buildTextSvg } from "@/lib/render/engine/svgTextLayer";
 import { ensureCustomFontsLoaded } from "@/lib/render/features/canvasFont";
+import { decodeImageBlobForCanvas } from "@/lib/render/features/canvasImageSource";
 import { buildEmbeddedFontFacesStyle } from "@/lib/render/features/embedFonts";
 import { ensureGoogleFontsLoaded } from "@/lib/fonts/googleFonts";
 import type { FieldConfig } from "@/lib/storage/types";
@@ -70,40 +71,23 @@ export async function exportTemplatePng({
     if (value) colorOverrideByNodeId[f.nodeId] = value;
   }
 
-  // Decode user-uploaded image overrides into ImageBitmaps once, so the
-  // backend can synchronously hand them to the image-fill renderer.
-  // Falls back to an HTMLImageElement path on browsers (e.g. older iOS Safari)
-  // where createImageBitmap is unavailable or throws on certain Blob types.
-  const imageOverrides = new Map<string, { source: ImageBitmap; objectFit: "cover" | "contain" }>();
+  // Decode user-uploaded image overrides into drawable sources once, so the
+  // backend can synchronously hand them to the image-fill renderer. iOS Safari
+  // often lacks/rejects createImageBitmap for picker blobs, so the decoder
+  // falls back to HTMLImageElement and keeps its object URL alive until the
+  // render pass finishes.
+  const imageOverrides = new Map<
+    string,
+    { source: CanvasImageSource; objectFit: "cover" | "contain"; release: () => void }
+  >();
   for (const [nodeId, entry] of Object.entries(previewImageByNodeId)) {
     try {
-      let bmp: ImageBitmap;
-      if (typeof createImageBitmap === "function") {
-        bmp = await createImageBitmap(entry.blob);
-      } else {
-        // iOS Safari ≤ 14 polyfill: decode via HTMLImageElement and
-        // drawImage to an offscreen canvas, then read back as ImageBitmap.
-        bmp = await new Promise<ImageBitmap>((resolve, reject) => {
-          const url = URL.createObjectURL(entry.blob);
-          const img = new Image();
-          img.onload = () => {
-            URL.revokeObjectURL(url);
-            const oc = document.createElement("canvas");
-            oc.width = img.naturalWidth;
-            oc.height = img.naturalHeight;
-            const octx = oc.getContext("2d");
-            if (!octx) { reject(new Error("no 2d ctx")); return; }
-            octx.drawImage(img, 0, 0);
-            oc.toBlob((b) => {
-              if (!b) { reject(new Error("toBlob failed")); return; }
-              createImageBitmap(b).then(resolve, reject);
-            });
-          };
-          img.onerror = () => { URL.revokeObjectURL(url); reject(new Error("img load failed")); };
-          img.src = url;
-        });
-      }
-      imageOverrides.set(nodeId, { source: bmp, objectFit: entry.objectFit });
+      const decoded = await decodeImageBlobForCanvas(entry.blob);
+      imageOverrides.set(nodeId, {
+        source: decoded.source,
+        objectFit: entry.objectFit,
+        release: decoded.release,
+      });
     } catch {
       // Ignore - backend will draw a placeholder instead.
     }
@@ -120,11 +104,15 @@ export async function exportTemplatePng({
     resolvePreviewImage: (id) => imageOverrides.get(id),
   });
 
-  await renderTree(design, backend, {
-    previewTextByNodeId,
-    previewColorByNodeId,
-    skipText: true,
-  });
+  try {
+    await renderTree(design, backend, {
+      previewTextByNodeId,
+      previewColorByNodeId,
+      skipText: true,
+    });
+  } finally {
+    for (const image of imageOverrides.values()) image.release();
+  }
 
   // Compose the SVG text layer on top using the browser's NATIVE SVG
   // rasterizer (the same engine the editor preview uses). We previously used

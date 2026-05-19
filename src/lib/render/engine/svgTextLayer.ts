@@ -100,6 +100,52 @@ export function buildTextSvg(input: BuildTextSvgInput): string {
     return w + ls;
   }
 
+  function measureTextInk(
+    text: string,
+    font: string,
+    extraLetterSpacingPx: number,
+  ): {
+    advance: number;
+    left: number;
+    right: number;
+    ascent: number;
+    descent: number;
+    hasHorizontalBounds: boolean;
+    hasVerticalBounds: boolean;
+  } {
+    if (!measureCtx) {
+      return {
+        advance: text.length * 8,
+        left: 0,
+        right: text.length * 8,
+        ascent: 0,
+        descent: 0,
+        hasHorizontalBounds: false,
+        hasVerticalBounds: false,
+      };
+    }
+    measureCtx.font = font;
+    const metrics = measureCtx.measureText(text);
+    const spacing = text.length > 1 ? (text.length - 1) * extraLetterSpacingPx : 0;
+    const advance = metrics.width + spacing;
+    const hasHorizontalBounds =
+      Number.isFinite(metrics.actualBoundingBoxLeft) &&
+      Number.isFinite(metrics.actualBoundingBoxRight);
+    const hasVerticalBounds =
+      Number.isFinite(metrics.actualBoundingBoxAscent) &&
+      Number.isFinite(metrics.actualBoundingBoxDescent);
+
+    return {
+      advance,
+      left: hasHorizontalBounds ? metrics.actualBoundingBoxLeft : 0,
+      right: hasHorizontalBounds ? metrics.actualBoundingBoxRight + spacing : advance,
+      ascent: hasVerticalBounds ? metrics.actualBoundingBoxAscent : 0,
+      descent: hasVerticalBounds ? metrics.actualBoundingBoxDescent : 0,
+      hasHorizontalBounds,
+      hasVerticalBounds,
+    };
+  }
+
   function wrapToWidth(input: string, maxWidth: number, font: string, extraLetterSpacingPx: number) {
     const tokens = input.split(/(\s+)/);
     const out: string[] = [];
@@ -138,6 +184,223 @@ export function buildTextSvg(input: BuildTextSvgInput): string {
     }
     if (line.trim().length) pushLine();
     return out.length ? out : [""];
+  }
+
+  function estimatePathBounds(paths: string[] | undefined):
+    | { minX: number; minY: number; maxX: number; maxY: number }
+    | null {
+    if (!paths?.length) return null;
+    let minX = Number.POSITIVE_INFINITY;
+    let minY = Number.POSITIVE_INFINITY;
+    let maxX = Number.NEGATIVE_INFINITY;
+    let maxY = Number.NEGATIVE_INFINITY;
+
+    const addPoint = (x: number, y: number) => {
+      if (!Number.isFinite(x) || !Number.isFinite(y)) return;
+      minX = Math.min(minX, x);
+      minY = Math.min(minY, y);
+      maxX = Math.max(maxX, x);
+      maxY = Math.max(maxY, y);
+    };
+
+    for (const path of paths) {
+      readSvgPathPoints(path, addPoint);
+    }
+
+    if (!Number.isFinite(minX) || !Number.isFinite(minY) || !Number.isFinite(maxX) || !Number.isFinite(maxY)) {
+      return null;
+    }
+    return { minX, minY, maxX, maxY };
+  }
+
+  function readSvgPathPoints(path: string, addPoint: (x: number, y: number) => void): void {
+    const tokens = path.match(/[a-zA-Z]|-?\d*\.?\d+(?:e[-+]?\d+)?/g);
+    if (!tokens) return;
+
+    let i = 0;
+    let command = "";
+    let x = 0;
+    let y = 0;
+    let startX = 0;
+    let startY = 0;
+
+    const isCommand = (token: string | undefined) => Boolean(token && /^[a-zA-Z]$/.test(token));
+    const hasNumber = () => i < tokens.length && !isCommand(tokens[i]);
+    const read = () => {
+      const n = Number(tokens[i]);
+      i += 1;
+      return n;
+    };
+    const point = (px: number, py: number, relative: boolean) => ({
+      x: relative ? x + px : px,
+      y: relative ? y + py : py,
+    });
+
+    while (i < tokens.length) {
+      if (isCommand(tokens[i])) command = tokens[i++] ?? "";
+      if (!command) break;
+      const relative = command === command.toLowerCase();
+      const cmd = command.toUpperCase();
+
+      if (cmd === "Z") {
+        x = startX;
+        y = startY;
+        addPoint(x, y);
+        command = "";
+        continue;
+      }
+
+      if (cmd === "M") {
+        if (!hasNumber()) continue;
+        const p = point(read(), read(), relative);
+        x = p.x;
+        y = p.y;
+        startX = x;
+        startY = y;
+        addPoint(x, y);
+        command = relative ? "l" : "L";
+        continue;
+      }
+
+      if (cmd === "L" || cmd === "T") {
+        while (hasNumber()) {
+          const p = point(read(), read(), relative);
+          x = p.x;
+          y = p.y;
+          addPoint(x, y);
+        }
+        continue;
+      }
+
+      if (cmd === "H") {
+        while (hasNumber()) {
+          x = relative ? x + read() : read();
+          addPoint(x, y);
+        }
+        continue;
+      }
+
+      if (cmd === "V") {
+        while (hasNumber()) {
+          y = relative ? y + read() : read();
+          addPoint(x, y);
+        }
+        continue;
+      }
+
+      if (cmd === "C") {
+        while (hasNumber()) {
+          const c1 = point(read(), read(), relative);
+          const c2 = point(read(), read(), relative);
+          const p = point(read(), read(), relative);
+          addPoint(c1.x, c1.y);
+          addPoint(c2.x, c2.y);
+          addPoint(p.x, p.y);
+          x = p.x;
+          y = p.y;
+        }
+        continue;
+      }
+
+      if (cmd === "S" || cmd === "Q") {
+        while (hasNumber()) {
+          const c = point(read(), read(), relative);
+          const p = point(read(), read(), relative);
+          addPoint(c.x, c.y);
+          addPoint(p.x, p.y);
+          x = p.x;
+          y = p.y;
+        }
+        continue;
+      }
+
+      if (cmd === "A") {
+        while (hasNumber()) {
+          const rx = Math.abs(read());
+          const ry = Math.abs(read());
+          read(); // x-axis rotation
+          read(); // large-arc flag
+          read(); // sweep flag
+          const p = point(read(), read(), relative);
+          addPoint(x - rx, y - ry);
+          addPoint(x + rx, y + ry);
+          addPoint(p.x - rx, p.y - ry);
+          addPoint(p.x + rx, p.y + ry);
+          addPoint(p.x, p.y);
+          x = p.x;
+          y = p.y;
+        }
+        continue;
+      }
+
+      break;
+    }
+  }
+
+  function invertMatrix(m: NonNullable<NormalizedTextNode["transform"]>) {
+    const det = m.a * m.d - m.b * m.c;
+    if (!Number.isFinite(det) || Math.abs(det) < 1e-12) return null;
+    return {
+      a: m.d / det,
+      b: -m.b / det,
+      c: -m.c / det,
+      d: m.a / det,
+      tx: (m.c * m.ty - m.d * m.tx) / det,
+      ty: (m.b * m.tx - m.a * m.ty) / det,
+    };
+  }
+
+  function transformBounds(
+    bounds: { minX: number; minY: number; maxX: number; maxY: number },
+    m: NonNullable<NormalizedTextNode["transform"]>,
+  ) {
+    const corners = [
+      { x: bounds.minX, y: bounds.minY },
+      { x: bounds.maxX, y: bounds.minY },
+      { x: bounds.minX, y: bounds.maxY },
+      { x: bounds.maxX, y: bounds.maxY },
+    ].map((p) => ({
+      x: m.a * p.x + m.c * p.y + m.tx,
+      y: m.b * p.x + m.d * p.y + m.ty,
+    }));
+    return {
+      minX: Math.min(...corners.map((p) => p.x)),
+      minY: Math.min(...corners.map((p) => p.y)),
+      maxX: Math.max(...corners.map((p) => p.x)),
+      maxY: Math.max(...corners.map((p) => p.y)),
+    };
+  }
+
+  function estimateOutlineBoundsForEditedText(
+    node: NormalizedTextNode,
+    outlinePaths: string[] | undefined,
+    localW: number,
+    localH: number,
+    useLocalTextSpace: boolean,
+  ) {
+    const bounds = estimatePathBounds(outlinePaths);
+    if (!bounds) return null;
+
+    const firstPath = outlinePaths?.[0];
+    const pathsAreLocal = firstPath
+      ? isLikelyLocalSvgPath(firstPath, { x: 0, y: 0, width: localW, height: localH })
+      : false;
+
+    if (useLocalTextSpace) {
+      if (pathsAreLocal) return bounds;
+      if (!node.transform) return null;
+      const inverse = invertMatrix(node.transform);
+      return inverse ? transformBounds(bounds, inverse) : null;
+    }
+
+    if (!pathsAreLocal) return bounds;
+    if (node.transform) return transformBounds(bounds, node.transform);
+    return {
+      minX: node.frame.x + bounds.minX,
+      minY: node.frame.y + bounds.minY,
+      maxX: node.frame.x + bounds.maxX,
+      maxY: node.frame.y + bounds.maxY,
+    };
   }
 
   function ensureClipPath(node: Exclude<NormalizedNode, { kind: "text" }>) {
@@ -476,11 +739,25 @@ export function buildTextSvg(input: BuildTextSvgInput): string {
     );
     const displayed = applyTextCase(characters, effectiveTextCase);
     const baseFontSize = resolvedText.fontSize;
+    const originalLineHeightPx = computeLineHeightPx(resolvedText.lineHeight, baseFontSize, baseFontSize);
 
     const localW = node.size?.width ?? node.frame.width;
     const localH = node.size?.height ?? node.frame.height;
     const m = node.transform;
     const useMatrixForOverriddenText = Boolean(isOverridden && m && localW > 0 && localH > 0);
+    const outlineBoundsForEditedText = isOverridden
+      ? estimateOutlineBoundsForEditedText(
+          node,
+          outlinePaths,
+          localW,
+          localH,
+          useMatrixForOverriddenText,
+        )
+      : null;
+    const outlineFirstBaselineAtBaseFont = outlineBoundsForEditedText
+      ? outlineBoundsForEditedText.maxY -
+        (Math.max(1, node.text.characters.split("\n").length) - 1) * originalLineHeightPx
+      : null;
 
     const behavior =
       field?.kind === "text"
@@ -519,22 +796,31 @@ export function buildTextSvg(input: BuildTextSvgInput): string {
 
     if (behavior?.autoScale || behavior?.overflow === "shrink") {
       const minFs = clampNumber(behavior.minFontSize, 1, 512);
-      const maxFs = clampNumber(behavior.maxFontSize, minFs, 512);
-      let lo = minFs;
-      let hi = maxFs;
-      let best = layoutAt(lo);
-      for (let i = 0; i < 12; i++) {
-        const mid = (lo + hi) / 2;
-        const cand = layoutAt(mid);
-        const fits = cand.maxW <= cand.layoutW + 0.25 && cand.h <= cand.layoutH + 0.25;
-        if (fits) {
-          best = cand;
-          lo = mid;
-        } else {
-          hi = mid;
+      const configuredMaxFs = clampNumber(behavior.maxFontSize, minFs, 512);
+      const maxFs = Math.max(minFs, Math.min(baseFontSize, configuredMaxFs));
+      const preferredFs = Math.max(minFs, Math.min(baseFontSize, maxFs));
+      const preferred = layoutAt(preferredFs);
+      const preferredFits =
+        preferred.maxW <= preferred.layoutW + 0.25 && preferred.h <= preferred.layoutH + 0.25;
+      if (preferredFits) {
+        layout = preferred;
+      } else {
+        let lo = minFs;
+        let hi = maxFs;
+        let best = layoutAt(lo);
+        for (let i = 0; i < 12; i++) {
+          const mid = (lo + hi) / 2;
+          const cand = layoutAt(mid);
+          const fits = cand.maxW <= cand.layoutW + 0.25 && cand.h <= cand.layoutH + 0.25;
+          if (fits) {
+            best = cand;
+            lo = mid;
+          } else {
+            hi = mid;
+          }
         }
+        layout = best;
       }
-      layout = best;
     }
 
     // Apply maxLines + textTruncation: when the design specifies a line cap,
@@ -569,7 +855,7 @@ export function buildTextSvg(input: BuildTextSvgInput): string {
           ? "end"
           : "start";
 
-    const x = useMatrixForOverriddenText
+    const baseX = useMatrixForOverriddenText
       ? anchor === "middle"
         ? localW / 2
         : anchor === "end"
@@ -580,6 +866,27 @@ export function buildTextSvg(input: BuildTextSvgInput): string {
         : anchor === "end"
           ? node.frame.x + node.frame.width
           : node.frame.x;
+
+    const layoutLetterSpacingPx = letterSpacingPx(resolvedText.letterSpacing, layout.fontSize);
+    const layoutFont = `${fontStyle} ${resolvedText.fontWeight} ${layout.fontSize}px ${fontFamily}`;
+    const firstLineInk = outlineBoundsForEditedText
+      ? measureTextInk(layout.lines[0] ?? "", layoutFont, layoutLetterSpacingPx)
+      : null;
+    const x =
+      outlineBoundsForEditedText && firstLineInk?.hasHorizontalBounds
+        ? (() => {
+            const targetOrigin =
+              anchor === "middle"
+                ? (outlineBoundsForEditedText.minX + outlineBoundsForEditedText.maxX) / 2 -
+                  (firstLineInk.right - firstLineInk.left) / 2
+                : anchor === "end"
+                  ? outlineBoundsForEditedText.maxX - firstLineInk.right
+                  : outlineBoundsForEditedText.minX + firstLineInk.left;
+            if (anchor === "middle") return targetOrigin + firstLineInk.advance / 2;
+            if (anchor === "end") return targetOrigin + firstLineInk.advance;
+            return targetOrigin;
+          })()
+        : baseX;
 
     // Vertical alignment - match Figma's box-top → em-box-top math precisely.
     // Two cases:
@@ -598,7 +905,17 @@ export function buildTextSvg(input: BuildTextSvgInput): string {
       resolvedText.leadingTrim === "CAP_HEIGHT"
         ? 0
         : Math.max(0, (layout.lineHeightPx - layout.fontSize) / 2);
-    const y = baseY + leadingOffsetPx;
+    const outlineBaselineOffset =
+      outlineFirstBaselineAtBaseFont !== null && baseFontSize > 0
+        ? outlineFirstBaselineAtBaseFont * (layout.fontSize / baseFontSize)
+        : null;
+    const useAlphabeticBaseline = outlineBaselineOffset !== null;
+    const y =
+      outlineBoundsForEditedText && firstLineInk?.hasVerticalBounds
+        ? outlineBoundsForEditedText.minY + firstLineInk.ascent
+        : useAlphabeticBaseline
+          ? baseY + outlineBaselineOffset
+          : baseY + leadingOffsetPx;
 
     const rotated = !useMatrixForOverriddenText && node.rotation && Math.abs(node.rotation) > 0.001;
     const cx = node.frame.x + node.frame.width / 2;
@@ -714,7 +1031,8 @@ export function buildTextSvg(input: BuildTextSvgInput): string {
 
     const shadowFilterAttr = ensureTextEffectFilter(node);
 
-    const textEl = `<text xml:space="preserve" x="${x}" y="${y}" fill="${escapeAttr(fillCss)}" font-size="${layout.fontSize}" font-weight="${resolvedText.fontWeight}" font-style="${fontStyle}" text-decoration="${textDecoration}" text-anchor="${anchor}" dominant-baseline="text-before-edge"${strokeAttrs}${shadowFilterAttr} ${transform ? `transform="${escapeAttr(transform)}"` : ""} style="white-space:pre;font-family:${escapeAttr(fontFamily)};letter-spacing:${escapeAttr(letterSpacingCss)};">${tspans}</text>`;
+    const baselineAttr = useAlphabeticBaseline ? "" : ` dominant-baseline="text-before-edge"`;
+    const textEl = `<text xml:space="preserve" x="${x}" y="${y}" fill="${escapeAttr(fillCss)}" font-size="${layout.fontSize}" font-weight="${resolvedText.fontWeight}" font-style="${fontStyle}" text-decoration="${textDecoration}" text-anchor="${anchor}"${baselineAttr}${strokeAttrs}${shadowFilterAttr} ${transform ? `transform="${escapeAttr(transform)}"` : ""} style="white-space:pre;font-family:${escapeAttr(fontFamily)};letter-spacing:${escapeAttr(letterSpacingCss)};">${tspans}</text>`;
 
     const matrix =
       useMatrixForOverriddenText && m

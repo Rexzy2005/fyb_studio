@@ -156,15 +156,22 @@ export function DesignWorkspace({
     [canvasH, canvasW],
   );
 
-  // Default zoom for both initial mount and the "Fit" button. Constant across
-  // surfaces (admin editor + end-user view) and viewport sizes so users get a
-  // predictable starting view every time. They can zoom further in/out at
-  // will via wheel / pinch / +- buttons / keyboard.
-  const DEFAULT_FIT_ZOOM = 0.58;
+  const fitZoomForViewport = useCallback(() => {
+    const el = wrapperRef.current;
+    if (!el) return 0.58;
+    const rect = el.getBoundingClientRect();
+    if (rect.width <= 0 || rect.height <= 0) return 0.58;
+    const padding = Math.max(12, Math.min(32, Math.min(rect.width, rect.height) * 0.05));
+    const availableW = Math.max(1, rect.width - padding * 2);
+    const availableH = Math.max(1, rect.height - padding * 2);
+    const fit = Math.min(availableW / canvasW, availableH / canvasH);
+    return Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, fit));
+  }, [canvasH, canvasW]);
 
   const fitToViewport = useCallback(() => {
-    setView({ zoom: DEFAULT_FIT_ZOOM, ...centeringPanFor(DEFAULT_FIT_ZOOM) });
-  }, [centeringPanFor, setView]);
+    const nextZoom = fitZoomForViewport();
+    setView({ zoom: nextZoom, ...centeringPanFor(nextZoom) });
+  }, [centeringPanFor, fitZoomForViewport, setView]);
 
   useEffect(() => {
     if (!autoFitOnMount) return;
@@ -640,15 +647,16 @@ function CanvasShapesLayer({
       const existing = imagesRef.current.get(id);
       if (existing && existing.src === url && existing.complete) continue;
       const img = new Image();
-      img.decoding = "async";
-      img.src = url;
-      imagesRef.current.set(id, img);
       const bump = () => {
         if (cancelled) return;
         setImageTick((t) => t + 1);
       };
       img.onload = bump;
       img.onerror = bump;
+      img.decoding = "async";
+      imagesRef.current.set(id, img);
+      img.src = url;
+      if (img.complete && img.naturalWidth > 0) queueMicrotask(bump);
       img.decode?.().then(bump).catch(() => {});
     }
     return () => {
@@ -721,13 +729,35 @@ function SvgTextLayer({
   showGuides: boolean;
 }) {
   const selected = selectedNodeId ? design.nodesById[selectedNodeId] : undefined;
+  const [fontEpoch, setFontEpoch] = useState(0);
+
+  useEffect(() => {
+    if (typeof document === "undefined" || !document.fonts) return;
+    let cancelled = false;
+    const bump = () => {
+      if (!cancelled) setFontEpoch((v) => v + 1);
+    };
+
+    void document.fonts.ready.then(bump).catch(() => {});
+    document.fonts.addEventListener?.("loadingdone", bump);
+    document.fonts.addEventListener?.("loadingerror", bump);
+
+    return () => {
+      cancelled = true;
+      document.fonts.removeEventListener?.("loadingdone", bump);
+      document.fonts.removeEventListener?.("loadingerror", bump);
+    };
+  }, []);
 
   // Build the text layer SVG via the shared engine so editor and PNG export stay in lockstep.
   // Editor guide rectangles are appended below for every configured field; keep
   // them out of the shared text SVG so text fields do not get double outlines.
   const svgInner = useMemo(
-    () => buildTextSvg({ design, fieldConfig, previewTextByNodeId, includeGuides: false }),
-    [design, fieldConfig, previewTextByNodeId],
+    () => {
+      void fontEpoch;
+      return buildTextSvg({ design, fieldConfig, previewTextByNodeId, includeGuides: false });
+    },
+    [design, fieldConfig, previewTextByNodeId, fontEpoch],
   );
 
   // The shared builder returns a full <svg ...>...</svg> string with its own viewBox.

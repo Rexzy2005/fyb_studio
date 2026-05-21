@@ -33,6 +33,14 @@ type Props = {
   autoFitKey?: string | number;
 };
 
+function isEditableElementFocused(): boolean {
+  if (typeof document === "undefined") return false;
+  const el = document.activeElement as HTMLElement | null;
+  if (!el) return false;
+  if (el.isContentEditable) return true;
+  return el.tagName === "INPUT" || el.tagName === "TEXTAREA" || el.tagName === "SELECT";
+}
+
 export function DesignWorkspace({
   design,
   fieldConfig,
@@ -193,8 +201,12 @@ export function DesignWorkspace({
     let raf = 0;
     const ro = new ResizeObserver(() => {
       if (userAdjustedViewRef.current) return;
+      if (isEditableElementFocused()) return;
       cancelAnimationFrame(raf);
-      raf = requestAnimationFrame(() => fitToViewport());
+      raf = requestAnimationFrame(() => {
+        if (isEditableElementFocused()) return;
+        fitToViewport();
+      });
     });
     ro.observe(el);
     return () => {
@@ -645,7 +657,7 @@ function CanvasShapesLayer({
       const url = previewImageByNodeId[id]?.url;
       if (!url) continue;
       const existing = imagesRef.current.get(id);
-      if (existing && existing.src === url && existing.complete) continue;
+      if (existing && existing.src === url && existing.complete && existing.naturalWidth > 0) continue;
       const img = new Image();
       const bump = () => {
         if (cancelled) return;

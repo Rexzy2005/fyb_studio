@@ -32,7 +32,6 @@ import { ShareButton } from "@/components/templates/ShareButton";
 
 import { DesignWorkspace } from "@/components/editor/DesignWorkspace";
 import { useGoogleFonts } from "@/components/editor/useGoogleFonts";
-import { ImageUpload, inferFileMeta } from "@/components/forms/ImageUpload";
 import { PaymentModal } from "@/components/payment/PaymentModal";
 import { ProgressModal } from "@/components/ui/ProgressModal";
 import { CurtainOpen } from "@/components/ui/CurtainOpen";
@@ -99,7 +98,7 @@ export default function UseTemplatePage({
   const [userDesign, setUserDesign] = useState<UserDesignRecord | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [lockBlock, setLockBlock] = useState<PublicTemplateLockBlock | null>(null);
-  const [refetchTrigger, setRefetchTrigger] = useState(0);
+  const refetchTrigger = 0;
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [exportStage, setExportStage] = useState<string>("");
@@ -969,7 +968,7 @@ export default function UseTemplatePage({
                 showGuides={false}
                 enableSelection={false}
                 autoFitOnMount
-                autoFitOnResize
+                autoFitOnResize={false}
                 autoFitKey={autoFitNonce}
               />
             </div>

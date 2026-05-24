@@ -987,7 +987,7 @@ export default function UseTemplatePage({
                   e.currentTarget.style.background = "rgba(255,215,0,0.06)";
                 }}
               >
-                <BookmarkCheck className="h-4 w-4 shrink-0" />
+                {/* <BookmarkCheck className="h-4 w-4 shrink-0" /> */}
                 <span className={sidebarCollapsed ? "sr-only" : ""}>Preview & reserve</span>
               </Link>
             ) : null}

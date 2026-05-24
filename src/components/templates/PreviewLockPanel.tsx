@@ -111,7 +111,6 @@ export function PreviewLockPanel({
             onClick={onReserve}
             loading={working === "reserve"}
           >
-            <BookmarkCheck className="mr-2 h-4 w-4" />
             {working === "reserve" ? "Reserving…" : "Reserve for my department"}
           </Button>
         </div>

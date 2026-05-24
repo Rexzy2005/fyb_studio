@@ -45,6 +45,7 @@ describe("applyImageFill", () => {
       ctx,
       source,
       imageFill({
+        scaleMode: "CROP",
         imageTransform: {
           a: 0.5,
           b: 0.2,
@@ -64,5 +65,36 @@ describe("applyImageFill", () => {
     expect(transform?.args[1]).not.toBe(0);
     expect(transform?.args[2]).not.toBe(0);
     expect(drawImage?.args).toHaveLength(5);
+  });
+
+  it("does not crop fill images only because imageTransform is present", () => {
+    const { ctx, ops } = makeCtx();
+    const source = { width: 100, height: 80 } as unknown as CanvasImageSource;
+
+    applyImageFill(
+      ctx,
+      source,
+      imageFill({
+        scaleMode: "FILL",
+        imageTransform: {
+          a: 0.5,
+          b: 0,
+          c: 0,
+          d: 0.5,
+          tx: 0.25,
+          ty: 0.25,
+        },
+      }),
+      { x: 10, y: 20, width: 200, height: 120 },
+    );
+
+    expect(ops.some((op) => op.name === "transform")).toBe(false);
+    expect(ops.find((op) => op.name === "drawImage")?.args).toEqual([
+      source,
+      10,
+      0,
+      200,
+      160,
+    ]);
   });
 });

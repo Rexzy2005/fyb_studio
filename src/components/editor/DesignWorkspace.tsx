@@ -22,6 +22,7 @@ type Props = {
     {
       url: string;
       objectFit: "cover" | "contain";
+      preservePaintScaleMode?: boolean;
     }
   >;
   previewColorByNodeId?: Record<string, string>;
@@ -636,7 +637,10 @@ function CanvasShapesLayer({
   // Kept for API parity even though the unified renderer pulls the order itself.
   orderedNodeIds?: string[];
   colorOverrideByNodeId: Record<string, string>;
-  previewImageByNodeId: Record<string, { url: string; objectFit: "cover" | "contain" }>;
+  previewImageByNodeId: Record<
+    string,
+    { url: string; objectFit: "cover" | "contain"; preservePaintScaleMode?: boolean }
+  >;
 }) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const imagesRef = useRef(new Map<string, HTMLImageElement>());
@@ -710,7 +714,12 @@ function CanvasShapesLayer({
         if (!url) return undefined;
         const img = imagesRef.current.get(id);
         if (!img || !img.complete || img.naturalWidth === 0) return undefined;
-        return { source: img, objectFit: previewImageByNodeId[id].objectFit };
+        const entry = previewImageByNodeId[id];
+        return {
+          source: img,
+          objectFit: entry.objectFit,
+          preservePaintScaleMode: entry.preservePaintScaleMode,
+        };
       },
     });
 

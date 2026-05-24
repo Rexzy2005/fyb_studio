@@ -12,7 +12,10 @@ export type ExportPngInput = {
   design: NormalizedDesignV1;
   fieldConfig: FieldConfig;
   previewTextByNodeId?: Record<string, string>;
-  previewImageByNodeId?: Record<string, { blob: Blob; objectFit: "cover" | "contain" }>;
+  previewImageByNodeId?: Record<
+    string,
+    { blob: Blob; objectFit: "cover" | "contain"; preservePaintScaleMode?: boolean }
+  >;
   previewColorByNodeId?: Record<string, string>;
   scale: number;
 };
@@ -78,7 +81,12 @@ export async function exportTemplatePng({
   // render pass finishes.
   const imageOverrides = new Map<
     string,
-    { source: CanvasImageSource; objectFit: "cover" | "contain"; release: () => void }
+    {
+      source: CanvasImageSource;
+      objectFit: "cover" | "contain";
+      preservePaintScaleMode?: boolean;
+      release: () => void;
+    }
   >();
   for (const [nodeId, entry] of Object.entries(previewImageByNodeId)) {
     try {
@@ -86,6 +94,7 @@ export async function exportTemplatePng({
       imageOverrides.set(nodeId, {
         source: decoded.source,
         objectFit: entry.objectFit,
+        preservePaintScaleMode: entry.preservePaintScaleMode,
         release: decoded.release,
       });
     } catch {

@@ -155,4 +155,15 @@ describe("buildTextSvg edited text", () => {
     expect(svg).toContain('font-size="20"');
     expect(svg).not.toContain('font-size="19.');
   });
+
+  it("keeps text opacity from the normalized design", () => {
+    const svg = buildTextSvg({
+      design: design(textNode({ opacity: 0.375 })),
+      fieldConfig,
+      previewTextByNodeId: {},
+      includeGuides: false,
+    });
+
+    expect(svg).toContain('<g opacity="0.375"');
+  });
 });

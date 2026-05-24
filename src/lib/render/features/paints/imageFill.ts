@@ -43,22 +43,15 @@ export function applyImageFill(
     ctx.translate(-cx, -cy);
   }
 
-  // Resolve scale mode. Two override layers, in order of priority:
-  //   1. Editor preview override (`frame.objectFit`) - set by the editor when
-  //      a user has uploaded a replacement image and chose cover/contain.
-  //   2. A non-identity `imageTransform` on the original Figma paint - Figma
-  //      stores manual crop adjustments here even when scaleMode says "FILL".
-  //      If the user nudged the crop in Figma, that intent lives in the matrix
-  //      and we MUST honor it regardless of the declared scaleMode, otherwise
-  //      cropped portraits / cropped logos render with the wrong region visible.
-  //   3. The paint's declared `scaleMode`.
+  // Resolve scale mode. User/admin replacement images may override the JSON
+  // paint with cover/contain, but original design images must follow the
+  // declared `scaleMode` exactly. Some plugin exports include imageTransform on
+  // non-CROP fills; treating that as crop shrinks otherwise-normal FILL images.
   const mode: NormalizedImageFill["scaleMode"] = frame.objectFit
     ? frame.objectFit === "contain"
       ? "FIT"
       : "FILL"
-    : !frame.objectFit && fill.imageTransform && isNonIdentity(fill.imageTransform)
-      ? "CROP"
-      : fill.scaleMode;
+    : fill.scaleMode;
 
   switch (mode) {
     case "FILL":
@@ -81,23 +74,6 @@ export function applyImageFill(
   }
 
   ctx.restore();
-}
-
-/**
- * The identity image transform `[[1,0,0],[0,1,0]]` means "no crop" - the
- * image fills naturally per scaleMode. Anything else is a custom crop.
- * Tolerance is generous because Figma serializes float matrices.
- */
-function isNonIdentity(m: { a: number; b: number; c: number; d: number; tx: number; ty: number }): boolean {
-  const eps = 1e-6;
-  return (
-    Math.abs(m.a - 1) > eps ||
-    Math.abs(m.d - 1) > eps ||
-    Math.abs(m.b) > eps ||
-    Math.abs(m.c) > eps ||
-    Math.abs(m.tx) > eps ||
-    Math.abs(m.ty) > eps
-  );
 }
 
 function drawCoverContain(

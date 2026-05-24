@@ -5,7 +5,11 @@ import { useMemo } from "react";
 import type { NormalizedDesignV1 } from "@/lib/figma/normalized";
 import type { PluginImageMap } from "@/lib/figma/plugin/adapter";
 
-export type PluginImageEntry = { url: string; objectFit: "cover" | "contain" };
+export type PluginImageEntry = {
+  url: string;
+  objectFit: "cover" | "contain";
+  preservePaintScaleMode: true;
+};
 
 /**
  * Resolve the FYB Extractor plugin's embedded image bytes into a per-node
@@ -26,7 +30,11 @@ export function usePluginImages(design: NormalizedDesignV1 | null | undefined): 
     for (const [nodeId, hash] of Object.entries(pluginImages.byNodeId)) {
       const entry = pluginImages.byHash[hash];
       if (!entry) continue;
-      out[nodeId] = { url: entry.dataUrl, objectFit: "cover" };
+      out[nodeId] = {
+        url: entry.dataUrl,
+        objectFit: "cover",
+        preservePaintScaleMode: true,
+      };
     }
     return out;
   }, [design]);

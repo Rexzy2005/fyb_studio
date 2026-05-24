@@ -463,14 +463,21 @@ export default function UseTemplatePage({
       // was supplied by the plugin (logos, decorative imagery, default
       // portraits) rendered as a transparent placeholder in the PNG even
       // though the editor showed it correctly.
-      const imageBlobs: Record<string, { blob: Blob; objectFit: "cover" | "contain" }> = {};
+      const imageBlobs: Record<
+        string,
+        { blob: Blob; objectFit: "cover" | "contain"; preservePaintScaleMode?: boolean }
+      > = {};
 
       // 1. Plugin originals — these are data URLs; fetch them into Blobs.
       await Promise.all(
         Object.entries(pluginImageByNodeId).map(async ([nodeId, entry]) => {
           const blob = await dataUrlToBlob(entry.url);
           if (blob) {
-            imageBlobs[nodeId] = { blob, objectFit: entry.objectFit };
+            imageBlobs[nodeId] = {
+              blob,
+              objectFit: entry.objectFit,
+              preservePaintScaleMode: entry.preservePaintScaleMode,
+            };
           }
         })
       );

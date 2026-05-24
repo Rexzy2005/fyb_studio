@@ -2,7 +2,10 @@ import type { FieldConfig } from "@/lib/storage/types";
 
 type ImageField = Extract<FieldConfig["fields"][number], { kind: "image" }>;
 
-export type ImageMapEntry = { objectFit: "cover" | "contain" };
+export type ImageMapEntry = {
+  objectFit: "cover" | "contain";
+  preservePaintScaleMode?: boolean;
+};
 
 function fitForField(field: ImageField): "cover" | "contain" {
   return field.imageBehavior?.fit ?? field.cropRule ?? "cover";
@@ -25,13 +28,17 @@ function fitForField(field: ImageField): "cover" | "contain" {
  *   - the user's `base` entry wins; if absent, the plugin original (if any)
  *     fills in so the design always shows its real picture by default.
  */
-export function composeImageMap<T extends ImageMapEntry>(
-  base: Record<string, T>,
-  designAssets: Record<string, T>,
+export function composeImageMap<
+  TBase extends ImageMapEntry,
+  TAsset extends ImageMapEntry,
+  TPlugin extends ImageMapEntry = never,
+>(
+  base: Record<string, TBase>,
+  designAssets: Record<string, TAsset>,
   fieldConfig: FieldConfig | undefined | null,
-  pluginOriginals?: Record<string, T>,
-): Record<string, T> {
-  const out: Record<string, T> = { ...base };
+  pluginOriginals?: Record<string, TPlugin>,
+): Record<string, TBase | TAsset | TPlugin> {
+  const out: Record<string, TBase | TAsset | TPlugin> = { ...base };
 
   // Fill in plugin originals for nodes that don't already have a user entry.
   if (pluginOriginals) {

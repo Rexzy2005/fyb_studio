@@ -12,7 +12,7 @@ export type RenderOpts = {
   previewTextByNodeId?: Record<string, string>;
   previewImageByNodeId?: Record<
     string,
-    { source: CanvasImageSource; objectFit: "cover" | "contain" }
+    { source: CanvasImageSource; objectFit: "cover" | "contain"; preservePaintScaleMode?: boolean }
   >;
   previewColorByNodeId?: Record<string, string>;
   // When true, the canvas backend does not paint TEXT nodes - text is composited

@@ -55,7 +55,9 @@ export type CanvasBackendDeps = {
   // Map of color overrides resolved upstream from the field config (one per node).
   colorOverrideByNodeId: Record<string, string>;
   // Image lookup the backend uses for IMAGE fills with a user override.
-  resolvePreviewImage(nodeId: string): { source: CanvasImageSource; objectFit: "cover" | "contain" } | undefined;
+  resolvePreviewImage(nodeId: string):
+    | { source: CanvasImageSource; objectFit: "cover" | "contain"; preservePaintScaleMode?: boolean }
+    | undefined;
 };
 
 /**
@@ -371,7 +373,7 @@ export class CanvasBackend implements RenderBackend {
               y: 0,
               width: canUseMatrix ? localW : node.frame.width,
               height: canUseMatrix ? localH : node.frame.height,
-              objectFit: override.objectFit,
+              objectFit: override.preservePaintScaleMode ? undefined : override.objectFit,
             });
           } else {
             // No override yet - show a placeholder clipped to the same shape.

@@ -33,7 +33,7 @@ export function LockedAccessModal({
       style={{ background: "rgba(0,0,0,0.72)", backdropFilter: "blur(8px)" }}
     >
       <div
-        className="relative w-full max-w-[420px] overflow-hidden"
+        className="relative w-full max-w-105 overflow-hidden"
         style={{
           background: "var(--canvas)",
           border: "1px solid var(--hairline)",
@@ -43,7 +43,7 @@ export function LockedAccessModal({
       >
         {/* Top accent */}
         <div
-          className="absolute inset-x-0 top-0 h-[2px]"
+          className="absolute inset-x-0 top-0 h-0.5"
           style={{ background: "linear-gradient(90deg,#EF4444,#DC2626)", opacity: 0.8 }}
         />
 

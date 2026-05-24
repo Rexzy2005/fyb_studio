@@ -110,6 +110,7 @@ export default function TemplateEditorPage({
   const [previewImageByNodeId, setPreviewImageByNodeId] = useState<
     Record<string, { url: string; objectFit: "cover" | "contain"; _revoke?: boolean }>
   >({});
+  const [imageLoadingByNodeId, setImageLoadingByNodeId] = useState<Record<string, boolean>>({});
   const [previewColorByNodeId, setPreviewColorByNodeId] = useState<Record<string, string>>({});
   const previewImagesRef = useRef(previewImageByNodeId);
   const selectedNodeId = useTemplateEditorStore((s) => s.selectedNodeId);
@@ -1115,6 +1116,7 @@ export default function TemplateEditorPage({
         config={record.fieldConfig}
         previewTextByNodeId={previewTextByNodeId}
         previewImageByNodeId={previewImageByNodeId}
+        imageLoadingByNodeId={imageLoadingByNodeId}
         previewColorByNodeId={previewColorByNodeId}
         onPreviewTextChange={onPreviewTextChange}
         onPreviewImageChange={onPreviewImageChange}

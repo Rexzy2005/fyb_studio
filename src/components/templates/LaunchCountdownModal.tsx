@@ -50,7 +50,7 @@ export function LaunchCountdownModal({
       style={{ background: "rgba(0,0,0,0.72)", backdropFilter: "blur(12px)" }}
     >
       <div
-        className="relative w-full max-w-[460px] overflow-hidden"
+        className="relative w-full max-w-115 overflow-hidden"
         style={{
           background:
             "radial-gradient(120% 120% at 50% 0%, rgba(255,215,0,0.12), transparent 60%), var(--canvas)",
@@ -60,7 +60,7 @@ export function LaunchCountdownModal({
         }}
       >
         <div
-          className="absolute inset-x-0 top-0 h-[2px]"
+          className="absolute inset-x-0 top-0 h-0.5"
           style={{ background: "linear-gradient(90deg,#F59E0B,#FDE047)", opacity: 0.8 }}
         />
 

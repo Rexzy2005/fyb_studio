@@ -13,6 +13,7 @@ type Props = {
   config: FieldConfig;
   previewTextByNodeId: Record<string, string>;
   previewImageByNodeId: Record<string, { url?: string; objectFit?: "cover" | "contain"; blob?: Blob }>;
+  imageLoadingByNodeId: Record<string, boolean>;
   previewColorByNodeId: Record<string, string>;
   onPreviewTextChange: (nodeId: string, value: string) => void;
   onPreviewImageChange: (nodeId: string, file: File | null) => void;
@@ -34,6 +35,7 @@ export function PreviewFormModal({
   config,
   previewTextByNodeId,
   previewImageByNodeId,
+  imageLoadingByNodeId,
   previewColorByNodeId,
   onPreviewTextChange,
   onPreviewImageChange,
@@ -113,6 +115,7 @@ export function PreviewFormModal({
                           field={f}
                           previewTextByNodeId={previewTextByNodeId}
                           previewImageByNodeId={previewImageByNodeId}
+                          imageLoadingByNodeId={imageLoadingByNodeId}
                           previewColorByNodeId={previewColorByNodeId}
                           onPreviewTextChange={onPreviewTextChange}
                           onPreviewImageChange={onPreviewImageChange}

@@ -32,6 +32,7 @@ type Props = {
   autoFitOnMount?: boolean;
   autoFitOnResize?: boolean;
   autoFitKey?: string | number;
+  showWatermark?: boolean;
 };
 
 function isEditableElementFocused(): boolean {
@@ -54,6 +55,7 @@ export function DesignWorkspace({
   autoFitOnMount = true,
   autoFitOnResize = false,
   autoFitKey,
+  showWatermark = false,
 }: Props) {
   const zoom = useTemplateEditorStore((s) => s.zoom);
   const panX = useTemplateEditorStore((s) => s.panX);
@@ -597,6 +599,9 @@ export function DesignWorkspace({
               selectedNodeId={selectedNodeId}
               showGuides={showGuides}
             />
+            {showWatermark ? (
+              <WatermarkOverlay width={canvasW} height={canvasH} text="FYB Studio" />
+            ) : null}
           </div>
         </div>
 
@@ -734,6 +739,98 @@ function CanvasShapesLayer({
   }, [design, colorOverrideByNodeId, imageTick, previewImageByNodeId]);
 
   return <canvas ref={canvasRef} className="absolute inset-0" />;
+}
+
+function WatermarkOverlay({
+  width,
+  height,
+  text,
+}: {
+  width: number;
+  height: number;
+  text: string;
+}) {
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const w = Math.max(1, width);
+    const h = Math.max(1, height);
+    const dpr = window.devicePixelRatio || 1;
+    canvas.width = Math.max(1, Math.round(w * dpr));
+    canvas.height = Math.max(1, Math.round(h * dpr));
+    canvas.style.width = `${w}px`;
+    canvas.style.height = `${h}px`;
+
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, w, h);
+
+    // Soft gradient wash to lift watermark contrast without masking the design.
+    const wash = ctx.createLinearGradient(0, 0, w, h);
+    wash.addColorStop(0, "rgba(0,0,0,0.06)");
+    wash.addColorStop(0.45, "rgba(0,0,0,0.02)");
+    wash.addColorStop(1, "rgba(0,0,0,0.08)");
+    ctx.fillStyle = wash;
+    ctx.fillRect(0, 0, w, h);
+
+    const size = Math.max(16, Math.min(26, Math.min(w, h) * 0.035));
+    const sizeSmall = Math.max(12, Math.min(18, Math.min(w, h) * 0.024));
+    const spacingX = Math.max(100, Math.min(180, Math.min(w, h) * 0.16));
+    const spacingY = Math.max(80, Math.min(160, Math.min(w, h) * 0.13));
+    const diag = Math.hypot(w, h);
+
+    ctx.save();
+    ctx.translate(w / 2, h / 2);
+    ctx.rotate(-Math.PI / 4);
+    ctx.font = `700 ${size}px var(--font-geist-sans, system-ui, -apple-system, Segoe UI, Roboto, Arial)`;
+    ctx.fillStyle = "rgba(255,255,255,0.34)";
+    ctx.strokeStyle = "rgba(0,0,0,0.16)";
+    ctx.lineWidth = Math.max(1, size * 0.07);
+    ctx.globalAlpha = 0.95;
+    ctx.textBaseline = "middle";
+
+    let row = 0;
+    for (let y = -diag; y <= diag; y += spacingY) {
+      const offset = row % 2 === 0 ? 0 : spacingX * 0.5;
+      for (let x = -diag; x <= diag; x += spacingX) {
+        const px = x + offset;
+        ctx.strokeText(text, px, y);
+        ctx.fillText(text, px, y);
+      }
+      row += 1;
+    }
+
+    // Secondary pass: smaller, offset layer to prevent clean gaps.
+    ctx.font = `600 ${sizeSmall}px var(--font-geist-sans, system-ui, -apple-system, Segoe UI, Roboto, Arial)`;
+    ctx.fillStyle = "rgba(255,255,255,0.26)";
+    ctx.strokeStyle = "rgba(0,0,0,0.12)";
+    ctx.lineWidth = Math.max(1, sizeSmall * 0.08);
+    ctx.globalAlpha = 0.85;
+    row = 0;
+    for (let y = -diag + spacingY * 0.5; y <= diag; y += spacingY) {
+      const offset = row % 2 === 0 ? spacingX * 0.35 : spacingX * 0.85;
+      for (let x = -diag + spacingX * 0.4; x <= diag; x += spacingX) {
+        const px = x + offset;
+        ctx.strokeText(text, px, y);
+        ctx.fillText(text, px, y);
+      }
+      row += 1;
+    }
+
+    ctx.restore();
+  }, [height, text, width]);
+
+  return (
+    <canvas
+      ref={canvasRef}
+      className="pointer-events-none absolute inset-0"
+      aria-hidden
+    />
+  );
 }
 
 function SvgTextLayer({

@@ -132,11 +132,6 @@ export async function exportTemplatePng({
   ctx.setTransform(1, 0, 0, 1, 0, 0);
   await drawSvgOntoCanvas(ctx, canvas, design, fieldConfig, previewTextByNodeId);
 
-  // Final touch: paint a subtle "design by fybstudio.art" signature at the
-  // bottom-right corner. Renders in design coordinates so the size is
-  // proportional to the design - never overpowering, never disappearing.
-  drawBrandSignature(ctx, designWidth, designHeight, sx, sy);
-
   // `canvas.toBlob` is async and null-safe; fall back to `toDataURL` on the
   // rare iOS WebKit versions that return null from `toBlob` for large canvases.
   const blob = await new Promise<Blob>((resolve, reject) => {
@@ -156,80 +151,6 @@ export async function exportTemplatePng({
   });
 
   return { blob, width: canvas.width, height: canvas.height };
-}
-
-/**
- * Paint a subtle "design by fybstudio.art" signature at the bottom-right of
- * the export. Designed to be a small mark - not a watermark - that survives
- * heavy social-media compression while remaining unobtrusive on the design.
- *
- * Rendering choices:
- *   - Position is in DESIGN coordinates (right-padding, bottom-padding) so it
- *     scales proportionally with the design at any export scale.
- *   - White fill at 80% opacity for legibility on dark backgrounds.
- *   - A soft drop-shadow halo (semi-opaque black, 1.5 px blur) gives the text
- *     enough separation from light backgrounds without looking heavy.
- *   - Font size capped to a sensible range so very small or very large
- *     designs still get a readable but unobtrusive mark.
- */
-function drawBrandSignature(
-  ctx: CanvasRenderingContext2D,
-  designWidth: number,
-  designHeight: number,
-  sx: number,
-  sy: number,
-): void {
-  ctx.save();
-  ctx.setTransform(sx, 0, 0, sy, 0, 0);
-
-  const text = "design by fybstudio.art";
-  const fontSize = Math.max(9, Math.min(14, Math.min(designWidth, designHeight) * 0.0085));
-  const padding = fontSize * 1.6;
-
-  ctx.font = `500 ${fontSize}px system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif`;
-  ctx.textAlign = "right";
-  ctx.textBaseline = "alphabetic";
-
-  // Sample background luminance at the bottom-right region to pick a
-  // contrasting text color. We sample in bitmap coordinates.
-  const canvasW = ctx.canvas.width;
-  const canvasH = ctx.canvas.height;
-  const sampleW = Math.min(Math.round(160 * sx), canvasW);
-  const sampleH = Math.min(Math.round(28 * sy), canvasH);
-  const bx = Math.max(0, Math.round((designWidth - padding) * sx) - sampleW);
-  const by = Math.max(0, Math.round((designHeight - padding - fontSize) * sy));
-  let isDark = true;
-  try {
-    const pixel = ctx.getImageData(bx, by, Math.max(1, sampleW), Math.max(1, sampleH));
-    let rSum = 0, gSum = 0, bSum = 0, count = 0;
-    for (let i = 0; i < pixel.data.length; i += 4) {
-      rSum += pixel.data[i];
-      gSum += pixel.data[i + 1];
-      bSum += pixel.data[i + 2];
-      count++;
-    }
-    if (count > 0) {
-      const luminance = (0.299 * (rSum / count) + 0.587 * (gSum / count) + 0.114 * (bSum / count)) / 255;
-      isDark = luminance < 0.55;
-    }
-  } catch {
-    // getImageData can throw in some environments; fall back to dark assumption
-  }
-
-  if (isDark) {
-    ctx.shadowColor = "rgba(0,0,0,0.35)";
-    ctx.shadowBlur = 1.5;
-    ctx.shadowOffsetY = 0.5;
-    ctx.fillStyle = "rgba(255,255,255,0.80)";
-  } else {
-    ctx.shadowColor = "rgba(255,255,255,0.3)";
-    ctx.shadowBlur = 1;
-    ctx.shadowOffsetY = 0.3;
-    ctx.fillStyle = "rgba(0,0,0,0.65)";
-  }
-
-  ctx.fillText(text, designWidth - padding, designHeight - padding);
-  ctx.restore();
 }
 
 

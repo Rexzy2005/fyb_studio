@@ -28,6 +28,7 @@ import {
   type PublicTemplateLockBlock,
 } from "@/lib/api/publicTemplates";
 import { LockedAccessModal } from "@/components/templates/LockedAccessModal";
+import { LaunchCountdownModal, type CountdownParts } from "@/components/templates/LaunchCountdownModal";
 import { ShareButton } from "@/components/templates/ShareButton";
 
 import { DesignWorkspace } from "@/components/editor/DesignWorkspace";
@@ -41,6 +42,7 @@ import {
   clearPendingDownload,
   listPendingDownloads,
 } from "@/lib/payment/pendingDownloads";
+import { lockTemplate, fetchTemplateLock } from "@/lib/api/templateLocks";
 
 function deriveCategoryLabel(name: string, explicit: string | null): string {
   const e = explicit?.trim();
@@ -62,6 +64,17 @@ function deriveCategoryLabel(name: string, explicit: string | null): string {
  */
 const STANDARD_EXPORT_SCALE = 2;
 
+const LAUNCH_AT = new Date("2026-05-27T09:00:00+01:00");
+
+function getCountdownParts(ms: number): CountdownParts {
+  const total = Math.max(0, Math.floor(ms / 1000));
+  const days = Math.floor(total / 86400);
+  const hours = Math.floor((total % 86400) / 3600);
+  const minutes = Math.floor((total % 3600) / 60);
+  const seconds = total % 60;
+  return { days, hours, minutes, seconds };
+}
+
 // Mobile devices (particularly iOS) have stricter canvas memory limits.
 // Use 1× on small screens so large canvases don't OOM the tab.
 function getExportScale(): 1 | 2 {
@@ -81,6 +94,11 @@ export default function UseTemplatePage({
   const viaShare = searchParams.get("via") === "share";
   const { data: session, status: sessionStatus } = useSession();
   const isHead = Boolean(session?.user?.isDepartmentHead);
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [now, setNow] = useState<Date | null>(null);
+  const [hydrated, setHydrated] = useState(false);
+  const [reserveStatus, setReserveStatus] = useState<"idle" | "loading" | "reserved">("idle");
+  const [reserveError, setReserveError] = useState<string | null>(null);
 
   // Auth gate: unauthenticated visitors get redirected to sign-in with a
   // callback back to this exact template URL. Honors the loading state so
@@ -91,6 +109,49 @@ export default function UseTemplatePage({
     const target = `/signin?from=${encodeURIComponent(here)}`;
     router.replace(target);
   }, [sessionStatus, templateId, viaShare, router]);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch("/api/admin/check");
+        if (!res.ok) return;
+        const data = (await res.json()) as { isAdmin?: boolean };
+        if (!cancelled) setIsAdmin(Boolean(data.isAdmin));
+      } catch (err) {
+        console.warn("[use] admin check failed", err);
+      } finally {
+        // No-op: admin check only affects bypass.
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    setHydrated(true);
+    setNow(new Date());
+    const id = window.setInterval(() => setNow(new Date()), 1000);
+    return () => window.clearInterval(id);
+  }, []);
+
+  useEffect(() => {
+    if (!isHead || sessionStatus !== "authenticated") return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const { lock, viewer } = await fetchTemplateLock(templateId);
+        if (cancelled) return;
+        if (lock && viewer?.fromSameDept) setReserveStatus("reserved");
+      } catch (err) {
+        console.warn("[use] lock fetch failed", err);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [isHead, sessionStatus, templateId]);
 
   // Track whether the "shared with you" banner is showing (dismissible).
   const [shareBannerOpen, setShareBannerOpen] = useState(viaShare);
@@ -162,6 +223,27 @@ export default function UseTemplatePage({
       }
     };
   }, []);
+
+  const launchMs = hydrated && now ? LAUNCH_AT.getTime() - now.getTime() : null;
+  const isLaunchLive = hydrated && launchMs !== null ? launchMs <= 0 : false;
+  const shouldGateLaunch =
+    sessionStatus === "authenticated" &&
+    !isAdmin &&
+    !isLaunchLive;
+  const countdown = hydrated && launchMs !== null ? getCountdownParts(launchMs) : null;
+
+  async function handleReserve() {
+    if (reserveStatus !== "idle") return;
+    setReserveError(null);
+    setReserveStatus("loading");
+    try {
+      const lock = await lockTemplate(templateId);
+      setReserveStatus("reserved");
+    } catch (err) {
+      setReserveStatus("idle");
+      setReserveError(err instanceof Error ? err.message : "Could not reserve this design");
+    }
+  }
 
   // Load or create the user-design working copy.
   // IDB lookup and server lock-check run concurrently so returning users see
@@ -371,6 +453,22 @@ export default function UseTemplatePage({
     );
   }
 
+  if (shouldGateLaunch) {
+    return (
+      <div className="min-h-dvh bg-canvas dark:bg-canvas">
+        <LaunchCountdownModal
+          open
+          countdown={countdown}
+          isHead={isHead}
+          reserveStatus={reserveStatus}
+          reserveError={reserveError}
+          onReserve={handleReserve}
+          onBack={() => router.push("/templates")}
+        />
+      </div>
+    );
+  }
+
   if (pageLoading || !userDesign || !fieldConfig || !normalized) {
     return (
       <div className="min-h-dvh bg-canvas dark:bg-canvas">
@@ -453,7 +551,7 @@ export default function UseTemplatePage({
     setExporting(true);
     setExportStage("Preparing images");
     try {
-      // Image precedence (lowest → highest) — must match composeImageMap so
+      // Image precedence (lowest to highest) — must match composeImageMap so
       // the export is pixel-identical to the editor preview:
       //   1. Plugin-original images baked into the Figma design
       //   2. User-uploaded preview overrides
@@ -977,6 +1075,7 @@ export default function UseTemplatePage({
                 autoFitOnMount
                 autoFitOnResize={false}
                 autoFitKey={autoFitNonce}
+                showWatermark
               />
             </div>
           </div>

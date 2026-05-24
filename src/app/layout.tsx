@@ -20,7 +20,7 @@ const geistMono = Geist_Mono({
 const plusJakarta = Plus_Jakarta_Sans({
   variable: "--font-plus-jakarta",
   subsets: ["latin"],
-  // Full range so every Tailwind weight class (font-light → font-extrabold)
+  // Full range so every Tailwind weight class (font-light to font-extrabold)
   // resolves to a real Plus Jakarta face, no fake-bolding from the browser.
   weight: ["300", "400", "500", "600", "700", "800"],
   display: "swap",

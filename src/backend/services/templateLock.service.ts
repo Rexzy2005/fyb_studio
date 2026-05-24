@@ -91,10 +91,11 @@ export async function lockTemplateForDepartment(input: {
     throw new AppError("NOT_FOUND", "Department not found", 404);
   }
 
-  const [template, dept, existing] = await Promise.all([
+  const [template, dept, existing, existingByDept] = await Promise.all([
     Template.findById(input.templateId).select("_id").lean<Pick<TemplateDoc, "_id"> | null>(),
     Department.findById(input.departmentId).lean<DepartmentDoc | null>(),
     TemplateLock.findOne({ templateId: input.templateId }),
+    TemplateLock.findOne({ departmentId: input.departmentId }),
   ]);
 
   if (!template) throw new AppError("NOT_FOUND", "Template not found", 404);
@@ -103,6 +104,13 @@ export async function lockTemplateForDepartment(input: {
     throw new AppError(
       "TEMPLATE_LOCKED",
       "This template is already locked",
+      409
+    );
+  }
+  if (existingByDept && existingByDept.templateId.toString() !== input.templateId) {
+    throw new AppError(
+      "DEPARTMENT_ALREADY_LOCKED",
+      "Your department already reserved another design. Free it before reserving a new one.",
       409
     );
   }

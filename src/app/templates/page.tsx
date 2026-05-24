@@ -750,7 +750,8 @@ function EmptyState({ query, onClear }: { query: string; onClear: () => void }) 
           textTransform: "uppercase",
         }}
       >
-        Clear filters →
+        Clear filters
+        <ArrowRight size={12} strokeWidth={2.5} />
       </button>
     </div>
   );

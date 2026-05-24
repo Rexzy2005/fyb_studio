@@ -36,11 +36,18 @@ function getAdminEmails(): Set<string> {
   );
 }
 
+export function isAdminEmail(email: string | null | undefined): boolean {
+  const normalized = email?.toLowerCase();
+  if (!normalized) return false;
+  const allowed = getAdminEmails();
+  if (allowed.size === 0) return false;
+  return allowed.has(normalized);
+}
+
 export async function requireAdmin() {
   const session = await requireSession();
-  const email = session.user.email?.toLowerCase();
-  const allowed = getAdminEmails();
-  if (!email || allowed.size === 0 || !allowed.has(email)) {
+  const email = session.user.email;
+  if (!isAdminEmail(email)) {
     throw new AppError("FORBIDDEN", "Admin access required", 403);
   }
   return session;

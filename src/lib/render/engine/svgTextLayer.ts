@@ -645,6 +645,7 @@ export function buildTextSvg(input: BuildTextSvgInput): string {
   }
 
   function renderTextNode(node: NormalizedTextNode) {
+    const nodeOpacity = Math.max(0, Math.min(1, node.opacity ?? 1));
     // Resolve the dominant fill: prefer node.fills, fall back to the first
     // run's fill, then black. Gradient fills are promoted to SVG gradient defs.
     const fillCss = (() => {
@@ -697,10 +698,12 @@ export function buildTextSvg(input: BuildTextSvgInput): string {
 
       if (local && m) {
         const matrix = `matrix(${m.a} ${m.b} ${m.c} ${m.d} ${m.tx} ${m.ty})`;
-        return `<g transform="${escapeAttr(matrix)}"${shadowFilterAttr}>${paths}</g>`;
+        const opacityAttr = nodeOpacity < 1 ? ` opacity="${nodeOpacity}"` : "";
+        return `<g transform="${escapeAttr(matrix)}"${shadowFilterAttr}${opacityAttr}>${paths}</g>`;
       }
       const translate = local ? ` transform="translate(${node.frame.x} ${node.frame.y})"` : "";
-      return `<g${translate}${shadowFilterAttr}>${paths}</g>`;
+      const opacityAttr = nodeOpacity < 1 ? ` opacity="${nodeOpacity}"` : "";
+      return `<g${translate}${shadowFilterAttr}${opacityAttr}>${paths}</g>`;
     }
 
     const resolvedText = {
@@ -1032,7 +1035,8 @@ export function buildTextSvg(input: BuildTextSvgInput): string {
     const shadowFilterAttr = ensureTextEffectFilter(node);
 
     const baselineAttr = useAlphabeticBaseline ? "" : ` dominant-baseline="text-before-edge"`;
-    const textEl = `<text xml:space="preserve" x="${x}" y="${y}" fill="${escapeAttr(fillCss)}" font-size="${layout.fontSize}" font-weight="${resolvedText.fontWeight}" font-style="${fontStyle}" text-decoration="${textDecoration}" text-anchor="${anchor}"${baselineAttr}${strokeAttrs}${shadowFilterAttr} ${transform ? `transform="${escapeAttr(transform)}"` : ""} style="white-space:pre;font-family:${escapeAttr(fontFamily)};letter-spacing:${escapeAttr(letterSpacingCss)};">${tspans}</text>`;
+    const opacityAttr = nodeOpacity < 1 ? ` opacity="${nodeOpacity}"` : "";
+    const textEl = `<text xml:space="preserve" x="${x}" y="${y}" fill="${escapeAttr(fillCss)}" font-size="${layout.fontSize}" font-weight="${resolvedText.fontWeight}" font-style="${fontStyle}" text-decoration="${textDecoration}" text-anchor="${anchor}"${baselineAttr}${strokeAttrs}${shadowFilterAttr}${opacityAttr} ${transform ? `transform="${escapeAttr(transform)}"` : ""} style="white-space:pre;font-family:${escapeAttr(fontFamily)};letter-spacing:${escapeAttr(letterSpacingCss)};">${tspans}</text>`;
 
     const matrix =
       useMatrixForOverriddenText && m

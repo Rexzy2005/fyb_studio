@@ -13,7 +13,7 @@ import {
 
 import { useSession } from "next-auth/react";
 import { HeaderAuthSlot } from "@/components/auth/HeaderAuthSlot";
-import { GraduationCap } from "lucide-react";
+import { ArrowRight, GraduationCap } from "lucide-react";
 
 /* ─── Type tokens ────────────────────────────────────────── */
 const jkt: CSSProperties = {
@@ -118,7 +118,7 @@ const WELCOME_STORAGE_KEY = "fyb_welcomed_v1";
 
 // External-store snapshot: returns true if the visitor has already seen the
 // welcome ceremony. Read at render time via useSyncExternalStore so we avoid
-// setState-in-effect and stay hydration-safe (SSR snapshot = true → no modal
+// setState-in-effect and stay hydration-safe (SSR snapshot = true, no modal
 // in server HTML; client snapshot flips to false post-hydration for new
 // visitors). The `tick` ref lets the close handler force a re-snapshot.
 const welcomeStore = (() => {
@@ -1117,19 +1117,19 @@ const STEPS = [
     num: "01", label: "PICK", color: "#FF6B6B",
     title: "A design that already looks finished.",
     desc: "Every template was built by a designer. Fonts, layout, palette, spacing locked. You only see the fields that are yours. Your name. Your department. Your photo.",
-    badge: "00:00 → 00:30",
+    badge: "00:00 - 00:30",
   },
   {
     num: "02", label: "FILL", color: "#A855F7",
     title: "Your details. Live preview.",
     desc: "Type your name and watch the design update instantly. No brief to write. No DMs to send. No two-day wait for a revision that still misses the mark.",
-    badge: "00:30 → 03:00",
+    badge: "00:30 - 03:00",
   },
   {
     num: "03", label: "EXPORT", color: "#4ECDC4",
     title: "₦1,000. Print-ready. Yours forever.",
     desc: "Pay via Paystack - card, bank transfer, USSD. One high-resolution PNG delivered to your device. If anything goes wrong, your dashboard holds a Resume button.",
-    badge: "03:00 → 05:00",
+    badge: "03:00 - 05:00",
   },
 ] as const;
 
@@ -2238,7 +2238,8 @@ function DepartmentSection() {
               className="nv-laser-btn"
               style={{ height: 54, padding: "0 32px", borderRadius: 8, fontSize: 12, letterSpacing: "0.1em", ...mono, display: "inline-flex", alignItems: "center", gap: 10 }}
             >
-              Reserve a design →
+              Reserve a design
+              <ArrowRight size={14} strokeWidth={2.5} />
             </Link>
           </div>
 
@@ -3391,13 +3392,13 @@ function AnimatedWords({ text, delay = 0, style }: { text: string; delay?: numbe
 
 
 /* ── Loading screen (first-visit only) - ceremony prelude ── */
-/* ── Cinematic intro: curtain open → confetti puff → trigger welcome ── */
+/* ── Cinematic intro: curtain open -> confetti puff -> trigger welcome ── */
 function LoadingScreen({ onDone }: { onDone: () => void }) {
-  // Phase timing - celebration countdown → curtain opens → confetti puff
+  // Phase timing - celebration countdown -> curtain opens -> confetti puff
   //   0–2700ms  : "3, 2, 1" countdown over the closed curtains
   //   2700ms    : curtains start opening
   //   3300ms    : confetti puff bursts from center as curtains pass mid-point
-  //   4300ms    : curtains fully open, layer fades out → trigger welcome
+  //   4300ms    : curtains fully open, layer fades out -> trigger welcome
   const [phase, setPhase] = useState<"countdown" | "opening" | "open">("countdown");
   const [tick, setTick] = useState(3);
   const puffCanvasRef = useRef<HTMLCanvasElement>(null);

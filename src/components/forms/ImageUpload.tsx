@@ -8,6 +8,7 @@ type Props = {
   valueUrl?: string;
   valueName?: string;
   disabled?: boolean;
+  loading?: boolean;
   objectFit?: "cover" | "contain";
   accept?: string;
   onPick: (file: File) => void;
@@ -33,6 +34,7 @@ export function ImageUpload({
   valueUrl,
   valueName,
   disabled,
+  loading,
   objectFit = "cover",
   accept = "image/*",
   onPick,
@@ -48,6 +50,8 @@ export function ImageUpload({
     onPick(file);
   }
 
+  const busy = Boolean(loading);
+
   return (
     <div className="grid w-full min-w-0 gap-1">
       <div className="flex flex-wrap items-baseline justify-between gap-3">
@@ -61,7 +65,7 @@ export function ImageUpload({
               onClear();
               if (inputRef.current) inputRef.current.value = "";
             }}
-            disabled={disabled}
+            disabled={disabled || busy}
             className="shrink-0 text-xs font-medium text-ink-muted hover:text-ink disabled:opacity-50 dark:text-ink-muted dark:hover:text-ink"
           >
             Remove
@@ -84,49 +88,49 @@ export function ImageUpload({
         id={inputId}
         type="file"
         accept={accept}
-        disabled={disabled}
+        disabled={disabled || busy}
         aria-describedby={description ? helpId : undefined}
         onChange={(e) => pickFile(e.target.files?.[0])}
         className="hidden"
       />
 
       <div
-        role={disabled ? undefined : "button"}
-        tabIndex={disabled ? -1 : 0}
-        aria-disabled={disabled ? true : undefined}
+        role={disabled || busy ? undefined : "button"}
+        tabIndex={disabled || busy ? -1 : 0}
+        aria-disabled={disabled || busy ? true : undefined}
         onClick={() => {
-          if (disabled) return;
+          if (disabled || busy) return;
           inputRef.current?.click();
         }}
         onKeyDown={(e) => {
-          if (disabled) return;
+          if (disabled || busy) return;
           if (e.key === "Enter" || e.key === " ") {
             e.preventDefault();
             inputRef.current?.click();
           }
         }}
         onDragOver={(e) => {
-          if (disabled) return;
+          if (disabled || busy) return;
           e.preventDefault();
           setDragOver(true);
         }}
         onDragLeave={() => setDragOver(false)}
         onDrop={(e) => {
-          if (disabled) return;
+          if (disabled || busy) return;
           e.preventDefault();
           setDragOver(false);
           pickFile(e.dataTransfer.files?.[0]);
         }}
         className={
           "flex w-full min-w-0 items-center gap-3 rounded-2xl border border-dashed p-3 outline-none transition " +
-          (disabled
+          (disabled || busy
             ? "cursor-not-allowed border-hairline bg-canvas opacity-70 dark:border-hairline dark:bg-surface-1"
             : dragOver
               ? "cursor-pointer border-ink bg-canvas dark:border-hairline-soft dark:bg-surface-2/60"
               : "cursor-pointer border-hairline bg-surface-1 hover:bg-canvas dark:border-hairline dark:bg-surface-1 dark:hover:bg-surface-2/40")
         }
       >
-        <div className="grid h-12 w-12 place-items-center overflow-hidden rounded-xl border border-hairline bg-canvas dark:border-hairline dark:bg-surface-1">
+        <div className="relative grid h-12 w-12 place-items-center overflow-hidden rounded-xl border border-hairline bg-canvas dark:border-hairline dark:bg-surface-1">
           {valueUrl ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img
@@ -140,6 +144,16 @@ export function ImageUpload({
           ) : (
             <div className="text-xs font-semibold text-ink-muted dark:text-ink-muted">IMG</div>
           )}
+          {busy ? (
+            <div
+              className="absolute inset-0 grid place-items-center"
+              style={{ background: "rgba(0,0,0,0.45)" }}
+            >
+              <span className="fyb-dots" aria-hidden>
+                <span /><span /><span />
+              </span>
+            </div>
+          ) : null}
         </div>
 
         <div className="min-w-0 flex-1">
@@ -147,11 +161,17 @@ export function ImageUpload({
             {valueName ? valueName : valueUrl ? "Selected image" : "Upload an image"}
           </div>
           <div className="mt-0.5 text-[11px] text-ink-muted dark:text-ink-muted">
-            {disabled ? "This image is locked by the template." : dragOver ? "Drop to upload" : "Click or drag & drop"}
+            {disabled
+              ? "This image is locked by the template."
+              : busy
+                ? "Optimizing image..."
+                : dragOver
+                  ? "Drop to upload"
+                  : "Click or drag & drop"}
           </div>
         </div>
 
-        {!disabled ? (
+        {!disabled && !busy ? (
           <span className="shrink-0 rounded-xl border border-hairline bg-surface-1 px-2 py-1 text-[11px] font-medium text-ink-muted dark:border-hairline dark:bg-surface-1 dark:text-ink">
             Choose
           </span>

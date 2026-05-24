@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { ArrowLeft, BookmarkCheck, CheckCircle2, ChevronLeft, ChevronRight, Download, GraduationCap, Menu, X } from "lucide-react";
+import imageCompression from "browser-image-compression";
 
 import type { NormalizedDesignV1 } from "@/lib/figma";
 import { composeImageMap } from "@/lib/render/composeImageMap";
@@ -179,6 +180,7 @@ export default function UseTemplatePage({
     string,
     { url: string; blob: Blob; objectFit: "cover" | "contain"; _revoke?: boolean }
   >>({});
+  const [imageLoadingByNodeId, setImageLoadingByNodeId] = useState<Record<string, boolean>>({});
   const [previewColorByNodeId, setPreviewColorByNodeId] = useState<Record<string, string>>({});
   const previewImagesRef = useRef(previewImageByNodeId);
   const resetView = useTemplateEditorStore((s) => s.resetView);
@@ -511,39 +513,88 @@ export default function UseTemplatePage({
     setPreviewColorByNodeId((prev) => ({ ...prev, [nodeId]: value }));
   }
 
-  function onPreviewImageChange(nodeId: string, file: File | null) {
-    setPreviewImageByNodeId((prev) => {
-      const existing = prev[nodeId];
-      if (existing?._revoke) URL.revokeObjectURL(existing.url);
+  async function onPreviewImageChange(nodeId: string, file: File | null) {
+    const imageField = fieldConfig?.fields.find(
+      (f): f is Extract<typeof f, { kind: "image" }> => f.nodeId === nodeId && f.kind === "image"
+    );
 
-      if (!file) {
-        const next = { ...prev };
-        delete next[nodeId];
-        return next;
-      }
+    if (imageField?.imageBehavior?.allowReplace === false) return;
 
-      const imageField = fieldConfig?.fields.find(
-        (f): f is Extract<typeof f, { kind: "image" }> => f.nodeId === nodeId && f.kind === "image"
-      );
+    setImageLoadingByNodeId((prev) => ({ ...prev, [nodeId]: Boolean(file) }));
 
-      if (imageField?.imageBehavior?.allowReplace === false) {
+    try {
+      setPreviewImageByNodeId((prev) => {
+        const existing = prev[nodeId];
+        if (existing?._revoke) URL.revokeObjectURL(existing.url);
+        if (!file) {
+          const next = { ...prev };
+          delete next[nodeId];
+          return next;
+        }
         return prev;
-      }
+      });
 
-      const url = URL.createObjectURL(file);
+      if (!file) return;
+
       const fit =
         imageField?.imageBehavior?.fit ?? (imageField?.cropRule === "contain" ? "contain" : "cover");
 
-      return {
+      const maxBytes = 2 * 1024 * 1024;
+      let finalFile: File = file;
+
+      if (file.size > maxBytes) {
+        const compressPromise: Promise<Blob> = imageCompression(file, {
+          maxSizeMB: 2,
+          maxWidthOrHeight: 3000,
+          initialQuality: 0.93,
+          alwaysKeepResolution: true,
+          useWebWorker: true,
+          fileType: "image/jpeg",
+        });
+
+        const timeoutPromise = new Promise<null>((resolve) => {
+          window.setTimeout(() => resolve(null), 15000);
+        });
+
+        const compressed = (await Promise.race([compressPromise, timeoutPromise])) as
+          | Blob
+          | null;
+        if (compressed && compressed instanceof Blob) {
+          finalFile =
+            compressed instanceof File
+              ? compressed
+              : new File([compressed], file.name, { type: compressed.type || "image/jpeg" });
+        }
+      }
+
+      const url = URL.createObjectURL(finalFile);
+      setPreviewImageByNodeId((prev) => ({
         ...prev,
         [nodeId]: {
           url,
-          blob: file,
+          blob: finalFile,
           objectFit: fit,
           _revoke: true,
         },
-      };
-    });
+      }));
+    } catch {
+      if (file) {
+        const url = URL.createObjectURL(file);
+        const fit =
+          imageField?.imageBehavior?.fit ?? (imageField?.cropRule === "contain" ? "contain" : "cover");
+        setPreviewImageByNodeId((prev) => ({
+          ...prev,
+          [nodeId]: {
+            url,
+            blob: file,
+            objectFit: fit,
+            _revoke: true,
+          },
+        }));
+      }
+    } finally {
+      setImageLoadingByNodeId((prev) => ({ ...prev, [nodeId]: false }));
+    }
   }
 
   async function doExportPng(scale: 1 | 2 | 3) {
@@ -1169,6 +1220,7 @@ export default function UseTemplatePage({
                   field={f}
                   previewTextByNodeId={previewTextByNodeId}
                   previewImageByNodeId={previewImageByNodeId}
+                  imageLoadingByNodeId={imageLoadingByNodeId}
                   previewColorByNodeId={previewColorByNodeId}
                   onPreviewTextChange={onPreviewTextChange}
                   onPreviewImageChange={onPreviewImageChange}
@@ -1369,6 +1421,7 @@ export default function UseTemplatePage({
                     field={f}
                     previewTextByNodeId={previewTextByNodeId}
                     previewImageByNodeId={previewImageByNodeId}
+                    imageLoadingByNodeId={imageLoadingByNodeId}
                     previewColorByNodeId={previewColorByNodeId}
                     onPreviewTextChange={onPreviewTextChange}
                     onPreviewImageChange={onPreviewImageChange}

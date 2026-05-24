@@ -37,6 +37,7 @@ export function FormField({
   field,
   previewTextByNodeId,
   previewImageByNodeId,
+  imageLoadingByNodeId,
   previewColorByNodeId,
   onPreviewTextChange,
   onPreviewImageChange,
@@ -46,9 +47,10 @@ export function FormField({
   field: FieldConfig["fields"][number];
   previewTextByNodeId: Record<string, string>;
   previewImageByNodeId: Record<string, { url?: string; objectFit?: "cover" | "contain"; blob?: Blob }>;
+  imageLoadingByNodeId: Record<string, boolean>;
   previewColorByNodeId: Record<string, string>;
   onPreviewTextChange: (nodeId: string, value: string) => void;
-  onPreviewImageChange: (nodeId: string, file: File | null) => void;
+  onPreviewImageChange: (nodeId: string, file: File | null) => void | Promise<void>;
   onPreviewColorChange: (nodeId: string, value: string) => void;
   density: "compact" | "comfortable";
 }) {
@@ -94,13 +96,14 @@ export function FormField({
         description={undefined}
         valueUrl={current?.url}
         valueName={meta}
+        loading={Boolean(imageLoadingByNodeId[field.nodeId])}
         objectFit={
           current?.objectFit ??
           (field.imageBehavior?.fit ?? (field.cropRule === "contain" ? "contain" : "cover"))
         }
         disabled={!allowReplace}
-        onPick={(file) => onPreviewImageChange(field.nodeId, file)}
-        onClear={allowReplace ? () => onPreviewImageChange(field.nodeId, null) : undefined}
+        onPick={(file) => void onPreviewImageChange(field.nodeId, file)}
+        onClear={allowReplace ? () => void onPreviewImageChange(field.nodeId, null) : undefined}
       />
     );
   }

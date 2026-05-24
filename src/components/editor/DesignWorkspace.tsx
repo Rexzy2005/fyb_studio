@@ -777,43 +777,25 @@ function WatermarkOverlay({
     ctx.fillStyle = wash;
     ctx.fillRect(0, 0, w, h);
 
-    const size = Math.max(16, Math.min(26, Math.min(w, h) * 0.035));
-    const sizeSmall = Math.max(12, Math.min(18, Math.min(w, h) * 0.024));
-    const spacingX = Math.max(100, Math.min(180, Math.min(w, h) * 0.16));
-    const spacingY = Math.max(80, Math.min(160, Math.min(w, h) * 0.13));
+    const size = Math.max(16, Math.min(28, Math.min(w, h) * 0.038));
+    const spacingX = Math.max(140, Math.min(240, Math.min(w, h) * 0.2));
+    const spacingY = Math.max(120, Math.min(220, Math.min(w, h) * 0.18));
     const diag = Math.hypot(w, h);
 
     ctx.save();
     ctx.translate(w / 2, h / 2);
     ctx.rotate(-Math.PI / 4);
     ctx.font = `700 ${size}px var(--font-geist-sans, system-ui, -apple-system, Segoe UI, Roboto, Arial)`;
-    ctx.fillStyle = "rgba(255,255,255,0.34)";
-    ctx.strokeStyle = "rgba(0,0,0,0.16)";
-    ctx.lineWidth = Math.max(1, size * 0.07);
-    ctx.globalAlpha = 0.95;
+    ctx.fillStyle = "rgba(255,255,255,0.4)";
+    ctx.strokeStyle = "rgba(0,0,0,0.2)";
+    ctx.lineWidth = Math.max(1, size * 0.075);
+    ctx.globalAlpha = 0.98;
     ctx.textBaseline = "middle";
 
     let row = 0;
     for (let y = -diag; y <= diag; y += spacingY) {
       const offset = row % 2 === 0 ? 0 : spacingX * 0.5;
       for (let x = -diag; x <= diag; x += spacingX) {
-        const px = x + offset;
-        ctx.strokeText(text, px, y);
-        ctx.fillText(text, px, y);
-      }
-      row += 1;
-    }
-
-    // Secondary pass: smaller, offset layer to prevent clean gaps.
-    ctx.font = `600 ${sizeSmall}px var(--font-geist-sans, system-ui, -apple-system, Segoe UI, Roboto, Arial)`;
-    ctx.fillStyle = "rgba(255,255,255,0.26)";
-    ctx.strokeStyle = "rgba(0,0,0,0.12)";
-    ctx.lineWidth = Math.max(1, sizeSmall * 0.08);
-    ctx.globalAlpha = 0.85;
-    row = 0;
-    for (let y = -diag + spacingY * 0.5; y <= diag; y += spacingY) {
-      const offset = row % 2 === 0 ? spacingX * 0.35 : spacingX * 0.85;
-      for (let x = -diag + spacingX * 0.4; x <= diag; x += spacingX) {
         const px = x + offset;
         ctx.strokeText(text, px, y);
         ctx.fillText(text, px, y);

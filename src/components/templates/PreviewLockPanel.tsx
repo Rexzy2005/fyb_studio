@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { BookmarkCheck, BookmarkX, ShieldCheck } from "lucide-react";
+import { BookmarkX, ShieldCheck } from "lucide-react";
 
 import {
   deleteTemplateLock,

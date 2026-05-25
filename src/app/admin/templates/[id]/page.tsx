@@ -3,6 +3,7 @@
 import { use, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import imageCompression from "browser-image-compression";
 
 import { normalizeFigmaExport, type NormalizedDesignV1 } from "@/lib/figma";
 import { composeImageMap } from "@/lib/render/composeImageMap";
@@ -32,6 +33,20 @@ import {
 type EditorMode = "draft" | "published";
 
 type TemplateCategoryPreset = "fyb" | "signout" | "other";
+
+async function optimizeTemplateCover(file: File): Promise<File> {
+  if (file.size <= 1.25 * 1024 * 1024) return file;
+
+  const compressed = await imageCompression(file, {
+    maxSizeMB: 1.25,
+    maxWidthOrHeight: 1800,
+    useWebWorker: true,
+    fileType: "image/jpeg",
+    initialQuality: 0.86,
+  });
+  const name = file.name.replace(/\.[^.]+$/, "") || "template-preview";
+  return new File([compressed], `${name}.jpg`, { type: "image/jpeg" });
+}
 
 function inferCategoryPreset(raw: string | undefined): { preset: TemplateCategoryPreset; otherValue: string } {
   const v = (raw ?? "").trim();
@@ -336,21 +351,22 @@ export default function TemplateEditorPage({
     }
   }
 
-  function onPickPublishPreview(file: File) {
+  async function onPickPublishPreview(file: File) {
     setPublishError(null);
-    const maxBytes = 5 * 1024 * 1024;
+    const maxBytes = 10 * 1024 * 1024;
     if (!file.type.startsWith("image/")) {
       setPublishError("Please upload an image file (PNG, JPG, or WebP). ");
       return;
     }
     if (file.size > maxBytes) {
-      setPublishError("Preview image must be under 5MB.");
+      setPublishError("Preview image must be under 10MB.");
       return;
     }
 
+    const optimized = await optimizeTemplateCover(file);
     if (publishPreviewUrl) URL.revokeObjectURL(publishPreviewUrl);
-    setPublishFile(file);
-    setPublishPreviewUrl(URL.createObjectURL(file));
+    setPublishFile(optimized);
+    setPublishPreviewUrl(URL.createObjectURL(optimized));
   }
 
   async function getImageDimensionsFromBlob(blob: Blob): Promise<{ width: number; height: number }> {
@@ -373,9 +389,6 @@ export default function TemplateEditorPage({
     if (!normalized) return;
     if (mode !== "draft") return;
 
-    const estimateJsonBytes = (value: unknown) =>
-      new Blob([JSON.stringify(value)]).size;
-
     const categoryValue = resolveCategoryValue(publishCategoryPreset, publishCategoryOther);
     if (!categoryValue) {
       setPublishError("Please choose a template type (FYB, Sign-out, or Other). ");
@@ -390,23 +403,6 @@ export default function TemplateEditorPage({
     setPublishing(true);
     setBusy(true);
     try {
-      const designBytes = estimateJsonBytes(record.designJson);
-      const normalizedBytes = estimateJsonBytes(record.normalized);
-      const fieldConfigBytes = estimateJsonBytes(record.fieldConfig);
-      const payloadBytes = designBytes + normalizedBytes + fieldConfigBytes;
-      console.info("[admin/templates] publish payload objects", {
-        designJson: record.designJson,
-        normalized: record.normalized,
-        fieldConfig: record.fieldConfig,
-      });
-      console.info("[admin/templates] publish payload sizes", {
-        designJsonBytes: designBytes,
-        normalizedBytes,
-        fieldConfigBytes,
-        totalJsonBytes: payloadBytes,
-        coverFileBytes: publishFile.size,
-      });
-
       await publishTemplateToBackend({
         name: record.name,
         category: categoryValue,
@@ -448,19 +444,20 @@ export default function TemplateEditorPage({
     }
   }
 
-  function onPickUpdateCover(file: File) {
+  async function onPickUpdateCover(file: File) {
     setUpdateError(null);
     if (!file.type.startsWith("image/")) {
       setUpdateError("Please upload an image file (PNG, JPG, or WebP).");
       return;
     }
-    if (file.size > 5 * 1024 * 1024) {
-      setUpdateError("Cover image must be under 5MB.");
+    if (file.size > 10 * 1024 * 1024) {
+      setUpdateError("Cover image must be under 10MB.");
       return;
     }
+    const optimized = await optimizeTemplateCover(file);
     if (updateCoverUrl) URL.revokeObjectURL(updateCoverUrl);
-    setUpdateCoverFile(file);
-    setUpdateCoverUrl(URL.createObjectURL(file));
+    setUpdateCoverFile(optimized);
+    setUpdateCoverUrl(URL.createObjectURL(optimized));
   }
 
   async function confirmUpdate() {

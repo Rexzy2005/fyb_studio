@@ -43,14 +43,6 @@ export function GoogleSignInButton({ callbackUrl }: { callbackUrl?: string }) {
         <GoogleMark />
       </span>
       <span>{pending ? "Redirecting…" : "Continue with Google"}</span>
-      {/* Arrow absolutely positioned so it doesn't push the label off-center */}
-      <span
-        aria-hidden
-        className="absolute right-5 transition group-hover:translate-x-1"
-        style={{ color: "rgba(0,0,0,0.6)" }}
-      >
-        →
-      </span>
     </button>
   );
 }

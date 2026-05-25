@@ -71,6 +71,14 @@ type TemplatePluginImages = {
   byNodeId: Record<string, string>;
 };
 
+export type TemplatePluginImageFileInput = {
+  hash: string;
+  buffer: Buffer;
+  mime: string | null;
+  width: number | null;
+  height: number | null;
+};
+
 function strippedDesignJsonMarker(): Record<string, unknown> {
   return {
     version: 1,
@@ -106,6 +114,7 @@ async function uploadPluginImages(
   templateId: string,
   designJson: unknown,
   normalized: NormalizedDesignV1 | null | undefined,
+  files: TemplatePluginImageFileInput[] = [],
 ): Promise<TemplatePluginImages | null> {
   if (!isFigmaDesignV1(designJson)) return null;
 
@@ -113,9 +122,10 @@ async function uploadPluginImages(
   const usedHashes = new Set(Object.values(byNodeId));
   if (usedHashes.size === 0) return null;
 
+  const filesByHash = new Map(files.map((file) => [file.hash, file]));
   const hasBytes = Object.entries(designJson.assets.images ?? {}).some(
     ([hash, asset]) => usedHashes.has(hash) && Boolean(asset?.base64),
-  );
+  ) || files.some((file) => usedHashes.has(file.hash) && file.buffer.length > 0);
   if (!hasBytes) return null;
 
   const byHash: Record<string, PluginImageAsset> = {};
@@ -123,10 +133,12 @@ async function uploadPluginImages(
 
   try {
     await Promise.all(
-      Object.entries(designJson.assets.images ?? {}).map(async ([hash, asset]) => {
+      [...usedHashes].map(async (hash) => {
+        const file = filesByHash.get(hash);
+        const asset = designJson.assets.images?.[hash];
+        const buffer = file?.buffer ?? (asset?.base64 ? Buffer.from(asset.base64, "base64") : null);
+        if (!buffer) return;
         if (!usedHashes.has(hash)) return;
-        if (!asset?.base64) return;
-        const buffer = Buffer.from(asset.base64, "base64");
         const uploaded = await uploadImage(
           buffer,
           pluginImagesFolder(templateId),
@@ -135,10 +147,10 @@ async function uploadPluginImages(
         byHash[hash] = {
           url: uploaded.url,
           publicId: uploaded.publicId,
-          width: uploaded.width,
-          height: uploaded.height,
+          width: asset?.width ?? file?.width ?? uploaded.width,
+          height: asset?.height ?? file?.height ?? uploaded.height,
           bytes: uploaded.bytes,
-          mime: asset.mime || uploaded.mime,
+          mime: asset?.mime || file?.mime || uploaded.mime,
         };
         uploadedIds.push(uploaded.publicId);
       })
@@ -225,6 +237,7 @@ export type PublishInput = {
   normalized: unknown;
   fieldConfig: unknown;
   coverFile: { buffer: Buffer; mime: string };
+  pluginImageFiles?: TemplatePluginImageFileInput[];
 };
 
 export async function publishTemplate(input: PublishInput): Promise<TemplateDetailView> {
@@ -238,7 +251,12 @@ export async function publishTemplate(input: PublishInput): Promise<TemplateDeta
     coverUploaded = await uploadImage(input.coverFile.buffer, coverFolder(idStr), "cover");
 
     const normalized = stripNormalizedPluginImages(input.normalized) as NormalizedDesignV1 | null;
-    const pluginImages = (await uploadPluginImages(idStr, input.designJson, normalized)) ?? {
+    const pluginImages = (await uploadPluginImages(
+      idStr,
+      input.designJson,
+      normalized,
+      input.pluginImageFiles
+    )) ?? {
       byHash: {},
       byNodeId: collectImageHashesByNodeId(normalized),
     };
@@ -283,6 +301,7 @@ export type UpdateInput = {
   normalized?: unknown;
   fieldConfig?: unknown;
   replaceCover?: { buffer: Buffer; mime: string } | null;
+  pluginImageFiles?: TemplatePluginImageFileInput[];
 };
 
 export async function updatePublishedTemplate(
@@ -328,6 +347,7 @@ export async function updatePublishedTemplate(
         idStr,
         input.designJson,
         nextNormalized as NormalizedDesignV1 | null,
+        input.pluginImageFiles,
       ) ?? {
         byHash: {},
         byNodeId: collectImageHashesByNodeId(nextNormalized as NormalizedDesignV1 | null),

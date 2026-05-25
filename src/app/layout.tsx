@@ -4,6 +4,7 @@ import "./globals.css";
 import { SessionProvider } from "@/components/auth/SessionProvider";
 import { ExpirySweeper } from "@/components/userDesigns/ExpirySweeper";
 import { ToastProvider } from "@/components/ui/Toast";
+import { SITE_DESCRIPTION, SITE_NAME, resolveSiteUrl } from "@/lib/site/metadata";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -27,8 +28,44 @@ const plusJakarta = Plus_Jakarta_Sans({
 });
 
 export const metadata: Metadata = {
-  title: "FYB Studio",
-  description: "Design-led templates you can personalize and export as PNG.",
+  metadataBase: new URL(resolveSiteUrl()),
+  applicationName: SITE_NAME,
+  title: {
+    default: SITE_NAME,
+    template: `%s · ${SITE_NAME}`,
+  },
+  description: SITE_DESCRIPTION,
+  authors: [{ name: SITE_NAME, url: "https://fybstudio.art" }],
+  creator: SITE_NAME,
+  publisher: SITE_NAME,
+  alternates: {
+    canonical: "/",
+  },
+  openGraph: {
+    type: "website",
+    siteName: SITE_NAME,
+    title: SITE_NAME,
+    description: SITE_DESCRIPTION,
+    url: "/",
+    images: [
+      {
+        url: "/opengraph-image",
+        width: 1200,
+        height: 630,
+        alt: "FYB Studio link preview",
+      },
+    ],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: SITE_NAME,
+    description: SITE_DESCRIPTION,
+    images: ["/opengraph-image"],
+  },
+  icons: {
+    icon: "/logo.jpg",
+    apple: "/logo.jpg",
+  },
 };
 
 export const viewport: Viewport = {

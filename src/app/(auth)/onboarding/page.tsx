@@ -248,7 +248,7 @@ export default async function OnboardingPage({
             padding: "clamp(20px, 4vw, 32px)",
             boxShadow:
               "0 30px 80px rgba(0,0,0,0.4), 0 0 80px rgba(255,180,0,0.06), inset 0 1px 0 rgba(255,255,255,0.04)",
-            overflow: "hidden",
+            overflow: "visible",
           }}
         >
           {/* Gold top accent stripe */}

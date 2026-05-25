@@ -8,6 +8,7 @@ import {
   findTemplateNameById,
   getTemplateById,
   updatePublishedTemplate,
+  type TemplatePluginImageFileInput,
 } from "@/backend/services/template.service";
 import {
   unpublishConfirmSchema,
@@ -25,6 +26,37 @@ export const GET = withErrorHandler(async (_req, ctx) => {
   }
   return NextResponse.json({ template });
 });
+
+async function readPluginImageFiles(
+  form: FormData,
+  metaImages: Array<{
+    hash: string;
+    mime?: string | null;
+    width?: number | null;
+    height?: number | null;
+  }>
+): Promise<TemplatePluginImageFileInput[]> {
+  const files: TemplatePluginImageFileInput[] = [];
+  const metaByHash = new Map(metaImages.map((image) => [image.hash, image]));
+
+  for (const [key, entry] of form.entries()) {
+    if (!key.startsWith("pluginImage:")) continue;
+    if (!(entry instanceof File)) continue;
+
+    const hash = key.slice("pluginImage:".length);
+    if (!hash) continue;
+    const meta = metaByHash.get(hash);
+    files.push({
+      hash,
+      buffer: Buffer.from(await entry.arrayBuffer()),
+      mime: entry.type || meta?.mime || null,
+      width: meta?.width ?? null,
+      height: meta?.height ?? null,
+    });
+  }
+
+  return files;
+}
 
 export const PATCH = withErrorHandler(async (req, ctx) => {
   await requireAdmin();
@@ -48,6 +80,7 @@ export const PATCH = withErrorHandler(async (req, ctx) => {
       mime: file.type || "image/png",
     };
   }
+  const pluginImageFiles = await readPluginImageFiles(form, meta.pluginImages);
 
   const updated = await updatePublishedTemplate({
     templateId: id,
@@ -57,6 +90,7 @@ export const PATCH = withErrorHandler(async (req, ctx) => {
     normalized: meta.normalized,
     fieldConfig: meta.fieldConfig,
     replaceCover,
+    pluginImageFiles,
   });
 
   return NextResponse.json({ template: updated });

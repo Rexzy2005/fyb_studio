@@ -197,7 +197,6 @@ export function OnboardingForm({ returnTo }: { returnTo?: string }) {
         ) : (
           <>
             <span>Continue to dashboard</span>
-            <span aria-hidden className="transition group-hover:translate-x-1">→</span>
           </>
         )}
       </button>

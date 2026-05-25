@@ -101,7 +101,7 @@ export default async function SignInPage({
               backdropFilter: "blur(8px)",
             }}
           >
-            <span aria-hidden>←</span> Home
+            Home
           </Link>
         </header>
 

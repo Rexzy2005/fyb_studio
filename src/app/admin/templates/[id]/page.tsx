@@ -373,6 +373,9 @@ export default function TemplateEditorPage({
     if (!normalized) return;
     if (mode !== "draft") return;
 
+    const estimateJsonBytes = (value: unknown) =>
+      new Blob([JSON.stringify(value)]).size;
+
     const categoryValue = resolveCategoryValue(publishCategoryPreset, publishCategoryOther);
     if (!categoryValue) {
       setPublishError("Please choose a template type (FYB, Sign-out, or Other). ");
@@ -387,6 +390,23 @@ export default function TemplateEditorPage({
     setPublishing(true);
     setBusy(true);
     try {
+      const designBytes = estimateJsonBytes(record.designJson);
+      const normalizedBytes = estimateJsonBytes(record.normalized);
+      const fieldConfigBytes = estimateJsonBytes(record.fieldConfig);
+      const payloadBytes = designBytes + normalizedBytes + fieldConfigBytes;
+      console.info("[admin/templates] publish payload objects", {
+        designJson: record.designJson,
+        normalized: record.normalized,
+        fieldConfig: record.fieldConfig,
+      });
+      console.info("[admin/templates] publish payload sizes", {
+        designJsonBytes: designBytes,
+        normalizedBytes,
+        fieldConfigBytes,
+        totalJsonBytes: payloadBytes,
+        coverFileBytes: publishFile.size,
+      });
+
       await publishTemplateToBackend({
         name: record.name,
         category: categoryValue,
@@ -453,8 +473,6 @@ export default function TemplateEditorPage({
         templateId: record.id,
         name: record.name,
         category: record.category ?? null,
-        designJson: record.designJson,
-        normalized: record.normalized,
         fieldConfig: record.fieldConfig,
         replaceCoverFile: updateCoverFile,
       });
@@ -514,7 +532,7 @@ export default function TemplateEditorPage({
   }
 
   /**
-   * Persist a draft snapshot to local storage with a 350ms debounce.
+   * Persist a draft snapshot to local storage with a 1 minute debounce.
    * Trailing-edge: the most recent change wins, prior in-flight writes are
    * cancelled. Triggered by any editable field (name, fieldConfig). Published
    * templates skip the debounced save - their edits are committed via the
@@ -548,7 +566,7 @@ export default function TemplateEditorPage({
       } finally {
         setSavingConfig(false);
       }
-    }, 350);
+    }, 60_000);
   }
 
   async function updateFieldConfig(nextConfig: TemplateRecord["fieldConfig"]) {

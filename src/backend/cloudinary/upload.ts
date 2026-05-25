@@ -106,6 +106,10 @@ export function assetsFolder(templateId: string): string {
   return `${templateFolder(templateId)}/assets`;
 }
 
+export function pluginImagesFolder(templateId: string): string {
+  return `${templateFolder(templateId)}/plugin-images`;
+}
+
 export function assetPublicIdHint(nodeId: string): string {
   return nodeId.replace(/[^a-zA-Z0-9_-]+/g, "_");
 }

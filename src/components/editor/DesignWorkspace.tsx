@@ -675,6 +675,9 @@ function CanvasShapesLayer({
       img.onload = bump;
       img.onerror = bump;
       img.decoding = "async";
+      if (url.startsWith("http://") || url.startsWith("https://")) {
+        img.crossOrigin = "anonymous";
+      }
       imagesRef.current.set(id, img);
       img.src = url;
       if (img.complete && img.naturalWidth > 0) queueMicrotask(bump);

@@ -1,6 +1,7 @@
 import mongoose from "mongoose";
 import { connectDb } from "@/backend/db/client";
 import { Department, User, type DepartmentDoc, type UserDoc } from "@/backend/db/models";
+import { AppError } from "@/backend/errors/app-error";
 
 export type GoogleProfileInput = {
   googleId: string;
@@ -204,4 +205,60 @@ export async function setOnboardedProfile(
     throw new Error("User not found while completing onboarding");
   }
   return updated;
+}
+
+export async function setDepartmentHeadStatus(
+  userId: string,
+  makeHead: boolean
+): Promise<void> {
+  await connectDb();
+  if (!mongoose.isValidObjectId(userId)) {
+    throw new AppError("NOT_FOUND", "User not found", 404);
+  }
+
+  const user = await User.findById(userId);
+  if (!user) {
+    throw new AppError("NOT_FOUND", "User not found", 404);
+  }
+
+  if (makeHead) {
+    if (!user.department) {
+      throw new AppError("VALIDATION_ERROR", "User has no department", 422);
+    }
+
+    const department = await Department.findById(user.department);
+    if (!department) {
+      throw new AppError("NOT_FOUND", "Department not found", 404);
+    }
+
+    if (department.headUserId && department.headUserId.toString() !== userId) {
+      await User.updateOne(
+        { _id: department.headUserId },
+        { $set: { isDepartmentHead: false } }
+      );
+    }
+
+    await Department.updateOne(
+      { _id: department._id },
+      { $set: { headUserId: user._id } }
+    );
+
+    if (!user.isDepartmentHead) {
+      user.isDepartmentHead = true;
+      await user.save();
+    }
+    return;
+  }
+
+  if (user.isDepartmentHead) {
+    user.isDepartmentHead = false;
+    await user.save();
+  }
+
+  if (user.department) {
+    await Department.updateOne(
+      { _id: user.department, headUserId: user._id },
+      { $set: { headUserId: null } }
+    );
+  }
 }

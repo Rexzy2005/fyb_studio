@@ -17,9 +17,8 @@ export type PluginImageEntry = {
  * and admin design-assets, so the design renders pixel-perfect with its
  * original images out-of-the-box.
  *
- * Data URLs are used directly - no blob URL lifecycle to manage. The URLs
- * become invalid only when the design itself is replaced (a re-render with
- * a new design rebuilds the map).
+ * Data URLs and Cloudinary URLs are used directly. Export paths fetch the URL
+ * into a Blob only when they need one.
  */
 export function usePluginImages(design: NormalizedDesignV1 | null | undefined): Record<string, PluginImageEntry> {
   return useMemo(() => {
@@ -28,10 +27,10 @@ export function usePluginImages(design: NormalizedDesignV1 | null | undefined): 
     if (!pluginImages) return {};
     const out: Record<string, PluginImageEntry> = {};
     for (const [nodeId, hash] of Object.entries(pluginImages.byNodeId)) {
-      const entry = pluginImages.byHash[hash];
-      if (!entry) continue;
+      const url = pluginImages.byHash[hash]?.dataUrl;
+      if (!url) continue;
       out[nodeId] = {
-        url: entry.dataUrl,
+        url,
         objectFit: "cover",
         preservePaintScaleMode: true,
       };

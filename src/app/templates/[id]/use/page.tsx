@@ -22,6 +22,7 @@ import {
   findInProgressByTemplate,
   getUserDesign,
   markDownloaded,
+  refreshUserDesignTemplateSnapshot,
   saveInputs,
 } from "@/lib/storage/userDesignRepo";
 import {
@@ -268,6 +269,16 @@ export default function UseTemplatePage({
       setPreviewImageByNodeId(hydrated);
     }
 
+    function templateAssetUrls(
+      assets: Array<{ nodeId: string; url: string }>
+    ): Record<string, string> {
+      const assetUrlsByNodeId: Record<string, string> = {};
+      for (const asset of assets) {
+        assetUrlsByNodeId[asset.nodeId] = asset.url;
+      }
+      return assetUrlsByNodeId;
+    }
+
     (async () => {
       try {
         // Kick off both operations simultaneously.
@@ -299,21 +310,30 @@ export default function UseTemplatePage({
 
         setLockBlock(null);
 
-        // If we already hydrated from IDB, we're done.
-        if (cachedRecord) return;
+        const assetUrlsByNodeId = templateAssetUrls(remote.template.designAssets);
+        const categoryLabel = deriveCategoryLabel(
+          remote.template.name,
+          remote.template.category
+        );
+
+        if (cachedRecord) {
+          const refreshed = await refreshUserDesignTemplateSnapshot(cachedRecord.id, {
+            name: remote.template.name,
+            categoryLabel,
+            designJson: remote.template.designJson,
+            normalized: remote.template.normalized,
+            fieldConfig: remote.template.fieldConfig as FieldConfig,
+            assetUrlsByNodeId,
+          });
+          if (!cancelled && refreshed) hydrateRecord(refreshed);
+          return;
+        }
 
         // First visit: create a fresh IDB record from the server template.
-        const assetUrlsByNodeId: Record<string, string> = {};
-        for (const a of remote.template.designAssets) {
-          assetUrlsByNodeId[a.nodeId] = a.url;
-        }
         const record = await createInProgressDesign({
           templateId: remote.template.id,
           name: remote.template.name,
-          categoryLabel: deriveCategoryLabel(
-            remote.template.name,
-            remote.template.category
-          ),
+          categoryLabel,
           designJson: remote.template.designJson,
           normalized: remote.template.normalized,
           fieldConfig: remote.template.fieldConfig as FieldConfig,
@@ -617,10 +637,11 @@ export default function UseTemplatePage({
         { blob: Blob; objectFit: "cover" | "contain"; preservePaintScaleMode?: boolean }
       > = {};
 
-      // 1. Plugin originals — these are data URLs; fetch them into Blobs.
+      // 1. Plugin originals - these may be data URLs, blob URLs, or
+      // Cloudinary URLs; fetch them into Blobs for the export renderer.
       await Promise.all(
         Object.entries(pluginImageByNodeId).map(async ([nodeId, entry]) => {
-          const blob = await dataUrlToBlob(entry.url);
+          const blob = await imageUrlToBlob(entry.url);
           if (blob) {
             imageBlobs[nodeId] = {
               blob,
@@ -1804,19 +1825,16 @@ function firePuff(canvas: HTMLCanvasElement | null): (() => void) | void {
 /* ─── Download + image helpers ─────────────────────────── */
 
 /**
- * Convert a `data:image/...;base64,...` URL into a Blob. Plugin-original
- * images are emitted as data URLs by the FYB extractor; we need real
- * Blobs to hand to the export pipeline (which calls `createImageBitmap`).
+ * Convert an image URL into a Blob. Plugin-original images may come from the
+ * FYB extractor as data URLs or from published templates as Cloudinary URLs;
+ * the export pipeline needs real Blobs either way.
  *
- * Uses `fetch()` because every modern browser implements a same-document
- * data: URL fetcher that's faster than manual atob() + Uint8Array assembly
- * and handles all base64 padding edge cases for us. Returns null on any
- * failure so the caller can fall back to a placeholder.
+ * Returns null on any failure so the caller can fall back to a placeholder.
  */
-async function dataUrlToBlob(dataUrl: string): Promise<Blob | null> {
+async function imageUrlToBlob(url: string): Promise<Blob | null> {
   try {
-    if (!dataUrl.startsWith("data:")) return null;
-    const res = await fetch(dataUrl);
+    const res = await fetch(url, { cache: "force-cache" });
+    if (!res.ok) return null;
     return await res.blob();
   } catch {
     return null;

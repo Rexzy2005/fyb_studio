@@ -7,11 +7,15 @@ import {
   coverFolder,
   deleteAsset,
   deleteFolder,
+  assetPublicIdHint,
+  pluginImagesFolder,
   templateFolder,
   uploadImage,
   type UploadedAsset,
 } from "@/backend/cloudinary/upload";
 import { emitTemplateChange } from "@/backend/events/templates.bus";
+import { isFigmaDesignV1 } from "@/lib/figma/plugin/schema";
+import type { NormalizedDesignV1, NormalizedFill } from "@/lib/figma/normalized";
 
 export type TemplateAssetView = {
   nodeId: string;
@@ -53,6 +57,121 @@ export type TemplateDetailView = {
   version: number;
 };
 
+type PluginImageAsset = {
+  url: string;
+  publicId: string;
+  width: number | null;
+  height: number | null;
+  bytes: number | null;
+  mime: string | null;
+};
+
+type TemplatePluginImages = {
+  byHash: Record<string, PluginImageAsset>;
+  byNodeId: Record<string, string>;
+};
+
+function strippedDesignJsonMarker(): Record<string, unknown> {
+  return {
+    version: 1,
+    stripped: true,
+    renderSource: "normalized",
+    assetStorage: "cloudinary",
+  };
+}
+
+function stripNormalizedPluginImages(input: unknown): unknown {
+  if (!input || typeof input !== "object") return input;
+  const next = { ...(input as Record<string, unknown>) };
+  if ("__pluginImages" in next) delete next.__pluginImages;
+  return next;
+}
+
+function collectImageHashesByNodeId(design: NormalizedDesignV1 | null | undefined): Record<string, string> {
+  if (!design) return {};
+  const out: Record<string, string> = {};
+  for (const [nodeId, node] of Object.entries(design.nodesById ?? {})) {
+    const fills = (node as { fills?: NormalizedFill[] }).fills;
+    if (!Array.isArray(fills)) continue;
+    const firstImage = fills.find(
+      (fill): fill is Extract<NormalizedFill, { kind: "image" }> =>
+        Boolean(fill && fill.kind === "image" && (fill as { imageHash?: string }).imageHash),
+    );
+    if (firstImage) out[nodeId] = firstImage.imageHash;
+  }
+  return out;
+}
+
+async function uploadPluginImages(
+  templateId: string,
+  designJson: unknown,
+  normalized: NormalizedDesignV1 | null | undefined,
+): Promise<TemplatePluginImages | null> {
+  if (!isFigmaDesignV1(designJson)) return null;
+
+  const byNodeId = collectImageHashesByNodeId(normalized);
+  const usedHashes = new Set(Object.values(byNodeId));
+  if (usedHashes.size === 0) return null;
+
+  const hasBytes = Object.entries(designJson.assets.images ?? {}).some(
+    ([hash, asset]) => usedHashes.has(hash) && Boolean(asset?.base64),
+  );
+  if (!hasBytes) return null;
+
+  const byHash: Record<string, PluginImageAsset> = {};
+  const uploadedIds: string[] = [];
+
+  try {
+    await Promise.all(
+      Object.entries(designJson.assets.images ?? {}).map(async ([hash, asset]) => {
+        if (!usedHashes.has(hash)) return;
+        if (!asset?.base64) return;
+        const buffer = Buffer.from(asset.base64, "base64");
+        const uploaded = await uploadImage(
+          buffer,
+          pluginImagesFolder(templateId),
+          assetPublicIdHint(hash),
+        );
+        byHash[hash] = {
+          url: uploaded.url,
+          publicId: uploaded.publicId,
+          width: uploaded.width,
+          height: uploaded.height,
+          bytes: uploaded.bytes,
+          mime: asset.mime || uploaded.mime,
+        };
+        uploadedIds.push(uploaded.publicId);
+      })
+    );
+  } catch (err) {
+    await Promise.all(uploadedIds.map((id) => deleteAsset(id)));
+    throw err;
+  }
+
+  return { byHash, byNodeId };
+}
+
+function attachPluginImagesToNormalized(
+  normalized: unknown,
+  pluginImages: TemplatePluginImages | null | undefined,
+): unknown {
+  if (!normalized || typeof normalized !== "object" || !pluginImages) return normalized;
+  const byHash: Record<string, { dataUrl: string; width: number; height: number }> = {};
+  for (const [hash, asset] of Object.entries(pluginImages.byHash ?? {})) {
+    byHash[hash] = {
+      dataUrl: asset.url,
+      width: asset.width ?? 0,
+      height: asset.height ?? 0,
+    };
+  }
+  const next = { ...(normalized as Record<string, unknown>) };
+  (next as Record<string, unknown>)["__pluginImages"] = {
+    byHash,
+    byNodeId: pluginImages.byNodeId ?? {},
+  };
+  return next;
+}
+
 function toListItem(doc: TemplateDoc, reservedByMyDept = false): TemplateListItem {
   return {
     id: doc._id.toString(),
@@ -68,14 +187,18 @@ function toListItem(doc: TemplateDoc, reservedByMyDept = false): TemplateListIte
 }
 
 function toDetailView(doc: TemplateDoc): TemplateDetailView {
+  const normalized = attachPluginImagesToNormalized(
+    doc.normalized ?? null,
+    doc.pluginImages as unknown as TemplatePluginImages | undefined,
+  );
   return {
     id: doc._id.toString(),
     name: doc.name,
     category: doc.category ?? null,
     status: "published",
     fieldConfig: doc.fieldConfig,
-    normalized: doc.normalized ?? null,
-    designJson: doc.designJson,
+    normalized,
+    designJson: null,
     cover: {
       url: doc.cover.url,
       width: doc.cover.width ?? null,
@@ -113,36 +236,43 @@ export async function publishTemplate(input: PublishInput): Promise<TemplateDeta
 
   try {
     coverUploaded = await uploadImage(input.coverFile.buffer, coverFolder(idStr), "cover");
+
+    const normalized = stripNormalizedPluginImages(input.normalized) as NormalizedDesignV1 | null;
+    const pluginImages = (await uploadPluginImages(idStr, input.designJson, normalized)) ?? {
+      byHash: {},
+      byNodeId: collectImageHashesByNodeId(normalized),
+    };
+
+    const doc = await Template.create({
+      _id: templateId,
+      name: input.name,
+      category: input.category ?? null,
+      status: "published",
+      fieldConfig: input.fieldConfig,
+      normalized,
+      designJson: strippedDesignJsonMarker(),
+      pluginImages,
+      cover: {
+        url: coverUploaded.url,
+        publicId: coverUploaded.publicId,
+        width: coverUploaded.width,
+        height: coverUploaded.height,
+        bytes: coverUploaded.bytes,
+        mime: coverUploaded.mime,
+      },
+      designAssets: [],
+      createdBy: new mongoose.Types.ObjectId(input.createdByUserId),
+      publishedAt: new Date(),
+      version: 1,
+    });
+
+    emitTemplateChange({ type: "published", templateId: idStr, at: new Date().toISOString() });
+
+    return toDetailView(doc);
   } catch (err) {
-    if (coverUploaded) await deleteAsset((coverUploaded as UploadedAsset).publicId);
+    if (coverUploaded) await deleteFolder(templateFolder(idStr));
     throw err;
   }
-
-  const doc = await Template.create({
-    _id: templateId,
-    name: input.name,
-    category: input.category ?? null,
-    status: "published",
-    fieldConfig: input.fieldConfig,
-    normalized: input.normalized,
-    designJson: input.designJson,
-    cover: {
-      url: coverUploaded.url,
-      publicId: coverUploaded.publicId,
-      width: coverUploaded.width,
-      height: coverUploaded.height,
-      bytes: coverUploaded.bytes,
-      mime: coverUploaded.mime,
-    },
-    designAssets: [],
-    createdBy: new mongoose.Types.ObjectId(input.createdByUserId),
-    publishedAt: new Date(),
-    version: 1,
-  });
-
-  emitTemplateChange({ type: "published", templateId: idStr, at: new Date().toISOString() });
-
-  return toDetailView(doc);
 }
 
 export type UpdateInput = {
@@ -163,7 +293,7 @@ export async function updatePublishedTemplate(
     throw new AppError("NOT_FOUND", "Template not found", 404);
   }
 
-  const existing = await Template.findById(input.templateId);
+  const existing = await Template.findById(input.templateId).select("-designJson");
   if (!existing) {
     throw new AppError("NOT_FOUND", "Template not found", 404);
   }
@@ -179,42 +309,59 @@ export async function updatePublishedTemplate(
         "cover"
       );
     }
+
+    const $set: Record<string, unknown> = {};
+
+    if (typeof input.name === "string") $set.name = input.name;
+    if (input.category !== undefined) $set.category = input.category ?? null;
+    if (input.fieldConfig !== undefined) $set.fieldConfig = input.fieldConfig;
+    if (input.normalized !== undefined) {
+      $set.normalized = stripNormalizedPluginImages(input.normalized);
+    }
+    if (input.designJson !== undefined) {
+      $set.designJson = strippedDesignJsonMarker();
+    }
+
+    if (input.designJson !== undefined && input.normalized !== undefined) {
+      const nextNormalized = stripNormalizedPluginImages(input.normalized);
+      const pluginImages = await uploadPluginImages(
+        idStr,
+        input.designJson,
+        nextNormalized as NormalizedDesignV1 | null,
+      ) ?? {
+        byHash: {},
+        byNodeId: collectImageHashesByNodeId(nextNormalized as NormalizedDesignV1 | null),
+      };
+      $set.pluginImages = pluginImages;
+    }
+    if (newCover) {
+      $set.cover = {
+        url: newCover.url,
+        publicId: newCover.publicId,
+        width: newCover.width,
+        height: newCover.height,
+        bytes: newCover.bytes,
+        mime: newCover.mime,
+      };
+    }
+
+    const updated = await Template.findByIdAndUpdate(
+      existing._id,
+      { $set, $inc: { version: 1 } },
+      { new: true, runValidators: true }
+    );
+
+    if (!updated) {
+      throw new AppError("NOT_FOUND", "Template not found", 404);
+    }
+
+    emitTemplateChange({ type: "updated", templateId: idStr, at: new Date().toISOString() });
+
+    return toDetailView(updated);
   } catch (err) {
     if (newCover) await deleteAsset(newCover.publicId);
     throw err;
   }
-
-  const $set: Record<string, unknown> = {};
-
-  if (typeof input.name === "string") $set.name = input.name;
-  if (input.category !== undefined) $set.category = input.category ?? null;
-  if (input.designJson !== undefined) $set.designJson = input.designJson;
-  if (input.normalized !== undefined) $set.normalized = input.normalized;
-  if (input.fieldConfig !== undefined) $set.fieldConfig = input.fieldConfig;
-  if (newCover) {
-    $set.cover = {
-      url: newCover.url,
-      publicId: newCover.publicId,
-      width: newCover.width,
-      height: newCover.height,
-      bytes: newCover.bytes,
-      mime: newCover.mime,
-    };
-  }
-
-  const updated = await Template.findByIdAndUpdate(
-    existing._id,
-    { $set, $inc: { version: 1 } },
-    { new: true, runValidators: true }
-  );
-
-  if (!updated) {
-    throw new AppError("NOT_FOUND", "Template not found", 404);
-  }
-
-  emitTemplateChange({ type: "updated", templateId: idStr, at: new Date().toISOString() });
-
-  return toDetailView(updated);
 }
 
 export async function deleteTemplateCompletely(templateId: string): Promise<void> {
@@ -223,7 +370,7 @@ export async function deleteTemplateCompletely(templateId: string): Promise<void
     throw new AppError("NOT_FOUND", "Template not found", 404);
   }
 
-  const existing = await Template.findById(templateId);
+  const existing = await Template.findById(templateId).select("_id");
   if (!existing) {
     throw new AppError("NOT_FOUND", "Template not found", 404);
   }
@@ -281,7 +428,7 @@ export async function getTemplateById(
 ): Promise<TemplateDetailView | null> {
   await connectDb();
   if (!mongoose.isValidObjectId(templateId)) return null;
-  const doc = await Template.findById(templateId);
+  const doc = await Template.findById(templateId).select("-designJson");
   return doc ? toDetailView(doc) : null;
 }
 

@@ -311,7 +311,7 @@ export async function confirmPaymentByReference(
 async function sendReceiptForPayment(payment: PaymentDoc): Promise<void> {
   const [user, template] = await Promise.all([
     User.findById(payment.userId).lean(),
-    Template.findById(payment.templateId).lean(),
+    Template.findById(payment.templateId).select("name").lean(),
   ]);
   if (!user?.email) return;
   await sendReceiptEmail({

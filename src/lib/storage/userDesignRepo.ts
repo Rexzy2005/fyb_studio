@@ -62,6 +62,37 @@ export async function getUserDesign(id: string): Promise<UserDesignRecord | null
   return (await db.get("userDesigns", id)) ?? null;
 }
 
+export type RefreshUserDesignTemplateInput = {
+  name: string;
+  categoryLabel: string;
+  designJson: unknown;
+  normalized: unknown;
+  fieldConfig: FieldConfig;
+  assetUrlsByNodeId: UserDesignAssetUrlMap;
+};
+
+export async function refreshUserDesignTemplateSnapshot(
+  id: string,
+  input: RefreshUserDesignTemplateInput
+): Promise<UserDesignRecord | null> {
+  assertBrowser();
+  const db = await getDb();
+  const existing = await db.get("userDesigns", id);
+  if (!existing) return null;
+
+  const next: UserDesignRecord = {
+    ...existing,
+    name: input.name,
+    categoryLabel: input.categoryLabel,
+    designJson: input.designJson,
+    normalized: input.normalized,
+    fieldConfig: input.fieldConfig,
+    assetUrlsByNodeId: input.assetUrlsByNodeId,
+  };
+  await db.put("userDesigns", next);
+  return next;
+}
+
 export async function findInProgressByTemplate(
   templateId: string
 ): Promise<UserDesignRecord | null> {

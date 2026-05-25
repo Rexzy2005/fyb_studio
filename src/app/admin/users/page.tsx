@@ -36,24 +36,31 @@ export default function AdminUsersPage() {
   const [loading, setLoading] = useState(true);
   const [users, setUsers] = useState<AdminUserListItem[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [savingUserId, setSavingUserId] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
+
+  async function loadUsers(signal?: AbortSignal) {
+    setError(null);
+    const res = await fetch("/api/admin/users", {
+      cache: "no-store",
+      signal,
+    });
+    const data = (await res.json()) as ApiResponse;
+    if (!res.ok || "error" in data) {
+      const message =
+        "error" in data ? data.error.message : `Request failed (${res.status})`;
+      throw new Error(message);
+    }
+    setUsers(data.users);
+  }
 
   useEffect(() => {
     let cancelled = false;
     (async () => {
       try {
         setLoading(true);
-        const res = await fetch("/api/admin/users", { cache: "no-store" });
-        const data = (await res.json()) as ApiResponse;
-        if (cancelled) return;
-        if (!res.ok || "error" in data) {
-          const message =
-            "error" in data ? data.error.message : `Request failed (${res.status})`;
-          setError(message);
-          return;
-        }
-        setUsers(data.users);
+        await loadUsers();
       } catch (e) {
         if (!cancelled) {
           setError(e instanceof Error ? e.message : "Unknown error");
@@ -66,6 +73,35 @@ export default function AdminUsersPage() {
       cancelled = true;
     };
   }, []);
+
+  async function onToggleDepartmentHead(user: AdminUserListItem) {
+    if (!user.department && !user.isDepartmentHead) {
+      setError("User must belong to a department before becoming a head.");
+      return;
+    }
+    setSavingUserId(user.id);
+    setError(null);
+    try {
+      const res = await fetch("/api/admin/users", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          userId: user.id,
+          makeHead: !user.isDepartmentHead,
+        }),
+      });
+      const data = (await res.json()) as { ok?: boolean; error?: { message: string } };
+      if (!res.ok || !data.ok) {
+        const message = data.error?.message ?? `Request failed (${res.status})`;
+        throw new Error(message);
+      }
+      await loadUsers();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to update department head");
+    } finally {
+      setSavingUserId(null);
+    }
+  }
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -161,13 +197,14 @@ export default function AdminUsersPage() {
                   <th className="px-4 py-3 font-medium">Department</th>
                   <th className="px-4 py-3 font-medium">Status</th>
                   <th className="px-4 py-3 font-medium">Last login</th>
+                  <th className="px-4 py-3 font-medium">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-zinc-200 dark:divide-zinc-800">
                 {loading ? (
                   <tr>
                     <td
-                      colSpan={6}
+                      colSpan={7}
                       className="px-4 py-6 text-center text-ink-muted dark:text-ink-muted"
                     >
                       Loading users…
@@ -176,7 +213,7 @@ export default function AdminUsersPage() {
                 ) : filtered.length === 0 ? (
                   <tr>
                     <td
-                      colSpan={6}
+                      colSpan={7}
                       className="px-4 py-6 text-center text-ink-muted dark:text-ink-muted"
                     >
                       {users.length === 0
@@ -227,6 +264,25 @@ export default function AdminUsersPage() {
                       </td>
                       <td className="px-4 py-3 text-ink-muted dark:text-ink-muted">
                         {formatDate(u.lastLoginAt)}
+                      </td>
+                      <td className="px-4 py-3">
+                        <button
+                          type="button"
+                          onClick={() => onToggleDepartmentHead(u)}
+                          disabled={Boolean(savingUserId) || (!u.department && !u.isDepartmentHead)}
+                          className={
+                            "inline-flex h-9 items-center justify-center rounded-xl border px-3 text-xs font-medium transition disabled:cursor-not-allowed disabled:opacity-50 " +
+                            (u.isDepartmentHead
+                              ? "border-[rgba(239,68,68,0.28)] bg-[rgba(239,68,68,0.08)] text-danger hover:bg-[rgba(239,68,68,0.12)] dark:border-[rgba(239,68,68,0.28)] dark:bg-red-950/40 dark:text-danger"
+                              : "border-hairline bg-surface-1 text-ink-muted hover:bg-canvas hover:text-ink dark:border-hairline dark:bg-surface-1 dark:text-ink")
+                          }
+                        >
+                          {savingUserId === u.id
+                            ? "Updating…"
+                            : u.isDepartmentHead
+                              ? "Remove head"
+                              : "Make head"}
+                        </button>
                       </td>
                     </tr>
                   ))

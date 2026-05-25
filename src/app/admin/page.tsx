@@ -24,6 +24,7 @@ import type { UserStats } from "@/backend/services/user.service";
 import { RevenuePanel } from "@/components/admin/RevenuePanel";
 import { FeedbackSummaryCard } from "@/components/admin/FeedbackSummaryCard";
 import { DatabaseStorageCard } from "@/components/admin/DatabaseStorageCard";
+import { CloudinaryStorageCard } from "@/components/admin/CloudinaryStorageCard";
 
 export default function AdminDashboardPage() {
   const [loading, setLoading] = useState(true);
@@ -175,11 +176,14 @@ export default function AdminDashboardPage() {
           <Section
             eyebrow="Storage"
             title="Storage & footprint"
-            subtitle="MongoDB cluster usage and the local IndexedDB cache this browser keeps for drafts."
+            subtitle="MongoDB + Cloudinary usage, plus the local IndexedDB cache this browser keeps for drafts."
           >
             <div className="grid grid-cols-1 gap-3 sm:gap-4">
               {/* Live MongoDB usage with a quota progress bar */}
               <DatabaseStorageCard />
+
+              {/* Cloudinary media storage usage */}
+              <CloudinaryStorageCard />
 
               {/* Local IndexedDB cache (per-browser, not server) */}
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4">

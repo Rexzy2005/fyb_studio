@@ -1,5 +1,7 @@
 import { connectDb } from "@/backend/db/client";
 import { env } from "@/backend/env";
+import { getCloudinary } from "@/backend/cloudinary/client";
+import { AppError } from "@/backend/errors/app-error";
 
 export interface DatabaseStorageStats {
   /** Logical document bytes (uncompressed). */
@@ -22,6 +24,17 @@ export interface DatabaseStorageStats {
   collectionCount: number;
   /** Number of indexes across all collections. */
   indexCount: number;
+}
+
+export interface CloudinaryStorageStats {
+  usedBytes: number;
+  quotaBytes: number | null;
+  remainingBytes: number | null;
+  percentUsed: number;
+  assetCount: number;
+  transformationCount: number;
+  lastUpdated: string | null;
+  plan: string | null;
 }
 
 /**
@@ -77,4 +90,67 @@ export async function getDatabaseStorageStats(): Promise<DatabaseStorageStats> {
     collectionCount: Number(raw.collections ?? 0),
     indexCount: Number(raw.indexes ?? 0),
   };
+}
+
+type CloudinaryUsageMetric = {
+  usage?: unknown;
+  used?: unknown;
+  limit?: unknown;
+};
+
+function asRecord(value: unknown): Record<string, unknown> {
+  return value && typeof value === "object" ? value as Record<string, unknown> : {};
+}
+
+function metricUsed(metric: CloudinaryUsageMetric): number {
+  const value = metric.usage ?? metric.used;
+  const parsed = Number(value ?? 0);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : 0;
+}
+
+function metricLimit(metric: CloudinaryUsageMetric): number | null {
+  const parsed = Number(metric.limit);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+}
+
+export function parseCloudinaryUsageStats(usage: unknown): CloudinaryStorageStats {
+  const root = asRecord(usage);
+  const storage = asRecord(root.storage) as CloudinaryUsageMetric;
+  const objects = asRecord(root.objects ?? root.resources) as CloudinaryUsageMetric;
+  const transformations = asRecord(root.transformations) as CloudinaryUsageMetric;
+
+  const usedBytes = metricUsed(storage);
+  const quotaBytes = metricLimit(storage);
+  const remainingBytes = quotaBytes === null ? null : Math.max(0, quotaBytes - usedBytes);
+  const percentUsed = quotaBytes
+    ? Math.min(100, (usedBytes / quotaBytes) * 100)
+    : 0;
+
+  const lastUpdated = root.last_updated ?? root.lastUpdated;
+  const plan = root.plan;
+
+  return {
+    usedBytes,
+    quotaBytes,
+    remainingBytes,
+    percentUsed,
+    assetCount: metricUsed(objects),
+    transformationCount: metricUsed(transformations),
+    lastUpdated: typeof lastUpdated === "string" ? lastUpdated : null,
+    plan: typeof plan === "string" ? plan : null,
+  };
+}
+
+export async function getCloudinaryStorageStats(): Promise<CloudinaryStorageStats> {
+  const cloudinary = getCloudinary();
+  if (!cloudinary) {
+    throw new AppError(
+      "INTERNAL_ERROR",
+      "Cloudinary is not configured",
+      500
+    );
+  }
+
+  const usage = await cloudinary.api.usage();
+  return parseCloudinaryUsageStats(usage);
 }

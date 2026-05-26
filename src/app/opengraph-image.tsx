@@ -18,7 +18,7 @@ export default function OpenGraphImage() {
           width: "100%",
           height: "100%",
           display: "flex",
-          background: "#090909",
+          background: "#070707",
           color: "#f8f3df",
           fontFamily: "Arial, sans-serif",
           position: "relative",
@@ -30,7 +30,7 @@ export default function OpenGraphImage() {
             position: "absolute",
             inset: 0,
             background:
-              "linear-gradient(135deg, rgba(255,215,0,0.18), transparent 34%), linear-gradient(315deg, rgba(78,205,196,0.16), transparent 38%)",
+              "radial-gradient(60% 80% at 10% 20%, rgba(255,215,0,0.24), transparent 60%), radial-gradient(50% 60% at 90% 10%, rgba(78,205,196,0.16), transparent 60%), linear-gradient(135deg, rgba(255,215,0,0.12), transparent 40%)",
           }}
         />
         <div
@@ -40,6 +40,27 @@ export default function OpenGraphImage() {
             border: "1px solid rgba(255,215,0,0.24)",
           }}
         />
+        <div
+          style={{
+            position: "absolute",
+            left: 82,
+            top: 72,
+            width: 82,
+            height: 82,
+            borderRadius: 18,
+            background: "linear-gradient(145deg, #ffd700, #f4d06f)",
+            boxShadow: "0 18px 44px rgba(0,0,0,0.45)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            color: "#111",
+            fontSize: 32,
+            fontWeight: 900,
+            letterSpacing: "-0.02em",
+          }}
+        >
+          FYB
+        </div>
         <div
           style={{
             width: "100%",
@@ -55,50 +76,58 @@ export default function OpenGraphImage() {
               style={{
                 display: "flex",
                 alignItems: "center",
-                gap: 14,
+                gap: 12,
                 color: "#ffd700",
-                fontSize: 24,
+                fontSize: 22,
                 fontWeight: 800,
-                letterSpacing: 0,
+                letterSpacing: "0.02em",
               }}
             >
-              <div
-                style={{
-                  width: 44,
-                  height: 44,
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  border: "1px solid rgba(255,215,0,0.45)",
-                  background: "rgba(255,215,0,0.08)",
-                }}
-              >
-                F
-              </div>
               FYB Studio
             </div>
             <div
               style={{
-                marginTop: 36,
-                fontSize: 78,
+                marginTop: 34,
+                fontSize: 76,
                 lineHeight: 0.92,
                 fontWeight: 900,
-                letterSpacing: 0,
+                letterSpacing: "-0.02em",
                 maxWidth: 660,
               }}
             >
-              Final-year designs ready to share.
+              Final-year designs,
+              <br />
+              built to ship.
             </div>
             <div
               style={{
                 marginTop: 28,
-                fontSize: 29,
+                fontSize: 28,
                 lineHeight: 1.35,
                 color: "rgba(248,243,223,0.76)",
                 maxWidth: 620,
               }}
             >
               {SITE_DESCRIPTION}
+            </div>
+            <div
+              style={{
+                marginTop: 26,
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 10,
+                padding: "10px 16px",
+                borderRadius: 999,
+                border: "1px solid rgba(255,215,0,0.35)",
+                background: "rgba(255,215,0,0.08)",
+                color: "#ffd700",
+                fontSize: 16,
+                fontWeight: 700,
+                letterSpacing: "0.08em",
+                textTransform: "uppercase",
+              }}
+            >
+              Templates • Live Preview • Export
             </div>
           </div>
 
@@ -119,7 +148,7 @@ export default function OpenGraphImage() {
                 width: 250,
                 height: 390,
                 background: "#f8f3df",
-                opacity: 0.18,
+                opacity: 0.16,
                 transform: "rotate(-8deg)",
               }}
             />
@@ -131,7 +160,7 @@ export default function OpenGraphImage() {
                 width: 250,
                 height: 390,
                 background: "#4ecdc4",
-                opacity: 0.22,
+                opacity: 0.2,
                 transform: "rotate(7deg)",
               }}
             />
@@ -155,13 +184,14 @@ export default function OpenGraphImage() {
                   alignItems: "center",
                   justifyContent: "center",
                   background:
-                    "linear-gradient(160deg, #ffd700 0%, #f8f3df 52%, #4ecdc4 100%)",
+                    "linear-gradient(160deg, #ffd700 0%, #f8f3df 55%, #4ecdc4 100%)",
                   color: "#090909",
-                  fontSize: 82,
+                  fontSize: 80,
                   fontWeight: 900,
+                  letterSpacing: "-0.02em",
                 }}
               >
-                FYB
+                GRAD
               </div>
               <div style={{ padding: 26, display: "flex", flexDirection: "column", gap: 12 }}>
                 <div style={{ width: 170, height: 16, background: "rgba(248,243,223,0.88)" }} />

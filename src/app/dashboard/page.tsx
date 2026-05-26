@@ -168,7 +168,7 @@ export default async function DashboardPage() {
                     color: "#fff",
                   }}
                 >
-                  Welcome, <span className="nv-shimmer-text" style={{ display: "inline-block" }}>{firstName}</span>
+                  Welcome, <span className="nv-shimmer-text" style={{ display: "inline-block" }}>{profile.username}</span>
                 </h1>
                 <div
                   className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1.5"
@@ -187,7 +187,7 @@ export default async function DashboardPage() {
                     <>
                       <DotSep />
                       <span
-                        className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1"
+                        className="inline-flex justify-center items-center gap-1.5 rounded-full px-2.5 py-1"
                         style={{
                           background: "linear-gradient(140deg, rgba(255,215,0,0.18), rgba(255,140,66,0.08))",
                           color: "#FFD700",

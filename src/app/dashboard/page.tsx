@@ -52,6 +52,8 @@ export default async function DashboardPage() {
 
   const classYear = getClassYear();
   const firstName = profile.name.split(" ")[0] || profile.username?.trim() || "Finalist";
+  const username = profile.username?.trim();
+  const greetingName = username ? `@${username}` : firstName;
   const initial = firstName.charAt(0).toUpperCase();
 
   return (
@@ -128,7 +130,7 @@ export default async function DashboardPage() {
 
           {/* Greeting + identity */}
           <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
-            <div className="flex min-w-0 flex-1 items-center gap-5">
+            <div className="flex min-w-0 flex-1 flex-col items-start gap-4 sm:flex-row sm:items-center sm:gap-5">
               {profile.avatar ? (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img
@@ -168,7 +170,7 @@ export default async function DashboardPage() {
                     color: "#fff",
                   }}
                 >
-                  Welcome, <span className="nv-shimmer-text" style={{ display: "inline-block" }}>{profile.username}</span>
+                  Welcome, <span className="nv-shimmer-text" style={{ display: "inline-block" }}>{greetingName}</span>
                 </h1>
                 <div
                   className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1.5"
@@ -187,7 +189,7 @@ export default async function DashboardPage() {
                     <>
                       <DotSep />
                       <span
-                        className="inline-flex justify-center items-center gap-1.5 rounded-full px-2.5 py-1"
+                        className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1"
                         style={{
                           background: "linear-gradient(140deg, rgba(255,215,0,0.18), rgba(255,140,66,0.08))",
                           color: "#FFD700",

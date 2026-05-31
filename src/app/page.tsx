@@ -3526,14 +3526,6 @@ function LoadingScreen({ onDone }: { onDone: () => void }) {
         >
           <span
             style={{
-              position: "relative", width: 7, height: 7, display: "inline-flex",
-            }}
-          >
-            <span className="nv-pulse-ring" style={{ position: "absolute", inset: 0, border: "1.5px solid rgba(255,215,0,0.6)", borderRadius: "50%" }} />
-            <span style={{ width: 7, height: 7, borderRadius: "50%", background: "#FFD700" }} />
-          </span>
-          <span
-            style={{
               ...mono, fontSize: 11, letterSpacing: "0.3em",
               color: "rgba(255,215,0,0.8)", textTransform: "uppercase",
               fontWeight: 700,
@@ -4066,25 +4058,12 @@ function CelebrationModal({ classYear, onClose }: { classYear: number; onClose: 
               display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 12,
             }}
           >
-            Take your seat - enter the studio
+            Take your seat, Enter the studio
           </button>
         </div>
       </div>
 
       {/* Bottom-left ticket stub corner */}
-      <div
-        aria-hidden
-        style={{
-          position: "absolute", bottom: "clamp(20px,3vw,40px)", left: "clamp(20px,3vw,40px)",
-          ...mono, fontSize: 9, letterSpacing: "0.22em",
-          color: "rgba(255,215,0,0.32)", textTransform: "uppercase",
-          zIndex: 6,
-          display: "flex", alignItems: "center", gap: 8,
-        }}
-      >
-        <span style={{ color: "#FFD700" }}>●</span>
-        Admit One · No · 0001
-      </div>
       <div
         aria-hidden
         style={{

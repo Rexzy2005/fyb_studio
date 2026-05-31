@@ -185,10 +185,7 @@ export function SignInShowcase({ classYear }: { classYear: number }) {
         style={{ paddingTop: "calc(env(safe-area-inset-top, 0px) + 64px)" }}
       >
         <div className="flex items-center gap-2">
-          <span style={{ position: "relative", width: 7, height: 7, display: "inline-flex" }}>
-            <span className="nv-pulse-ring" style={{ position: "absolute", inset: 0, border: "1.5px solid rgba(255,215,0,0.55)", borderRadius: "50%" }} />
-            <span style={{ width: 7, height: 7, borderRadius: "50%", background: "#FFD700" }} />
-          </span>
+          
           <span style={{ ...mono, fontSize: 10, letterSpacing: "0.3em", color: "rgba(255,215,0,0.7)", textTransform: "uppercase", fontWeight: 700 }}>
             What you get
           </span>
@@ -202,7 +199,7 @@ export function SignInShowcase({ classYear }: { classYear: number }) {
           }}
           aria-hidden
         >
-          <span>↤</span> swipe <span>↦</span>
+          swipe 
         </div>
       </div>
 

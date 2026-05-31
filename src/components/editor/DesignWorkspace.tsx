@@ -748,19 +748,49 @@ function WatermarkOverlay({
   width,
   height,
   text,
+  sourceCanvas, // pass the card's canvas/image element for sampling
 }: {
   width: number;
   height: number;
   text: string;
+  sourceCanvas?: HTMLCanvasElement | HTMLImageElement | null;
 }) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
+
+  // Sample average brightness of a region from the source canvas
+  const sampleBrightness = (
+    ctx: CanvasRenderingContext2D,
+    cx: number,
+    cy: number,
+    sampleSize: number
+  ): number => {
+    const half = sampleSize / 2;
+    const sx = Math.max(0, Math.round(cx - half));
+    const sy = Math.max(0, Math.round(cy - half));
+    const sw = Math.min(sampleSize, ctx.canvas.width - sx);
+    const sh = Math.min(sampleSize, ctx.canvas.height - sy);
+    if (sw <= 0 || sh <= 0) return 128; // fallback to mid-grey
+    try {
+      const { data } = ctx.getImageData(sx, sy, sw, sh);
+      let total = 0;
+      for (let i = 0; i < data.length; i += 4) {
+        // Perceived luminance (ITU-R BT.709)
+        total += 0.2126 * data[i] + 0.7152 * data[i + 1] + 0.0722 * data[i + 2];
+      }
+      return total / (data.length / 4);
+    } catch {
+      return 128;
+    }
+  };
 
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
+
     const w = Math.max(1, width);
     const h = Math.max(1, height);
     const dpr = window.devicePixelRatio || 1;
+
     canvas.width = Math.max(1, Math.round(w * dpr));
     canvas.height = Math.max(1, Math.round(h * dpr));
     canvas.style.width = `${w}px`;
@@ -772,42 +802,101 @@ function WatermarkOverlay({
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.clearRect(0, 0, w, h);
 
-    // Soft gradient wash to lift watermark contrast without masking the design.
-    const wash = ctx.createLinearGradient(0, 0, w, h);
-    wash.addColorStop(0, "rgba(0,0,0,0.06)");
-    wash.addColorStop(0.45, "rgba(0,0,0,0.02)");
-    wash.addColorStop(1, "rgba(0,0,0,0.08)");
-    ctx.fillStyle = wash;
-    ctx.fillRect(0, 0, w, h);
+    // ── Source context for brightness sampling ────────────────────────────────
+    let srcCtx: CanvasRenderingContext2D | null = null;
+    if (sourceCanvas instanceof HTMLCanvasElement) {
+      srcCtx = sourceCanvas.getContext("2d");
+    } else if (sourceCanvas instanceof HTMLImageElement && sourceCanvas.complete) {
+      // Draw image into an offscreen canvas so we can sample it
+      const offscreen = document.createElement("canvas");
+      offscreen.width = w;
+      offscreen.height = h;
+      const offCtx = offscreen.getContext("2d");
+      if (offCtx) {
+        offCtx.drawImage(sourceCanvas, 0, 0, w, h);
+        srcCtx = offCtx;
+      }
+    }
 
-    const size = Math.max(16, Math.min(28, Math.min(w, h) * 0.038));
-    const spacingX = Math.max(140, Math.min(240, Math.min(w, h) * 0.2));
-    const spacingY = Math.max(120, Math.min(220, Math.min(w, h) * 0.18));
+    // ── Size & layout ─────────────────────────────────────────────────────────
+    const size = Math.max(42, Math.min(72, Math.min(w, h) * 0.095));
+    const spacingX = size * 5;
+    const spacingY = size * 3.5;
     const diag = Math.hypot(w, h);
+    const angle = -Math.PI / 6;
 
     ctx.save();
     ctx.translate(w / 2, h / 2);
-    ctx.rotate(-Math.PI / 4);
-    ctx.font = `700 ${size}px var(--font-geist-sans, system-ui, -apple-system, Segoe UI, Roboto, Arial)`;
-    ctx.fillStyle = "rgba(255,255,255,0.4)";
-    ctx.strokeStyle = "rgba(0,0,0,0.2)";
-    ctx.lineWidth = Math.max(1, size * 0.075);
-    ctx.globalAlpha = 0.98;
+    ctx.rotate(angle);
+
+    ctx.font = `900 ${size}px var(--font-geist-sans, system-ui, -apple-system, Segoe UI, Roboto, Arial)`; 
     ctx.textBaseline = "middle";
+    ctx.textAlign = "center";
+    ctx.lineJoin = "round";
 
     let row = 0;
     for (let y = -diag; y <= diag; y += spacingY) {
       const offset = row % 2 === 0 ? 0 : spacingX * 0.5;
       for (let x = -diag; x <= diag; x += spacingX) {
         const px = x + offset;
+
+        // ── Map rotated canvas coords back to screen coords for sampling ──────
+        const cosA = Math.cos(-angle);
+        const sinA = Math.sin(-angle);
+        const screenX = w / 2 + px * cosA - y * sinA;
+        const screenY = h / 2 + px * sinA + y * cosA;
+
+        // ── Brightness-adaptive fill & stroke ─────────────────────────────────
+        let fillColor: string;
+        let strokeColor: string;
+        let fillAlpha: number;
+        let strokeAlpha: number;
+
+        if (srcCtx) {
+          const brightness = sampleBrightness(srcCtx, screenX, screenY, Math.round(size * 2));
+          if (brightness > 160) {
+            // Light background → dark watermark
+            fillColor = "rgba(0,0,0,1)";
+            strokeColor = "rgba(255,255,255,1)";
+            fillAlpha = 0.45;
+            strokeAlpha = 0.2;
+          } else if (brightness < 80) {
+            // Dark background → white watermark
+            fillColor = "rgba(255,255,255,1)";
+            strokeColor = "rgba(0,0,0,1)";
+            fillAlpha = 0.55;
+            strokeAlpha = 0.3;
+          } else {
+            // Mid-tone → white with stronger dark outline
+            fillColor = "rgba(255,255,255,1)";
+            strokeColor = "rgba(0,0,0,1)";
+            fillAlpha = 0.5;
+            strokeAlpha = 0.35;
+          }
+        } else {
+          // No source — safe universal fallback
+          fillColor = "rgba(255,255,255,1)";
+          strokeColor = "rgba(0,0,0,1)";
+          fillAlpha = 0.5;
+          strokeAlpha = 0.3;
+        }
+
+        // Stroke pass (halo)
+        ctx.globalAlpha = strokeAlpha;
+        ctx.lineWidth = size * 0.13;
+        ctx.strokeStyle = strokeColor;
         ctx.strokeText(text, px, y);
+
+        // Fill pass (primary text)
+        ctx.globalAlpha = fillAlpha;
+        ctx.fillStyle = fillColor;
         ctx.fillText(text, px, y);
       }
       row += 1;
     }
 
     ctx.restore();
-  }, [height, text, width]);
+  }, [height, text, width, sourceCanvas]);
 
   return (
     <canvas

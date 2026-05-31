@@ -212,7 +212,7 @@ function ReserveCard({
             border: "1px solid rgba(239, 68, 68, 0.35)",
           }}
         >
-          <BookmarkX size={13} />
+          {/* <BookmarkX size={13} /> */}
           Free
         </button>
       </div>

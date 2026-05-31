@@ -155,7 +155,7 @@ export function PreviewLockPanel({
           onClick={() => setConfirmFree(true)}
           disabled={working !== null}
         >
-          <BookmarkX className="mr-2 h-4 w-4" />
+          {/* <BookmarkX className="mr-2 h-4 w-4" /> */}
           Free this design
         </Button>
       </div>

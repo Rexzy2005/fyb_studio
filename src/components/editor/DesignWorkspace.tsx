@@ -815,9 +815,9 @@ function WatermarkOverlay({
       }
     }
 
-    // ── Tile size — small and dense like stock photo watermark ────────────────
-    const tileSize = Math.max(80, Math.min(130, Math.min(w, h) * 0.18));
-    const fontSize = Math.round(tileSize * 0.22);
+    // ── Tile size — bigger and more visible ───────────────────────────────────
+    const tileSize = Math.max(140, Math.min(200, Math.min(w, h) * 0.28));
+    const fontSize = Math.round(tileSize * 0.28);
 
     // ── Draw diagonal cross lines across the whole canvas ────────────────────
     const drawCrossLines = (color: string, alpha: number) => {
@@ -854,39 +854,45 @@ function WatermarkOverlay({
     let textStrokeAlpha: number;
 
     if (srcCtx) {
-      const brightness = sampleBrightness(srcCtx, w / 2, h / 2, Math.round(Math.min(w, h) * 0.5));
+      const brightness = sampleBrightness(
+        srcCtx,
+        w / 2,
+        h / 2,
+        Math.round(Math.min(w, h) * 0.5)
+      );
       if (brightness > 160) {
         // Light background
         lineColor = "rgba(0,0,0,1)";
         textFillColor = "rgba(0,0,0,1)";
         textStrokeColor = "rgba(255,255,255,1)";
-        lineAlpha = 0.08;
-        textFillAlpha = 0.18;
-        textStrokeAlpha = 0.06;
+        lineAlpha = 0.12;
+        textFillAlpha = 0.35;
+        textStrokeAlpha = 0.12;
       } else if (brightness < 80) {
         // Dark background
         lineColor = "rgba(255,255,255,1)";
         textFillColor = "rgba(255,255,255,1)";
         textStrokeColor = "rgba(0,0,0,1)";
-        lineAlpha = 0.1;
-        textFillAlpha = 0.22;
-        textStrokeAlpha = 0.08;
+        lineAlpha = 0.15;
+        textFillAlpha = 0.45;
+        textStrokeAlpha = 0.18;
       } else {
         // Mid tone
         lineColor = "rgba(255,255,255,1)";
         textFillColor = "rgba(255,255,255,1)";
         textStrokeColor = "rgba(0,0,0,1)";
-        lineAlpha = 0.09;
-        textFillAlpha = 0.2;
-        textStrokeAlpha = 0.07;
+        lineAlpha = 0.13;
+        textFillAlpha = 0.40;
+        textStrokeAlpha = 0.15;
       }
     } else {
+      // No source fallback
       lineColor = "rgba(255,255,255,1)";
       textFillColor = "rgba(255,255,255,1)";
       textStrokeColor = "rgba(0,0,0,1)";
-      lineAlpha = 0.09;
-      textFillAlpha = 0.2;
-      textStrokeAlpha = 0.07;
+      lineAlpha = 0.13;
+      textFillAlpha = 0.40;
+      textStrokeAlpha = 0.15;
     }
 
     // Draw cross lines first
@@ -922,8 +928,8 @@ function WatermarkOverlay({
     <canvas
       ref={canvasRef}
       style={{
-        backdropFilter: "blur(0.9px)",
-        WebkitBackdropFilter: "blur(0.9px)",
+        backdropFilter: "blur(0.95px)",
+        WebkitBackdropFilter: "blur(0.95px)",
       }}
       className="pointer-events-none absolute inset-0"
       aria-hidden

@@ -748,7 +748,7 @@ function WatermarkOverlay({
   width,
   height,
   text,
-  sourceCanvas, // pass the card's canvas/image element for sampling
+  sourceCanvas,
 }: {
   width: number;
   height: number;
@@ -757,7 +757,6 @@ function WatermarkOverlay({
 }) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
-  // Sample average brightness of a region from the source canvas
   const sampleBrightness = (
     ctx: CanvasRenderingContext2D,
     cx: number,
@@ -769,12 +768,11 @@ function WatermarkOverlay({
     const sy = Math.max(0, Math.round(cy - half));
     const sw = Math.min(sampleSize, ctx.canvas.width - sx);
     const sh = Math.min(sampleSize, ctx.canvas.height - sy);
-    if (sw <= 0 || sh <= 0) return 128; // fallback to mid-grey
+    if (sw <= 0 || sh <= 0) return 128;
     try {
       const { data } = ctx.getImageData(sx, sy, sw, sh);
       let total = 0;
       for (let i = 0; i < data.length; i += 4) {
-        // Perceived luminance (ITU-R BT.709)
         total += 0.2126 * data[i] + 0.7152 * data[i + 1] + 0.0722 * data[i + 2];
       }
       return total / (data.length / 4);
@@ -802,12 +800,10 @@ function WatermarkOverlay({
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.clearRect(0, 0, w, h);
 
-    // ── Source context for brightness sampling ────────────────────────────────
     let srcCtx: CanvasRenderingContext2D | null = null;
     if (sourceCanvas instanceof HTMLCanvasElement) {
       srcCtx = sourceCanvas.getContext("2d");
     } else if (sourceCanvas instanceof HTMLImageElement && sourceCanvas.complete) {
-      // Draw image into an offscreen canvas so we can sample it
       const offscreen = document.createElement("canvas");
       offscreen.width = w;
       offscreen.height = h;
@@ -818,10 +814,10 @@ function WatermarkOverlay({
       }
     }
 
-    // ── Size & layout ─────────────────────────────────────────────────────────
-    const size = Math.max(42, Math.min(72, Math.min(w, h) * 0.095));
-    const spacingX = size * 5;
-    const spacingY = size * 3.5;
+    // ── Bigger text, tighter spacing = denser pattern ─────────────────────────
+    const size = Math.max(64, Math.min(110, Math.min(w, h) * 0.16)); // was 0.095
+    const spacingX = size * 3.2;   // was 5 — tighter horizontal
+    const spacingY = size * 2.4;   // was 3.5 — tighter vertical
     const diag = Math.hypot(w, h);
     const angle = -Math.PI / 6;
 
@@ -829,7 +825,7 @@ function WatermarkOverlay({
     ctx.translate(w / 2, h / 2);
     ctx.rotate(angle);
 
-    ctx.font = `900 ${size}px var(--font-geist-sans, system-ui, -apple-system, Segoe UI, Roboto, Arial)`; 
+    ctx.font = `900 ${size}px var(--font-geist-sans, system-ui, -apple-system, Segoe UI, Roboto, Arial)`;
     ctx.textBaseline = "middle";
     ctx.textAlign = "center";
     ctx.lineJoin = "round";
@@ -840,13 +836,11 @@ function WatermarkOverlay({
       for (let x = -diag; x <= diag; x += spacingX) {
         const px = x + offset;
 
-        // ── Map rotated canvas coords back to screen coords for sampling ──────
         const cosA = Math.cos(-angle);
         const sinA = Math.sin(-angle);
         const screenX = w / 2 + px * cosA - y * sinA;
         const screenY = h / 2 + px * sinA + y * cosA;
 
-        // ── Brightness-adaptive fill & stroke ─────────────────────────────────
         let fillColor: string;
         let strokeColor: string;
         let fillAlpha: number;
@@ -855,39 +849,35 @@ function WatermarkOverlay({
         if (srcCtx) {
           const brightness = sampleBrightness(srcCtx, screenX, screenY, Math.round(size * 2));
           if (brightness > 160) {
-            // Light background → dark watermark
             fillColor = "rgba(0,0,0,1)";
             strokeColor = "rgba(255,255,255,1)";
-            fillAlpha = 0.45;
-            strokeAlpha = 0.2;
+            fillAlpha = 0.55;   // slightly stronger on light bg
+            strokeAlpha = 0.25;
           } else if (brightness < 80) {
-            // Dark background → white watermark
             fillColor = "rgba(255,255,255,1)";
             strokeColor = "rgba(0,0,0,1)";
-            fillAlpha = 0.55;
-            strokeAlpha = 0.3;
-          } else {
-            // Mid-tone → white with stronger dark outline
-            fillColor = "rgba(255,255,255,1)";
-            strokeColor = "rgba(0,0,0,1)";
-            fillAlpha = 0.5;
+            fillAlpha = 0.65;   // stronger on dark bg
             strokeAlpha = 0.35;
+          } else {
+            fillColor = "rgba(255,255,255,1)";
+            strokeColor = "rgba(0,0,0,1)";
+            fillAlpha = 0.6;
+            strokeAlpha = 0.4;
           }
         } else {
-          // No source — safe universal fallback
           fillColor = "rgba(255,255,255,1)";
           strokeColor = "rgba(0,0,0,1)";
-          fillAlpha = 0.5;
-          strokeAlpha = 0.3;
+          fillAlpha = 0.6;
+          strokeAlpha = 0.35;
         }
 
-        // Stroke pass (halo)
+        // Stroke pass
         ctx.globalAlpha = strokeAlpha;
         ctx.lineWidth = size * 0.13;
         ctx.strokeStyle = strokeColor;
         ctx.strokeText(text, px, y);
 
-        // Fill pass (primary text)
+        // Fill pass
         ctx.globalAlpha = fillAlpha;
         ctx.fillStyle = fillColor;
         ctx.fillText(text, px, y);
@@ -901,6 +891,10 @@ function WatermarkOverlay({
   return (
     <canvas
       ref={canvasRef}
+      style={{
+        backdropFilter: "blur(3px)",        // blurs what is behind the overlay
+        WebkitBackdropFilter: "blur(3px)",  // Safari support
+      }}
       className="pointer-events-none absolute inset-0"
       aria-hidden
     />

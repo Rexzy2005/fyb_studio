@@ -815,9 +815,11 @@ function WatermarkOverlay({
       }
     }
 
-    // ── Brightness detection ──────────────────────────────────────────────────
+    // ── Brightness adaptive color ─────────────────────────────────────────────
     let textFillColor: string;
+    let textStrokeColor: string;
     let textFillAlpha: number;
+    let textStrokeAlpha: number;
 
     if (srcCtx) {
       const brightness = sampleBrightness(
@@ -826,18 +828,32 @@ function WatermarkOverlay({
         h / 2,
         Math.round(Math.min(w, h) * 0.5)
       );
+
       if (brightness > 160) {
-        // Light background — dark text
+        // Light/white background
         textFillColor = "rgba(0,0,0,1)";
-        textFillAlpha = 0.12;
-      } else {
-        // Dark or mid background — white text
+        textStrokeColor = "rgba(255,255,255,1)";
+        textFillAlpha = 0.4;
+        textStrokeAlpha = 0.08;
+      } else if (brightness < 80) {
+        // Dark background
         textFillColor = "rgba(255,255,255,1)";
-        textFillAlpha = 0.15;
+        textStrokeColor = "rgba(0,0,0,1)";
+        textFillAlpha = 0.4;
+        textStrokeAlpha = 0.12;
+      } else {
+        // Mid tone
+        textFillColor = "rgba(255,255,255,1)";
+        textStrokeColor = "rgba(0,0,0,1)";
+        textFillAlpha = 0.4;
+        textStrokeAlpha = 0.10;
       }
     } else {
+      // No source fallback
       textFillColor = "rgba(255,255,255,1)";
-      textFillAlpha = 0.15;
+      textStrokeColor = "rgba(0,0,0,1)";
+      textFillAlpha = 0.4;
+      textStrokeAlpha = 0.10;
     }
 
     const poppins = new FontFace(
@@ -845,10 +861,7 @@ function WatermarkOverlay({
       "url(https://fonts.gstatic.com/s/poppins/v21/pxiByp8kv8JHgFVrLDD4Z1xlFQ.woff2)"
     );
 
-    poppins.load().then((font) => {
-      document.fonts.add(font);
-
-      // ── Font size fills the full diagonal width ───────────────────────────
+    const draw = (fontFamily: string) => {
       const fontSize = Math.round(Math.min(w, h) * 0.13);
       const angle = -Math.PI / 6;
 
@@ -856,33 +869,33 @@ function WatermarkOverlay({
       ctx.translate(w / 2, h / 2);
       ctx.rotate(angle);
 
-      ctx.font = `900 ${fontSize}px 'Poppins', sans-serif`;
+      ctx.font = `900 ${fontSize}px ${fontFamily}`;
       ctx.textBaseline = "middle";
       ctx.textAlign = "center";
       ctx.lineJoin = "round";
 
-      // Single centered text — no loop, no tiling
+      // Stroke pass
+      ctx.globalAlpha = textStrokeAlpha;
+      ctx.lineWidth = fontSize * 0.08;
+      ctx.strokeStyle = textStrokeColor;
+      ctx.strokeText(text, 0, 0);
+
+      // Fill pass
       ctx.globalAlpha = textFillAlpha;
       ctx.fillStyle = textFillColor;
       ctx.fillText(text, 0, 0);
 
       ctx.restore();
+    };
 
-    }).catch(() => {
-      // Fallback if Poppins fails
-      const fontSize = Math.round(Math.min(w, h) * 0.13);
-      const angle = -Math.PI / 6;
-      ctx.save();
-      ctx.translate(w / 2, h / 2);
-      ctx.rotate(angle);
-      ctx.font = `900 ${fontSize}px sans-serif`;
-      ctx.textBaseline = "middle";
-      ctx.textAlign = "center";
-      ctx.globalAlpha = textFillAlpha;
-      ctx.fillStyle = textFillColor;
-      ctx.fillText(text, 0, 0);
-      ctx.restore();
-    });
+    poppins.load()
+      .then((font) => {
+        document.fonts.add(font);
+        draw("'Poppins', sans-serif");
+      })
+      .catch(() => {
+        draw("sans-serif");
+      });
 
   }, [height, text, width, sourceCanvas]);
 

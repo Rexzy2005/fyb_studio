@@ -747,12 +747,12 @@ function CanvasShapesLayer({
 function WatermarkOverlay({
   width,
   height,
-  text,
+  text = "PREVIEW ONLY",
   sourceCanvas,
 }: {
   width: number;
   height: number;
-  text: string;
+  text?: string;
   sourceCanvas?: HTMLCanvasElement | HTMLImageElement | null;
 }) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -815,91 +815,115 @@ function WatermarkOverlay({
       }
     }
 
-    // ── Massive text, sparse tiles — 2 to 3 visible at a time ────────────────
-    const size = Math.max(120, Math.min(200, Math.min(w, h) * 0.35));
-    const spacingX = size * 2.8;
-    const spacingY = size * 2.0;
-    const diag = Math.hypot(w, h);
-    const angle = -Math.PI / 6;
+    // ── Tile size — small and dense like stock photo watermark ────────────────
+    const tileSize = Math.max(80, Math.min(130, Math.min(w, h) * 0.18));
+    const fontSize = Math.round(tileSize * 0.22);
 
-    ctx.save();
-    ctx.translate(w / 2, h / 2);
-    ctx.rotate(angle);
+    // ── Draw diagonal cross lines across the whole canvas ────────────────────
+    const drawCrossLines = (color: string, alpha: number) => {
+      ctx.save();
+      ctx.globalAlpha = alpha;
+      ctx.strokeStyle = color;
+      ctx.lineWidth = 0.6;
 
-    ctx.font = `900 ${size}px var(--font-geist-sans, system-ui, -apple-system, Segoe UI, Roboto, Arial)`;
+      // diagonal lines top-left to bottom-right
+      for (let i = -h; i < w + h; i += tileSize) {
+        ctx.beginPath();
+        ctx.moveTo(i, 0);
+        ctx.lineTo(i + h, h);
+        ctx.stroke();
+      }
+
+      // diagonal lines top-right to bottom-left
+      for (let i = 0; i < w + h; i += tileSize) {
+        ctx.beginPath();
+        ctx.moveTo(i, 0);
+        ctx.lineTo(i - h, h);
+        ctx.stroke();
+      }
+
+      ctx.restore();
+    };
+
+    // ── Determine color from brightness ───────────────────────────────────────
+    let lineColor: string;
+    let textFillColor: string;
+    let textStrokeColor: string;
+    let lineAlpha: number;
+    let textFillAlpha: number;
+    let textStrokeAlpha: number;
+
+    if (srcCtx) {
+      const brightness = sampleBrightness(srcCtx, w / 2, h / 2, Math.round(Math.min(w, h) * 0.5));
+      if (brightness > 160) {
+        // Light background
+        lineColor = "rgba(0,0,0,1)";
+        textFillColor = "rgba(0,0,0,1)";
+        textStrokeColor = "rgba(255,255,255,1)";
+        lineAlpha = 0.08;
+        textFillAlpha = 0.18;
+        textStrokeAlpha = 0.06;
+      } else if (brightness < 80) {
+        // Dark background
+        lineColor = "rgba(255,255,255,1)";
+        textFillColor = "rgba(255,255,255,1)";
+        textStrokeColor = "rgba(0,0,0,1)";
+        lineAlpha = 0.1;
+        textFillAlpha = 0.22;
+        textStrokeAlpha = 0.08;
+      } else {
+        // Mid tone
+        lineColor = "rgba(255,255,255,1)";
+        textFillColor = "rgba(255,255,255,1)";
+        textStrokeColor = "rgba(0,0,0,1)";
+        lineAlpha = 0.09;
+        textFillAlpha = 0.2;
+        textStrokeAlpha = 0.07;
+      }
+    } else {
+      lineColor = "rgba(255,255,255,1)";
+      textFillColor = "rgba(255,255,255,1)";
+      textStrokeColor = "rgba(0,0,0,1)";
+      lineAlpha = 0.09;
+      textFillAlpha = 0.2;
+      textStrokeAlpha = 0.07;
+    }
+
+    // Draw cross lines first
+    drawCrossLines(lineColor, lineAlpha);
+
+    // ── Draw tiled text centered in each tile cell ────────────────────────────
+    ctx.font = `600 ${fontSize}px var(--font-geist-sans, system-ui, -apple-system, Segoe UI, Roboto, Arial)`;
     ctx.textBaseline = "middle";
     ctx.textAlign = "center";
     ctx.lineJoin = "round";
 
-    let row = 0;
-    for (let y = -diag; y <= diag; y += spacingY) {
-      const offset = row % 2 === 0 ? 0 : spacingX * 0.5;
-      for (let x = -diag; x <= diag; x += spacingX) {
-        const px = x + offset;
+    for (let row = -1; row <= Math.ceil(h / tileSize) + 1; row++) {
+      for (let col = -1; col <= Math.ceil(w / tileSize) + 1; col++) {
+        const cx = col * tileSize + tileSize / 2;
+        const cy = row * tileSize + tileSize / 2;
 
-        // ── Map rotated coords back to screen for brightness sampling ─────────
-        const cosA = Math.cos(-angle);
-        const sinA = Math.sin(-angle);
-        const screenX = w / 2 + px * cosA - y * sinA;
-        const screenY = h / 2 + px * sinA + y * cosA;
+        // Stroke pass
+        ctx.globalAlpha = textStrokeAlpha;
+        ctx.lineWidth = fontSize * 0.2;
+        ctx.strokeStyle = textStrokeColor;
+        ctx.strokeText(text, cx, cy);
 
-        // ── Brightness adaptive color ─────────────────────────────────────────
-        let fillColor: string;
-        let strokeColor: string;
-        let fillAlpha: number;
-        let strokeAlpha: number;
-
-        if (srcCtx) {
-          const brightness = sampleBrightness(srcCtx, screenX, screenY, Math.round(size * 2));
-          if (brightness > 160) {
-            // Light background — dark watermark
-            fillColor = "rgba(0,0,0,1)";
-            strokeColor = "rgba(255,255,255,1)";
-            fillAlpha = 0.55;
-            strokeAlpha = 0.25;
-          } else if (brightness < 80) {
-            // Dark background — white watermark
-            fillColor = "rgba(255,255,255,1)";
-            strokeColor = "rgba(0,0,0,1)";
-            fillAlpha = 0.65;
-            strokeAlpha = 0.35;
-          } else {
-            // Mid tone
-            fillColor = "rgba(255,255,255,1)";
-            strokeColor = "rgba(0,0,0,1)";
-            fillAlpha = 0.6;
-            strokeAlpha = 0.4;
-          }
-        } else {
-          fillColor = "rgba(255,255,255,1)";
-          strokeColor = "rgba(0,0,0,1)";
-          fillAlpha = 0.6;
-          strokeAlpha = 0.35;
-        }
-
-        // Stroke pass — halo effect
-        ctx.globalAlpha = strokeAlpha;
-        ctx.lineWidth = size * 0.13;
-        ctx.strokeStyle = strokeColor;
-        ctx.strokeText(text, px, y);
-
-        // Fill pass — primary text
-        ctx.globalAlpha = fillAlpha;
-        ctx.fillStyle = fillColor;
-        ctx.fillText(text, px, y);
+        // Fill pass
+        ctx.globalAlpha = textFillAlpha;
+        ctx.fillStyle = textFillColor;
+        ctx.fillText(text, cx, cy);
       }
-      row += 1;
     }
 
-    ctx.restore();
   }, [height, text, width, sourceCanvas]);
 
   return (
     <canvas
       ref={canvasRef}
       style={{
-        backdropFilter: "blur(0.8px)",
-        WebkitBackdropFilter: "blur(0.8px)",
+        backdropFilter: "blur(0.5px)",
+        WebkitBackdropFilter: "blur(0.5px)",
       }}
       className="pointer-events-none absolute inset-0"
       aria-hidden

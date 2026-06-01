@@ -600,7 +600,7 @@ export function DesignWorkspace({
               showGuides={showGuides}
             />
             {showWatermark ? (
-              <WatermarkOverlay width={canvasW} height={canvasH} text="FYB Studio" />
+              <WatermarkOverlay width={canvasW} height={canvasH} text="PREVIEW ONLY" />
             ) : null}
           </div>
         </div>
@@ -922,8 +922,8 @@ function WatermarkOverlay({
     <canvas
       ref={canvasRef}
       style={{
-        backdropFilter: "blur(0.5px)",
-        WebkitBackdropFilter: "blur(0.5px)",
+        backdropFilter: "blur(0.9px)",
+        WebkitBackdropFilter: "blur(0.9px)",
       }}
       className="pointer-events-none absolute inset-0"
       aria-hidden

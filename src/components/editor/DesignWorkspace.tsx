@@ -815,69 +815,84 @@ function WatermarkOverlay({
       }
     }
 
-    // ── Tile size — bigger and more visible ───────────────────────────────────
-    const tileSize = Math.max(140, Math.min(200, Math.min(w, h) * 0.28));
-    const fontSize = Math.round(tileSize * 0.28);
+    // ── Load Poppins before drawing ───────────────────────────────────────────
+    const poppins = new FontFace(
+      "Poppins",
+      "url(https://fonts.gstatic.com/s/poppins/v21/pxiByp8kv8JHgFVrLDD4Z1xlFQ.woff2)"
+    );
 
-    // ── Draw diagonal cross lines across the whole canvas ────────────────────
-    const drawCrossLines = (color: string, alpha: number) => {
-      ctx.save();
-      ctx.globalAlpha = alpha;
-      ctx.strokeStyle = color;
-      ctx.lineWidth = 0.6;
+    poppins.load().then((font) => {
+      document.fonts.add(font);
 
-      // diagonal lines top-left to bottom-right
-      for (let i = -h; i < w + h; i += tileSize) {
-        ctx.beginPath();
-        ctx.moveTo(i, 0);
-        ctx.lineTo(i + h, h);
-        ctx.stroke();
-      }
+      const tileSize = Math.max(140, Math.min(200, Math.min(w, h) * 0.28));
+      const fontSize = Math.round(tileSize * 0.52);
 
-      // diagonal lines top-right to bottom-left
-      for (let i = 0; i < w + h; i += tileSize) {
-        ctx.beginPath();
-        ctx.moveTo(i, 0);
-        ctx.lineTo(i - h, h);
-        ctx.stroke();
-      }
+      // ── Draw diagonal cross lines ─────────────────────────────────────────
+      const drawCrossLines = (color: string, alpha: number) => {
+        ctx.save();
+        ctx.globalAlpha = alpha;
+        ctx.strokeStyle = color;
+        ctx.lineWidth = 0.6;
 
-      ctx.restore();
-    };
+        for (let i = -h; i < w + h; i += tileSize) {
+          ctx.beginPath();
+          ctx.moveTo(i, 0);
+          ctx.lineTo(i + h, h);
+          ctx.stroke();
+        }
 
-    // ── Determine color from brightness ───────────────────────────────────────
-    let lineColor: string;
-    let textFillColor: string;
-    let textStrokeColor: string;
-    let lineAlpha: number;
-    let textFillAlpha: number;
-    let textStrokeAlpha: number;
+        for (let i = 0; i < w + h; i += tileSize) {
+          ctx.beginPath();
+          ctx.moveTo(i, 0);
+          ctx.lineTo(i - h, h);
+          ctx.stroke();
+        }
 
-    if (srcCtx) {
-      const brightness = sampleBrightness(
-        srcCtx,
-        w / 2,
-        h / 2,
-        Math.round(Math.min(w, h) * 0.5)
-      );
-      if (brightness > 160) {
-        // Light background
-        lineColor = "rgba(0,0,0,1)";
-        textFillColor = "rgba(0,0,0,1)";
-        textStrokeColor = "rgba(255,255,255,1)";
-        lineAlpha = 0.12;
-        textFillAlpha = 0.35;
-        textStrokeAlpha = 0.12;
-      } else if (brightness < 80) {
-        // Dark background
-        lineColor = "rgba(255,255,255,1)";
-        textFillColor = "rgba(255,255,255,1)";
-        textStrokeColor = "rgba(0,0,0,1)";
-        lineAlpha = 0.15;
-        textFillAlpha = 0.45;
-        textStrokeAlpha = 0.18;
+        ctx.restore();
+      };
+
+      // ── Determine color from brightness ───────────────────────────────────
+      let lineColor: string;
+      let textFillColor: string;
+      let textStrokeColor: string;
+      let lineAlpha: number;
+      let textFillAlpha: number;
+      let textStrokeAlpha: number;
+
+      if (srcCtx) {
+        const brightness = sampleBrightness(
+          srcCtx,
+          w / 2,
+          h / 2,
+          Math.round(Math.min(w, h) * 0.5)
+        );
+        if (brightness > 160) {
+          // Light background
+          lineColor = "rgba(0,0,0,1)";
+          textFillColor = "rgba(0,0,0,1)";
+          textStrokeColor = "rgba(255,255,255,1)";
+          lineAlpha = 0.12;
+          textFillAlpha = 0.35;
+          textStrokeAlpha = 0.12;
+        } else if (brightness < 80) {
+          // Dark background
+          lineColor = "rgba(255,255,255,1)";
+          textFillColor = "rgba(255,255,255,1)";
+          textStrokeColor = "rgba(0,0,0,1)";
+          lineAlpha = 0.15;
+          textFillAlpha = 0.45;
+          textStrokeAlpha = 0.18;
+        } else {
+          // Mid tone
+          lineColor = "rgba(255,255,255,1)";
+          textFillColor = "rgba(255,255,255,1)";
+          textStrokeColor = "rgba(0,0,0,1)";
+          lineAlpha = 0.13;
+          textFillAlpha = 0.40;
+          textStrokeAlpha = 0.15;
+        }
       } else {
-        // Mid tone
+        // No source fallback
         lineColor = "rgba(255,255,255,1)";
         textFillColor = "rgba(255,255,255,1)";
         textStrokeColor = "rgba(0,0,0,1)";
@@ -885,42 +900,37 @@ function WatermarkOverlay({
         textFillAlpha = 0.40;
         textStrokeAlpha = 0.15;
       }
-    } else {
-      // No source fallback
-      lineColor = "rgba(255,255,255,1)";
-      textFillColor = "rgba(255,255,255,1)";
-      textStrokeColor = "rgba(0,0,0,1)";
-      lineAlpha = 0.13;
-      textFillAlpha = 0.40;
-      textStrokeAlpha = 0.15;
-    }
 
-    // Draw cross lines first
-    drawCrossLines(lineColor, lineAlpha);
+      // Draw cross lines first
+      drawCrossLines(lineColor, lineAlpha);
 
-    // ── Draw tiled text centered in each tile cell ────────────────────────────
-    ctx.font = `600 ${fontSize}px var(--font-geist-sans, system-ui, -apple-system, Segoe UI, Roboto, Arial)`;
-    ctx.textBaseline = "middle";
-    ctx.textAlign = "center";
-    ctx.lineJoin = "round";
+      // ── Draw tiled text ───────────────────────────────────────────────────
+      ctx.font = `900 ${fontSize}px 'Poppins', sans-serif`;
+      ctx.textBaseline = "middle";
+      ctx.textAlign = "center";
+      ctx.lineJoin = "round";
 
-    for (let row = -1; row <= Math.ceil(h / tileSize) + 1; row++) {
-      for (let col = -1; col <= Math.ceil(w / tileSize) + 1; col++) {
-        const cx = col * tileSize + tileSize / 2;
-        const cy = row * tileSize + tileSize / 2;
+      for (let row = -1; row <= Math.ceil(h / tileSize) + 1; row++) {
+        for (let col = -1; col <= Math.ceil(w / tileSize) + 1; col++) {
+          const cx = col * tileSize + tileSize / 2;
+          const cy = row * tileSize + tileSize / 2;
 
-        // Stroke pass
-        ctx.globalAlpha = textStrokeAlpha;
-        ctx.lineWidth = fontSize * 0.2;
-        ctx.strokeStyle = textStrokeColor;
-        ctx.strokeText(text, cx, cy);
+          // Stroke pass
+          ctx.globalAlpha = textStrokeAlpha;
+          ctx.lineWidth = fontSize * 0.2;
+          ctx.strokeStyle = textStrokeColor;
+          ctx.strokeText(text, cx, cy);
 
-        // Fill pass
-        ctx.globalAlpha = textFillAlpha;
-        ctx.fillStyle = textFillColor;
-        ctx.fillText(text, cx, cy);
+          // Fill pass
+          ctx.globalAlpha = textFillAlpha;
+          ctx.fillStyle = textFillColor;
+          ctx.fillText(text, cx, cy);
+        }
       }
-    }
+    }).catch(() => {
+      // Poppins failed to load — fall back to system sans-serif
+      ctx.font = `900 ${Math.round(Math.max(140, Math.min(200, Math.min(w, h) * 0.28)) * 0.52)}px sans-serif`;
+    });
 
   }, [height, text, width, sourceCanvas]);
 

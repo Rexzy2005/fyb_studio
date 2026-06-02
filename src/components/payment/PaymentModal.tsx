@@ -34,20 +34,23 @@ const FONT_SANS = "var(--font-geist-sans), sans-serif";
 
 export function PaymentModal({
   open,
+  ...props
+}: Props) {
+  if (!open) return null;
+  return <PaymentModalContent {...props} />;
+}
+
+function PaymentModalContent({
   templateId,
   templateName,
   userDesignId,
   customerEmail,
   onPaid,
   onClose,
-}: Props) {
+}: Omit<Props, "open">) {
   const [stage, setStage] = useState<Stage>({ kind: "idle" });
   const [priceNgn, setPriceNgn] = useState<number | null>(null);
   const backdropRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (open) setStage({ kind: "idle" });
-  }, [open]);
 
   const submitting =
     stage.kind === "initializing" ||
@@ -55,23 +58,19 @@ export function PaymentModal({
     stage.kind === "verifying";
 
   useEffect(() => {
-    if (!open) return;
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape" && !submitting) onClose();
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [open, submitting, onClose]);
+  }, [submitting, onClose]);
 
   // Lock body scroll while open
   useEffect(() => {
-    if (!open) return;
     const prev = document.body.style.overflow;
     document.body.style.overflow = "hidden";
     return () => { document.body.style.overflow = prev; };
-  }, [open]);
-
-  if (!open) return null;
+  }, []);
 
   const btnLabel =
     stage.kind === "initializing"

@@ -34,6 +34,13 @@ const PAYSTACK_FINAL_FAILURE_STATUSES: PaymentStatus[] = [
   "abandoned",
   "reversed",
 ];
+const PAYSTACK_RECONCILE_STATUSES: PaymentStatus[] = [
+  ...PAYSTACK_ACTIVE_STATUSES,
+  "expired",
+  "timeout",
+];
+const RECONCILE_LOOKBACK_DAYS = 90;
+const RECONCILE_THROTTLE_MINUTES = 5;
 
 export type PriceQuote = {
   amountKobo: number;
@@ -331,7 +338,7 @@ export async function getPaymentResumeTarget(
  */
 export async function confirmPaymentByReference(
   reference: string,
-  options: { source?: "verify" | "webhook" } = {}
+  options: { source?: "verify" | "webhook" | "system" } = {}
 ): Promise<ConfirmedPayment> {
   await connectDb();
   const source = options.source ?? "verify";
@@ -638,6 +645,77 @@ export async function expireStalePaymentAttempts(now = new Date()): Promise<numb
     }
   );
   return res.modifiedCount;
+}
+
+export async function reconcileRecentPaymentAttempts(
+  now = new Date(),
+  options: { limit?: number } = {}
+): Promise<{ checked: number; corrected: number; expired: number }> {
+  await connectDb();
+
+  if (!env.PAYSTACK_SECRET_KEY) {
+    return {
+      checked: 0,
+      corrected: 0,
+      expired: await expireStalePaymentAttempts(now),
+    };
+  }
+
+  const limit = Math.min(Math.max(options.limit ?? 25, 1), 100);
+  const lookback = new Date(
+    now.getTime() - RECONCILE_LOOKBACK_DAYS * 24 * 60 * 60 * 1000
+  );
+  const verifyCutoff = new Date(
+    now.getTime() - RECONCILE_THROTTLE_MINUTES * 60 * 1000
+  );
+
+  const candidates = await Payment.find({
+    status: { $in: PAYSTACK_RECONCILE_STATUSES },
+    createdAt: { $gte: lookback },
+    $or: [
+      { lastVerifiedAt: null },
+      { lastVerifiedAt: { $lt: verifyCutoff } },
+    ],
+  })
+    .select("_id paystackReference status")
+    .sort({ lastVerifiedAt: 1, createdAt: -1 })
+    .limit(limit)
+    .lean();
+
+  let checked = 0;
+  let corrected = 0;
+
+  for (const candidate of candidates) {
+    checked += 1;
+    try {
+      const { payment } = await confirmPaymentByReference(
+        candidate.paystackReference,
+        { source: "system" }
+      );
+      if (payment.status === "success" && candidate.status !== "success") {
+        corrected += 1;
+      }
+    } catch (err) {
+      if (
+        err instanceof AppError &&
+        (err.code === "PAYMENT_NOT_SUCCESSFUL" ||
+          err.code === "PAYMENT_VERIFY_FAILED" ||
+          err.code === "PAYMENT_NOT_FOUND")
+      ) {
+        continue;
+      }
+      console.error("[payment] reconcile failed", {
+        reference: candidate.paystackReference,
+        err,
+      });
+    }
+  }
+
+  return {
+    checked,
+    corrected,
+    expired: await expireStalePaymentAttempts(now),
+  };
 }
 
 async function sendReceiptForPayment(payment: PaymentDoc): Promise<void> {

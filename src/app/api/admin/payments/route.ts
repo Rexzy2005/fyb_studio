@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 
 import { requireAdmin } from "@/backend/auth/session";
 import { withErrorHandler } from "@/backend/errors/handler";
-import { expireStalePaymentAttempts } from "@/backend/services/payment.service";
+import { reconcileRecentPaymentAttempts } from "@/backend/services/payment.service";
 import {
   getRecentPayments,
   getRevenueSummary,
@@ -13,12 +13,13 @@ export const runtime = "nodejs";
 /**
  * GET /api/admin/payments
  *
- * Dedicated admin payment history endpoint. It reconciles stale attempts
- * before reading so the page reflects pending attempts that have aged out.
+ * Dedicated admin payment history endpoint. It checks recent stale attempts
+ * with Paystack before reading, then expires only attempts that are still not
+ * successful.
  */
 export const GET = withErrorHandler(async (req: Request) => {
   await requireAdmin();
-  await expireStalePaymentAttempts();
+  await reconcileRecentPaymentAttempts(undefined, { limit: 50 });
 
   const url = new URL(req.url);
   const requestedLimit = Number(url.searchParams.get("limit") ?? 100);

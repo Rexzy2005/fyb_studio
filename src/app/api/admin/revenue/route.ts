@@ -7,7 +7,7 @@ import {
   getRevenueSummary,
   getTopTemplates,
 } from "@/backend/services/revenue.service";
-import { expireStalePaymentAttempts } from "@/backend/services/payment.service";
+import { reconcileRecentPaymentAttempts } from "@/backend/services/payment.service";
 
 export const runtime = "nodejs";
 
@@ -20,7 +20,7 @@ export const runtime = "nodejs";
  */
 export const GET = withErrorHandler(async () => {
   await requireAdmin();
-  await expireStalePaymentAttempts();
+  await reconcileRecentPaymentAttempts();
   const [summary, daily, topTemplates] = await Promise.all([
     getRevenueSummary(),
     getRevenueDailyBuckets(30),

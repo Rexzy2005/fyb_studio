@@ -1,9 +1,9 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 
 import type {
-  RecentPaymentRow,
   RevenueDailyBucket,
   RevenueSummary,
   TopTemplateRow,
@@ -13,16 +13,10 @@ type RevenueResponse = {
   summary: RevenueSummary;
   daily: RevenueDailyBucket[];
   topTemplates: TopTemplateRow[];
-  recentPayments: RecentPaymentRow[];
 };
 
 function formatNgn(n: number): string {
   return `₦${n.toLocaleString()}`;
-}
-function formatDate(iso: string): string {
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return iso;
-  return d.toLocaleString();
 }
 
 /**
@@ -30,7 +24,7 @@ function formatDate(iso: string): string {
  *   - Headline stats (total revenue, 30d revenue, paying users, downloads).
  *   - Daily revenue+downloads chart (last 30 days, inline SVG so no chart lib).
  *   - Top revenue templates.
- *   - Recent payments table.
+ *   - Compact payment-state summary with a link to full payment history.
  */
 export function RevenuePanel() {
   const [data, setData] = useState<RevenueResponse | null>(null);
@@ -132,7 +126,7 @@ export function RevenuePanel() {
           value={data ? data.summary.totalDownloads.toLocaleString() : loading ? "…" : "0"}
           sub={
             data
-              ? `${data.summary.pendingPayments} pending · ${data.summary.failedPayments} failed`
+              ? `${data.summary.pendingPayments} pending · ${data.summary.failedPayments} attention`
               : ""
           }
         />
@@ -198,68 +192,44 @@ export function RevenuePanel() {
         </div>
       </div>
 
-      {/* Recent payments table */}
-      <div className="rounded-2xl border border-hairline bg-surface-1 dark:border-hairline dark:bg-surface-1">
-        <div className="border-b border-hairline px-4 py-3 dark:border-hairline">
-          <div className="text-xs font-semibold uppercase tracking-wide text-ink-muted dark:text-ink-muted">
-            Recent payments
+      <div className="rounded-2xl border border-hairline bg-surface-1 p-4 dark:border-hairline dark:bg-surface-1">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <div className="text-xs font-semibold uppercase tracking-wide text-ink-muted dark:text-ink-muted">
+              Payment state
+            </div>
+            <p className="mt-1 text-xs text-ink-faint dark:text-ink-faint">
+              Full Paystack journey lives in the dedicated payment history section.
+            </p>
           </div>
+          <Link
+            href="/admin/payments"
+            className="inline-flex h-9 items-center rounded-xl border border-hairline bg-canvas px-3 text-xs font-medium text-ink-muted transition hover:bg-surface-2 hover:text-ink dark:border-hairline dark:bg-surface-2 dark:text-ink-muted dark:hover:bg-surface-1"
+          >
+            Open payment history
+          </Link>
         </div>
         {loading || !data ? (
-          <div className="space-y-2 p-4">
-            {Array.from({ length: 4 }).map((_, i) => (
-              <div key={i} className="fyb-skeleton h-9 rounded-lg" />
+          <div className="mt-4 grid gap-2 sm:grid-cols-3 lg:grid-cols-6">
+            {Array.from({ length: 6 }).map((_, i) => (
+              <div key={i} className="fyb-skeleton h-10 rounded-xl" />
             ))}
           </div>
-        ) : data.recentPayments.length === 0 ? (
-          <div className="px-4 py-6 text-sm text-ink-faint dark:text-ink-faint">
-            No payments yet - this fills in once your first user buys a download.
-          </div>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-zinc-200 text-sm dark:divide-zinc-800">
-              <thead>
-                <tr className="text-left text-[11px] uppercase tracking-wide text-ink-faint dark:text-ink-faint">
-                  <th className="px-4 py-2">When</th>
-                  <th className="px-4 py-2">User</th>
-                  <th className="px-4 py-2">Template</th>
-                  <th className="px-4 py-2">Amount</th>
-                  <th className="px-4 py-2">Status</th>
-                  <th className="px-4 py-2">Reference</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800">
-                {data.recentPayments.map((p) => (
-                  <tr key={p.id} className="hover:bg-canvas/60 dark:hover:bg-surface-2/30">
-                    <td className="px-4 py-2 text-xs text-ink-muted dark:text-ink-faint">
-                      {formatDate(p.paidAt ?? p.createdAt)}
-                    </td>
-                    <td className="px-4 py-2">
-                      <div className="text-sm text-ink dark:text-ink">
-                        {p.userName ?? "-"}
-                      </div>
-                      <div className="text-[11px] text-ink-faint dark:text-ink-faint">
-                        {p.userEmail ?? ""}
-                      </div>
-                    </td>
-                    <td className="px-4 py-2 text-sm text-ink dark:text-ink">
-                      {p.templateName ?? "(deleted)"}
-                    </td>
-                    <td className="px-4 py-2 font-medium text-ink dark:text-ink">
-                      {formatNgn(p.amountNgn)}
-                    </td>
-                    <td className="px-4 py-2">
-                      <StatusPill status={p.status} />
-                    </td>
-                    <td className="px-4 py-2">
-                      <span className="font-mono text-[11px] text-ink-faint dark:text-ink-faint">
-                        {p.paystackReference}
-                      </span>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+          <div className="mt-4 grid gap-2 sm:grid-cols-3 lg:grid-cols-6">
+            {(["success", "pending", "cancelled", "expired", "timeout", "failed"] as const).map((status) => (
+              <div
+                key={status}
+                className="rounded-xl border border-hairline bg-canvas px-3 py-2 dark:border-hairline dark:bg-surface-2/40"
+              >
+                <div className="text-[10px] font-semibold uppercase tracking-wide text-ink-faint">
+                  {status}
+                </div>
+                <div className="mt-0.5 text-lg font-semibold tabular-nums text-ink dark:text-ink">
+                  {data.summary.paymentStatusCounts[status] ?? 0}
+                </div>
+              </div>
+            ))}
           </div>
         )}
       </div>
@@ -288,24 +258,6 @@ function RevenueStat({
         <div className="mt-0.5 truncate text-[10.5px] text-ink-muted sm:text-[11.5px] dark:text-ink-muted">{sub}</div>
       ) : null}
     </div>
-  );
-}
-
-function StatusPill({ status }: { status: RecentPaymentRow["status"] }) {
-  const map: Record<RecentPaymentRow["status"], string> = {
-    success:
-      "border-[rgba(0,153,255,0.28)] bg-[var(--accent-blue-soft)] text-[var(--accent-blue)] dark:border-[rgba(0,153,255,0.28)] dark:bg-[var(--accent-blue-soft)] dark:text-[var(--accent-blue)]",
-    pending:
-      "border-[rgba(245,158,11,0.28)] bg-[rgba(245,158,11,0.08)] text-warning dark:border-[rgba(245,158,11,0.28)] dark:bg-[rgba(245,158,11,0.12)] dark:text-warning",
-    failed:
-      "border-[rgba(239,68,68,0.28)] bg-[rgba(239,68,68,0.08)] text-danger dark:border-[rgba(239,68,68,0.28)] dark:bg-[rgba(239,68,68,0.12)] dark:text-danger",
-    abandoned:
-      "border-hairline bg-canvas text-ink-muted dark:border-hairline dark:bg-surface-1/30 dark:text-ink-faint",
-  };
-  return (
-    <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10.5px] font-medium uppercase tracking-wide ${map[status]}`}>
-      {status}
-    </span>
   );
 }
 

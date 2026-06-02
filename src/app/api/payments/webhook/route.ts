@@ -52,7 +52,7 @@ export const POST = withErrorHandler(async (req) => {
   }
 
   try {
-    await confirmPaymentByReference(reference);
+    await confirmPaymentByReference(reference, { source: "webhook" });
   } catch (err) {
     // Swallow - Paystack will retry forever otherwise. The original error is
     // logged for ops; downstream `/verify` calls will surface the right state

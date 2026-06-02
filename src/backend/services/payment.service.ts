@@ -9,6 +9,7 @@ import {
   User,
   type DownloadGrantDoc,
   type PaymentDoc,
+  type PaymentStatus,
 } from "@/backend/db/models";
 import { sendReceiptEmail } from "@/backend/email/send-receipt";
 import { env } from "@/backend/env";
@@ -20,6 +21,19 @@ import {
 
 const PRICE_NGN = env.PAYMENT_DOWNLOAD_PRICE_NGN;
 const GRANT_EXPIRY_HOURS = env.PAYMENT_GRANT_EXPIRY_HOURS;
+const ATTEMPT_EXPIRY_MINUTES = env.PAYMENT_ATTEMPT_EXPIRY_MINUTES;
+const PAYSTACK_ACTIVE_STATUSES: PaymentStatus[] = [
+  "pending",
+  "ongoing",
+  "processing",
+  "queued",
+  "timeout",
+];
+const PAYSTACK_FINAL_FAILURE_STATUSES: PaymentStatus[] = [
+  "failed",
+  "abandoned",
+  "reversed",
+];
 
 export type PriceQuote = {
   amountKobo: number;
@@ -37,6 +51,49 @@ export function quoteDownloadPrice(): PriceQuote {
     amountNgn: PRICE_NGN,
     currency: "NGN",
   };
+}
+
+function attemptExpiresAt(now = new Date()): Date {
+  return new Date(now.getTime() + ATTEMPT_EXPIRY_MINUTES * 60 * 1000);
+}
+
+function isPaymentStatus(value: string): value is PaymentStatus {
+  return [
+    "pending",
+    "success",
+    "failed",
+    "abandoned",
+    "cancelled",
+    "expired",
+    "timeout",
+    "ongoing",
+    "processing",
+    "queued",
+    "reversed",
+  ].includes(value);
+}
+
+function localStatusFromPaystack(status: string): PaymentStatus {
+  return isPaymentStatus(status) ? status : "failed";
+}
+
+function appendStatusHistory(
+  payment: PaymentDoc,
+  input: {
+    status: PaymentStatus;
+    source: "init" | "popup" | "verify" | "webhook" | "system";
+    message?: string | null;
+    paystackStatus?: string | null;
+    at?: Date;
+  }
+): void {
+  payment.statusHistory.push({
+    status: input.status,
+    source: input.source,
+    message: input.message ?? null,
+    paystackStatus: input.paystackStatus ?? null,
+    at: input.at ?? new Date(),
+  });
 }
 
 export type ActiveGrantSummary = {
@@ -165,14 +222,24 @@ export async function initializePayment(opts: {
 
   const userObjectId = new mongoose.Types.ObjectId(opts.userId);
   const templateObjectId = new mongoose.Types.ObjectId(opts.templateId);
-  const thirtyMinutesAgo = new Date(Date.now() - 30 * 60 * 1000);
+  const now = new Date();
+
+  await expireStalePaymentAttempts(now);
 
   const existing = await Payment.findOne({
     userId: userObjectId,
     templateId: templateObjectId,
     userDesignId: opts.userDesignId ?? null,
-    status: "pending",
-    initializedAt: { $gt: thirtyMinutesAgo },
+    status: { $in: PAYSTACK_ACTIVE_STATUSES },
+    $or: [
+      { expiresAt: { $gt: now } },
+      {
+        expiresAt: null,
+        initializedAt: {
+          $gt: new Date(now.getTime() - ATTEMPT_EXPIRY_MINUTES * 60 * 1000),
+        },
+      },
+    ],
   })
     .sort({ initializedAt: -1 })
     .lean();
@@ -198,6 +265,16 @@ export async function initializePayment(opts: {
     currency: "NGN",
     paystackReference: reference,
     status: "pending",
+    initializedAt: now,
+    expiresAt: attemptExpiresAt(now),
+    statusHistory: [
+      {
+        status: "pending",
+        source: "init",
+        message: "Payment attempt initialized",
+        at: now,
+      },
+    ],
   });
 
   return {
@@ -225,9 +302,11 @@ export type ConfirmedPayment = {
  * make that race serialised.
  */
 export async function confirmPaymentByReference(
-  reference: string
+  reference: string,
+  options: { source?: "verify" | "webhook" } = {}
 ): Promise<ConfirmedPayment> {
   await connectDb();
+  const source = options.source ?? "verify";
 
   const payment = await Payment.findOne({ paystackReference: reference });
   if (!payment) {
@@ -238,7 +317,8 @@ export async function confirmPaymentByReference(
     );
   }
 
-  // Already finalized - return the existing grant (or refuse if it failed).
+  // Already finalized - return the existing grant. Every other status remains
+  // retryable because Paystack can still be the source of truth later.
   if (payment.status === "success") {
     const grant = await DownloadGrant.findOne({ paymentId: payment._id });
     if (!grant) {
@@ -249,27 +329,52 @@ export async function confirmPaymentByReference(
     }
     return { payment, grant };
   }
-  if (payment.status === "failed" || payment.status === "abandoned") {
-    throw new AppError(
-      "PAYMENT_NOT_SUCCESSFUL",
-      `Payment is in '${payment.status}' state and cannot be confirmed`,
-      409
-    );
+
+  let result: Awaited<ReturnType<typeof verifyPaystackTransaction>>;
+  try {
+    result = await verifyPaystackTransaction(reference);
+  } catch (err) {
+    if (err instanceof AppError && err.code === "PAYMENT_VERIFY_FAILED") {
+      payment.status = "timeout";
+      payment.timedOutAt = new Date();
+      payment.lastVerifiedAt = new Date();
+      payment.failureReason = err.message;
+      appendStatusHistory(payment, {
+        status: "timeout",
+        source,
+        message: err.message,
+        paystackStatus: null,
+      });
+      await payment.save();
+    }
+    throw err;
   }
 
-  const result = await verifyPaystackTransaction(reference);
+  const paystackStatus = result.status;
+  const nextStatus = localStatusFromPaystack(paystackStatus);
+  payment.lastVerifiedAt = new Date();
+  payment.paystackStatus = paystackStatus;
 
-  if (result.status !== "success") {
-    payment.status = result.status === "abandoned" ? "abandoned" : "failed";
-    payment.failedAt = new Date();
-    payment.failureReason = `Paystack reported '${result.status}'`;
+  if (nextStatus !== "success") {
+    payment.status = nextStatus;
+    if (PAYSTACK_FINAL_FAILURE_STATUSES.includes(nextStatus)) {
+      payment.failedAt = new Date();
+    }
+    if (nextStatus === "timeout") payment.timedOutAt = new Date();
+    payment.failureReason = `Paystack reported '${paystackStatus}'`;
     payment.providerResponse = result.raw;
+    appendStatusHistory(payment, {
+      status: nextStatus,
+      source,
+      message: payment.failureReason,
+      paystackStatus,
+    });
     await payment.save();
     throw new AppError(
       "PAYMENT_NOT_SUCCESSFUL",
-      `Payment was not successful (${result.status})`,
+      `Payment was not successful (${paystackStatus})`,
       402,
-      { paystackStatus: result.status }
+      { paystackStatus }
     );
   }
 
@@ -279,8 +384,16 @@ export async function confirmPaymentByReference(
   if (result.amount < payment.amountKobo) {
     payment.status = "failed";
     payment.failedAt = new Date();
+    payment.paystackStatus = result.status;
+    payment.lastVerifiedAt = new Date();
     payment.failureReason = `Paid amount ${result.amount} below expected ${payment.amountKobo}`;
     payment.providerResponse = result.raw;
+    appendStatusHistory(payment, {
+      status: "failed",
+      source,
+      message: payment.failureReason,
+      paystackStatus: result.status,
+    });
     await payment.save();
     throw new AppError(
       "PAYMENT_AMOUNT_MISMATCH",
@@ -291,7 +404,16 @@ export async function confirmPaymentByReference(
 
   payment.status = "success";
   payment.paidAt = result.paidAt ? new Date(result.paidAt) : new Date();
+  payment.paystackStatus = result.status;
+  payment.lastVerifiedAt = new Date();
   payment.providerResponse = result.raw;
+  payment.failureReason = null;
+  appendStatusHistory(payment, {
+    status: "success",
+    source,
+    message: "Paystack verified successful payment",
+    paystackStatus: result.status,
+  });
   await payment.save();
 
   const grant = await issueGrantForPayment(payment);
@@ -306,6 +428,62 @@ export async function confirmPaymentByReference(
   });
 
   return { payment, grant };
+}
+
+export async function markPaymentCancelledByReference(input: {
+  reference: string;
+  userId: string;
+}): Promise<void> {
+  await connectDb();
+  const payment = await Payment.findOne({ paystackReference: input.reference });
+  if (!payment) return;
+  if (String(payment.userId) !== input.userId) {
+    throw new AppError("FORBIDDEN", "This payment belongs to a different user", 403);
+  }
+  if (payment.status === "success") return;
+
+  payment.status = "cancelled";
+  payment.cancelledAt = new Date();
+  payment.failureReason = "Customer cancelled the Paystack popup";
+  appendStatusHistory(payment, {
+    status: "cancelled",
+    source: "popup",
+    message: payment.failureReason,
+    paystackStatus: payment.paystackStatus ?? null,
+  });
+  await payment.save();
+}
+
+export async function expireStalePaymentAttempts(now = new Date()): Promise<number> {
+  await connectDb();
+  const legacyCutoff = new Date(
+    now.getTime() - ATTEMPT_EXPIRY_MINUTES * 60 * 1000
+  );
+  const res = await Payment.updateMany(
+    {
+      status: { $in: PAYSTACK_ACTIVE_STATUSES },
+      $or: [
+        { expiresAt: { $lt: now } },
+        { expiresAt: null, initializedAt: { $lt: legacyCutoff } },
+      ],
+    },
+    {
+      $set: {
+        status: "expired",
+        expiredAt: now,
+        failureReason: "Payment attempt expired before successful verification",
+      },
+      $push: {
+        statusHistory: {
+          status: "expired",
+          source: "system",
+          message: "Payment attempt expired before successful verification",
+          at: now,
+        },
+      },
+    }
+  );
+  return res.modifiedCount;
 }
 
 async function sendReceiptForPayment(payment: PaymentDoc): Promise<void> {

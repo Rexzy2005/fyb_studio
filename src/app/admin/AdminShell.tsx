@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
+  CreditCard,
   LayoutDashboard,
   LayoutGrid,
   Menu,
@@ -12,6 +13,7 @@ import {
   PanelLeftClose,
   PanelLeftOpen,
   PlusSquare,
+  ShieldCheck,
   Users,
   X,
   type LucideIcon,
@@ -33,6 +35,8 @@ type NavItem = {
 const NAV: NavItem[] = [
   { href: "/admin", label: "Dashboard", icon: LayoutDashboard },
   { href: "/admin/templates", label: "Templates", icon: LayoutGrid, prefix: true },
+  { href: "/admin/reservations", label: "Reservations", icon: ShieldCheck, prefix: true },
+  { href: "/admin/payments", label: "Payment History", icon: CreditCard, prefix: true },
   { href: "/admin/templates/new", label: "Create Template", icon: PlusSquare },
   { href: "/admin/users", label: "Users", icon: Users, prefix: true },
   { href: "/admin/feedback", label: "Feedback", icon: MessageSquareText, prefix: true },

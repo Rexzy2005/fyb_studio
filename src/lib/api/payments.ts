@@ -82,6 +82,18 @@ export async function verifyPayment(reference: string): Promise<VerifyResult> {
   return (await res.json()) as VerifyResult;
 }
 
+export async function recordPaymentEvent(opts: {
+  reference: string;
+  event: "cancelled";
+}): Promise<void> {
+  const res = await fetch("/api/payments/events", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(opts),
+  });
+  if (!res.ok) throw new Error(await readError(res));
+}
+
 export type PendingGrant = {
   grantId: string;
   paymentId: string;

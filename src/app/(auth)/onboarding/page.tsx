@@ -52,7 +52,7 @@ export default async function OnboardingPage({
           backdropFilter: "blur(20px)",
         }}
       >
-        <div className="mx-auto flex h-full max-w-[1200px] items-center justify-between gap-3 px-4 sm:px-8">
+        <div className="mx-auto flex h-full max-w-300 items-center justify-between gap-3 px-4 sm:px-8">
           <Link href="/" className="flex items-center gap-1.5">
             <span
               aria-hidden
@@ -147,7 +147,7 @@ export default async function OnboardingPage({
 
       {/* Hero + form area */}
       <main
-        className="relative mx-auto flex w-full max-w-[520px] flex-col px-5 pb-20 pt-10 sm:pt-16"
+        className="relative mx-auto flex w-full max-w-130 flex-col px-5 pb-20 pt-10 sm:pt-16"
         style={{ zIndex: 1 }}
       >
         {/* Eyebrow */}

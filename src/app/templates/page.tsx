@@ -489,10 +489,7 @@ function TemplateCard({
   const [visible, setVisible] = useState(false);
   const toast = useToast();
   const cat = deriveCategoryLabel(t);
-  const accent =
-    cat === "Sign-out" ? "#4ECDC4" :
-    cat === "FYB"      ? "#FF6B6B" :
-    "#FFD700";
+  const brandGold = "#FFD700";
 
   useEffect(() => {
     const el = ref.current;
@@ -541,82 +538,111 @@ function TemplateCard({
       ref={ref}
       href={`/templates/${t.id}/use`}
       onClick={(e) => onClick(e, t)}
-      className="group relative block overflow-hidden transition p-2 sm:p-3"
+      className="group relative block overflow-hidden p-1.5 transition sm:p-2"
       style={{
-        background: "linear-gradient(180deg, rgba(255,255,255,0.04), rgba(255,255,255,0.01))",
-        border: `1px solid rgba(255,215,0,0.15)`,
-        borderRadius: 12,
+        background:
+          "linear-gradient(180deg, rgba(255,215,0,0.16), rgba(255,255,255,0.045) 18%, rgba(7,7,7,0.98) 100%)",
+        border: "1px solid rgba(255,215,0,0.18)",
+        borderRadius: 8,
         opacity: visible ? 1 : 0,
-        transform: visible ? "translateY(0) scale(1)" : "translateY(20px) scale(0.97)",
-        transition: `opacity 600ms ${delay}ms cubic-bezier(0.16, 1, 0.3, 1), transform 600ms ${delay}ms cubic-bezier(0.16, 1, 0.3, 1), border-color 250ms, box-shadow 250ms`,
-        boxShadow: "0 8px 24px rgba(0,0,0,0.3)",
+        transform: visible ? "translateY(0)" : "translateY(16px)",
+        transition: `opacity 520ms ${delay}ms cubic-bezier(0.16, 1, 0.3, 1), transform 520ms ${delay}ms cubic-bezier(0.16, 1, 0.3, 1), border-color 220ms, background 220ms, box-shadow 220ms`,
+        boxShadow: "0 14px 34px rgba(0,0,0,0.34), inset 0 1px 0 rgba(255,255,255,0.08)",
+        willChange: "transform",
       }}
       onMouseEnter={(e) => {
-        e.currentTarget.style.borderColor = accent;
-        e.currentTarget.style.boxShadow = `0 14px 40px rgba(0,0,0,0.5), 0 0 30px ${accent}30`;
-        e.currentTarget.style.transform = "translateY(-4px) scale(1)";
+        e.currentTarget.style.background =
+          "linear-gradient(180deg, rgba(255,215,0,0.22), rgba(255,255,255,0.065) 18%, rgba(10,10,10,0.99) 100%)";
+        e.currentTarget.style.borderColor = "rgba(255,215,0,0.48)";
+        e.currentTarget.style.boxShadow =
+          "0 24px 46px rgba(0,0,0,0.52), 0 0 0 1px rgba(255,215,0,0.1), inset 0 1px 0 rgba(255,255,255,0.1)";
+        e.currentTarget.style.transform = "translateY(-6px)";
       }}
       onMouseLeave={(e) => {
-        e.currentTarget.style.borderColor = "rgba(255,215,0,0.15)";
-        e.currentTarget.style.boxShadow = "0 8px 24px rgba(0,0,0,0.3)";
-        e.currentTarget.style.transform = "translateY(0) scale(1)";
+        e.currentTarget.style.background =
+          "linear-gradient(180deg, rgba(255,215,0,0.16), rgba(255,255,255,0.045) 18%, rgba(7,7,7,0.98) 100%)";
+        e.currentTarget.style.borderColor = "rgba(255,215,0,0.18)";
+        e.currentTarget.style.boxShadow = "0 14px 34px rgba(0,0,0,0.34), inset 0 1px 0 rgba(255,255,255,0.08)";
+        e.currentTarget.style.transform = "translateY(0)";
       }}
       aria-label={`Use template ${t.name}`}
     >
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-x-4 top-0 h-px opacity-80 transition-opacity duration-300 group-hover:opacity-100"
+        style={{ background: "linear-gradient(90deg, transparent, rgba(255,215,0,0.9), transparent)" }}
+      />
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-0 opacity-0 transition-opacity duration-300 group-hover:opacity-100"
+        style={{
+          background:
+            "linear-gradient(135deg, rgba(255,215,0,0.1), transparent 34%, transparent 66%, rgba(255,140,66,0.06))",
+        }}
+      />
       {/* Image cell */}
       <div
-        className="relative aspect-[4/5] w-full overflow-hidden"
+        className="relative aspect-[4/5] w-full overflow-hidden transition-transform duration-300 ease-out group-hover:-translate-y-0.5"
         style={{
-          background: `linear-gradient(140deg, rgba(255,255,255,0.04), rgba(0,0,0,0.4))`,
+          background: "linear-gradient(180deg, rgba(255,255,255,0.04), rgba(0,0,0,0.18))",
+          border: "1px solid rgba(255,215,0,0.12)",
           borderRadius: 8,
+          boxShadow: "inset 0 0 0 1px rgba(255,255,255,0.025)",
         }}
       >
+        <div
+          aria-hidden
+          className="absolute inset-x-3 top-3 z-[1] h-px opacity-70 transition-opacity duration-300 group-hover:opacity-100"
+          style={{ background: "linear-gradient(90deg, transparent, rgba(255,215,0,0.55), transparent)" }}
+        />
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
           src={t.coverUrl}
           alt={`${t.name} preview`}
           loading="lazy"
           decoding="async"
-          className="absolute inset-0 h-full w-full object-contain p-1 sm:p-2 transition-transform duration-700 ease-out group-hover:scale-[1.04]"
+          className="absolute inset-0 h-full w-full object-contain p-1.5 transition-transform duration-500 ease-out group-hover:scale-[1.035] sm:p-2.5"
         />
         {/* Category pill */}
-        <div className="absolute right-1.5 top-1.5 sm:right-2 sm:top-2">
+        <div className="absolute right-1.5 top-1.5 transition-transform duration-300 ease-out group-hover:-translate-y-0.5 sm:right-2 sm:top-2">
           <span
             style={{
-              ...mono, fontSize: 7, letterSpacing: "0.14em",
-              color: accent,
-              background: "rgba(0,0,0,0.65)",
+              ...mono, fontSize: 7, letterSpacing: "0.12em",
+              color: "#070707",
+              background: "linear-gradient(180deg, #FFE878, #DFAF1F)",
               backdropFilter: "blur(8px)",
-              border: `1px solid ${accent}40`,
-              padding: "3px 7px",
+              border: "1px solid rgba(255,255,255,0.22)",
+              padding: "3px 8px",
               borderRadius: 100,
               textTransform: "uppercase",
-              fontWeight: 700,
-              display: "inline-flex", alignItems: "center", gap: 4,
+              fontWeight: 800,
+              display: "inline-flex", alignItems: "center",
+              boxShadow: "0 6px 16px rgba(0,0,0,0.28)",
             }}
           >
-            <span style={{ width: 4, height: 4, borderRadius: "50%", background: accent }} />
             {cat}
           </span>
         </div>
-        {/* "Reserved for your dept" badge - top-left, shown only when applicable */}
-        {t.reservedByMyDept && (
-          <div className="absolute left-1.5 top-1.5 sm:left-2 sm:top-2">
+        {/* Reservation badge - free templates stay untagged. */}
+        {t.isReserved && (
+          <div className="absolute left-1.5 top-1.5 transition-transform duration-300 ease-out group-hover:-translate-y-0.5 sm:left-2 sm:top-2">
             <span
               style={{
-                ...mono, fontSize: 7, letterSpacing: "0.14em",
-                color: "#000",
-                background: "linear-gradient(140deg, #FFD700, #FF8C42)",
-                padding: "3px 7px",
+                ...mono, fontSize: 7, letterSpacing: "0.12em",
+                color: "#fff",
+                background: "rgba(120,20,20,0.9)",
+                padding: "3px 8px",
                 borderRadius: 100,
                 textTransform: "uppercase",
                 fontWeight: 800,
-                display: "inline-flex", alignItems: "center", gap: 4,
-                boxShadow: "0 4px 12px rgba(255,180,0,0.4)",
+                display: "inline-flex", alignItems: "center",
+                border: "1px solid rgba(255,255,255,0.22)",
+                backdropFilter: "blur(8px)",
+                boxShadow: "0 6px 16px rgba(0,0,0,0.28)",
               }}
+              title={t.reservedByMyDept ? "Reserved for your department" : "Reserved by a department"}
             >
-              <span aria-hidden>✦</span>
-              Yours
+              Taken
             </span>
           </div>
         )}
@@ -625,11 +651,16 @@ function TemplateCard({
           aria-hidden
           style={{
             position: "absolute", bottom: 0, left: 0, right: 0, height: 36,
-            background: "linear-gradient(to top, rgba(0,0,0,0.4), transparent)",
+            background: "linear-gradient(to top, rgba(0,0,0,0.46), transparent)",
             opacity: 0, transition: "opacity 250ms",
             pointerEvents: "none",
           }}
           className="group-hover:opacity-100"
+        />
+        <div
+          aria-hidden
+          className="absolute inset-x-0 bottom-0 h-px opacity-70 transition-opacity duration-300 group-hover:opacity-100"
+          style={{ background: `linear-gradient(90deg, transparent, ${brandGold}90, transparent)` }}
         />
         {/* Quick-share button - always visible, anyone can share */}
         <button
@@ -637,13 +668,13 @@ function TemplateCard({
           onClick={handleShare}
           aria-label={`Share ${t.name}`}
           title="Share this design"
-          className="absolute bottom-1.5 right-1.5 inline-flex items-center justify-center rounded-full transition active:scale-90 sm:bottom-2 sm:right-2"
+          className="absolute bottom-1.5 right-1.5 inline-flex items-center justify-center rounded-full opacity-100 transition duration-200 active:scale-90 sm:bottom-2 sm:right-2 sm:translate-y-1 sm:opacity-0 sm:group-hover:translate-y-0 sm:group-hover:opacity-100"
           style={{
             width: 28, height: 28,
-            background: "rgba(0,0,0,0.65)",
+            background: "rgba(0,0,0,0.72)",
             backdropFilter: "blur(8px)",
-            border: `1px solid ${accent}40`,
-            color: accent,
+            border: "1px solid rgba(255,215,0,0.28)",
+            color: brandGold,
           }}
         >
           <Share2 className="h-3.5 w-3.5" />
@@ -651,23 +682,27 @@ function TemplateCard({
       </div>
 
       {/* Name + CTA */}
-      <div className="mt-2 flex items-center justify-between gap-1.5 px-0.5 pb-0.5 sm:mt-3 sm:px-1 sm:pb-1">
+      <div className="relative mt-2.5 flex items-center justify-between gap-2 px-1 pb-1 transition-transform duration-300 ease-out group-hover:translate-y-[-1px] sm:mt-3 sm:px-1.5 sm:pb-1.5">
         <div className="min-w-0 flex-1">
           <div
             className="truncate"
             title={t.name}
-            style={{ ...jkt, fontSize: 12, fontWeight: 700, color: "#fff", letterSpacing: "-0.01em" }}
+            style={{ ...jkt, fontSize: 13, fontWeight: 800, color: "#fff" }}
           >
             {t.name}
           </div>
-          <div className="mt-0.5 truncate" style={{ ...mono, fontSize: 7.5, letterSpacing: "0.14em", color: "rgba(255,255,255,0.3)", textTransform: "uppercase" }}>
-            Tap to open
+          <div className="mt-1 truncate" style={{ ...mono, fontSize: 7.5, letterSpacing: "0.14em", color: "rgba(255,215,0,0.62)", textTransform: "uppercase", fontWeight: 700 }}>
+            FYB Studio
           </div>
         </div>
         <span
           aria-hidden
-          className="shrink-0 transition group-hover:translate-x-0.5"
-          style={{ color: accent }}
+          className="grid h-7 w-7 shrink-0 place-items-center rounded-full transition duration-300 group-hover:translate-x-1"
+          style={{
+            color: "#050505",
+            background: "linear-gradient(180deg, #FFE878, #DFAF1F)",
+            boxShadow: "0 8px 18px rgba(0,0,0,0.25)",
+          }}
         >
           <ArrowRight size={12} strokeWidth={2.5} />
         </span>

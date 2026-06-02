@@ -4,6 +4,7 @@ import { connectDb } from "@/backend/db/client";
 import {
   DownloadEvent,
   Payment,
+  type PaymentStatus,
 } from "@/backend/db/models";
 
 export type RevenueSummary = {
@@ -13,6 +14,7 @@ export type RevenueSummary = {
   uniquePayingUsers: number;
   pendingPayments: number;
   failedPayments: number;
+  paymentStatusCounts: Record<PaymentStatus, number>;
   averageDownloadsPerPaidUser: number;
   // Snapshots over the last 30 days for the dashboard's headline numbers.
   last30Days: {
@@ -40,14 +42,40 @@ export type TopTemplateRow = {
 export type RecentPaymentRow = {
   id: string;
   amountNgn: number;
-  status: "pending" | "success" | "failed" | "abandoned";
+  status: PaymentStatus;
+  paystackStatus: string | null;
   paystackReference: string;
   templateName: string | null;
   userName: string | null;
   userEmail: string | null;
   createdAt: string;
+  initializedAt: string | null;
+  expiresAt: string | null;
   paidAt: string | null;
+  lastVerifiedAt: string | null;
+  failureReason: string | null;
+  journey: Array<{
+    status: PaymentStatus;
+    source: string;
+    message: string | null;
+    paystackStatus: string | null;
+    at: string;
+  }>;
 };
+
+const ALL_PAYMENT_STATUSES: PaymentStatus[] = [
+  "pending",
+  "success",
+  "failed",
+  "abandoned",
+  "cancelled",
+  "expired",
+  "timeout",
+  "ongoing",
+  "processing",
+  "queued",
+  "reversed",
+];
 
 export async function getRevenueSummary(): Promise<RevenueSummary> {
   await connectDb();
@@ -58,6 +86,7 @@ export async function getRevenueSummary(): Promise<RevenueSummary> {
     payingUsersAgg,
     pendingCount,
     failedCount,
+    statusAgg,
     last30PaymentAgg,
     totalDownloadsCount,
     last30DownloadsCount,
@@ -72,7 +101,14 @@ export async function getRevenueSummary(): Promise<RevenueSummary> {
     ]),
     Payment.distinct("userId", { status: "success" }),
     Payment.countDocuments({ status: "pending" }),
-    Payment.countDocuments({ status: { $in: ["failed", "abandoned"] } }),
+    Payment.countDocuments({
+      status: {
+        $in: ["failed", "abandoned", "cancelled", "expired", "timeout", "reversed"],
+      },
+    }),
+    Payment.aggregate<{ _id: PaymentStatus; count: number }>([
+      { $group: { _id: "$status", count: { $sum: 1 } } },
+    ]),
     Payment.aggregate<{
       _id: null;
       totalKobo: number;
@@ -90,6 +126,16 @@ export async function getRevenueSummary(): Promise<RevenueSummary> {
   const last30Kobo = last30PaymentAgg[0]?.totalKobo ?? 0;
   const last30Count = last30PaymentAgg[0]?.count ?? 0;
   const uniquePayingUsers = Array.isArray(payingUsersAgg) ? payingUsersAgg.length : 0;
+  const paymentStatusCounts = ALL_PAYMENT_STATUSES.reduce(
+    (acc, status) => {
+      acc[status] = 0;
+      return acc;
+    },
+    {} as Record<PaymentStatus, number>
+  );
+  for (const row of statusAgg) {
+    if (row._id in paymentStatusCounts) paymentStatusCounts[row._id] = row.count;
+  }
 
   return {
     successfulPayments: successful,
@@ -98,6 +144,7 @@ export async function getRevenueSummary(): Promise<RevenueSummary> {
     uniquePayingUsers,
     pendingPayments: pendingCount,
     failedPayments: failedCount,
+    paymentStatusCounts,
     averageDownloadsPerPaidUser:
       uniquePayingUsers > 0
         ? Math.round((totalDownloadsCount / uniquePayingUsers) * 10) / 10
@@ -253,12 +300,24 @@ export async function getRecentPayments(limit = 20): Promise<RecentPaymentRow[]>
       id: String(r._id),
       amountNgn: r.amountKobo / 100,
       status: r.status as RecentPaymentRow["status"],
+      paystackStatus: r.paystackStatus ?? null,
       paystackReference: r.paystackReference,
       templateName: template?.name ?? null,
       userName: user?.name ?? null,
       userEmail: user?.email ?? null,
       createdAt: r.createdAt.toISOString(),
+      initializedAt: r.initializedAt ? new Date(r.initializedAt).toISOString() : null,
+      expiresAt: r.expiresAt ? new Date(r.expiresAt).toISOString() : null,
       paidAt: r.paidAt ? r.paidAt.toISOString() : null,
+      lastVerifiedAt: r.lastVerifiedAt ? new Date(r.lastVerifiedAt).toISOString() : null,
+      failureReason: r.failureReason ?? null,
+      journey: (r.statusHistory ?? []).map((entry) => ({
+        status: entry.status as PaymentStatus,
+        source: entry.source,
+        message: entry.message ?? null,
+        paystackStatus: entry.paystackStatus ?? null,
+        at: entry.at ? new Date(entry.at).toISOString() : r.createdAt.toISOString(),
+      })),
     };
   });
 }

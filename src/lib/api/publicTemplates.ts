@@ -31,6 +31,11 @@ export type PublicTemplateListItem = {
   publishedAt: string;
   updatedAt: string;
   /**
+   * True when any department has reserved this template.
+   * Free templates have this set to false and should not show a reservation tag.
+   */
+  isReserved: boolean;
+  /**
    * True when the viewer is signed in with a department AND the template's
    * head has reserved it for that department. False for guests / non-members.
    * The /api/templates list endpoint pins these to the top of the response.

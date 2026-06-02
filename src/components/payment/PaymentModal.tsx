@@ -6,6 +6,7 @@ import { ShieldCheck, X } from "lucide-react";
 import {
   initializePayment,
   openPaystackPopup,
+  recordPaymentEvent,
   verifyPayment,
 } from "@/lib/api/payments";
 import { recordPendingDownload } from "@/lib/payment/pendingDownloads";
@@ -101,7 +102,14 @@ export function PaymentModal({
         amountKobo: init.amountKobo,
         email: customerEmail,
         onSuccess: () => {},
-        onCancel: () => {},
+        onCancel: () => {
+          void recordPaymentEvent({
+            reference: init.reference,
+            event: "cancelled",
+          }).catch((err) => {
+            console.error("[payment] cancel event failed", err);
+          });
+        },
       });
 
       setStage({ kind: "verifying" });
@@ -418,4 +426,3 @@ export function PaymentModal({
     </div>
   );
 }
-

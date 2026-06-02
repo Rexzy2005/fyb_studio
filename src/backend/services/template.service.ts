@@ -40,6 +40,11 @@ export type TemplateListItem = {
    * those templates and sort them to the top. Always false for guests.
    */
   reservedByMyDept: boolean;
+  /**
+   * True when any department has reserved this template. Lets public gallery
+   * cards show a "Taken" badge while free templates remain untagged.
+   */
+  isReserved: boolean;
 };
 
 export type TemplateDetailView = {
@@ -184,7 +189,10 @@ function attachPluginImagesToNormalized(
   return next;
 }
 
-function toListItem(doc: TemplateDoc, reservedByMyDept = false): TemplateListItem {
+function toListItem(
+  doc: TemplateDoc,
+  flags: { reservedByMyDept?: boolean; isReserved?: boolean } = {}
+): TemplateListItem {
   return {
     id: doc._id.toString(),
     name: doc.name,
@@ -194,7 +202,8 @@ function toListItem(doc: TemplateDoc, reservedByMyDept = false): TemplateListIte
     coverHeight: doc.cover.height ?? null,
     publishedAt: (doc.publishedAt ?? doc.createdAt).toISOString(),
     updatedAt: doc.updatedAt.toISOString(),
-    reservedByMyDept,
+    reservedByMyDept: Boolean(flags.reservedByMyDept),
+    isReserved: Boolean(flags.isReserved),
   };
 }
 
@@ -417,20 +426,41 @@ export async function listPublishedTemplates(opts?: {
     .select("name category cover publishedAt updatedAt createdAt status")
     .lean<TemplateDoc[]>();
 
+  const templateIds = docs.map((d) => d._id);
+  const locks = templateIds.length
+    ? await TemplateLock.find({ templateId: { $in: templateIds } })
+        .select("templateId departmentId")
+        .lean<
+          Array<{
+            templateId: mongoose.Types.ObjectId | string;
+            departmentId: mongoose.Types.ObjectId | string;
+          }>
+        >()
+    : [];
+
+  const reservedTemplateIds = new Set(locks.map((l) => String(l.templateId)));
   const deptId = opts?.viewerDepartmentId;
   if (!deptId || !mongoose.isValidObjectId(deptId)) {
-    // Guest or no-dept user: no priority sorting, just return the natural order
-    return docs.map((d) => toListItem(d, false));
+    // Guest or no-dept user: no priority sorting, just return the natural order.
+    return docs.map((d) =>
+      toListItem(d, { isReserved: reservedTemplateIds.has(String(d._id)) })
+    );
   }
 
-  // Pull all locks for this dept in a single query, then sort dept-reserved
+  // Pull locks from the shared list, then sort dept-reserved
   // templates to the top while preserving the publishedAt order within groups.
-  const locks = await TemplateLock.find({ departmentId: deptId })
-    .select("templateId")
-    .lean<Array<{ templateId: mongoose.Types.ObjectId | string }>>();
-  const reservedSet = new Set(locks.map((l) => String(l.templateId)));
+  const reservedSet = new Set(
+    locks
+      .filter((l) => String(l.departmentId) === deptId)
+      .map((l) => String(l.templateId))
+  );
 
-  const items = docs.map((d) => toListItem(d, reservedSet.has(String(d._id))));
+  const items = docs.map((d) =>
+    toListItem(d, {
+      reservedByMyDept: reservedSet.has(String(d._id)),
+      isReserved: reservedTemplateIds.has(String(d._id)),
+    })
+  );
   // Stable sort: reserved-by-my-dept first, otherwise keep existing order
   items.sort((a, b) => {
     if (a.reservedByMyDept === b.reservedByMyDept) return 0;

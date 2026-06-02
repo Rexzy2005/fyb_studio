@@ -36,6 +36,10 @@ const schema = z.object({
   // their download. Grants are single-use - this is a safety net for
   // unredeemed grants, NOT a re-download window. Default 7 days.
   PAYMENT_GRANT_EXPIRY_HOURS: z.coerce.number().int().positive().default(168),
+  // Minutes a checkout attempt can remain active before the local payment
+  // history marks it expired. Paystack may still be re-verified later by
+  // reference, but stale attempts stop showing as live pending payments.
+  PAYMENT_ATTEMPT_EXPIRY_MINUTES: z.coerce.number().int().positive().default(30),
 
   // Storage quota (in MB) for the MongoDB cluster the app talks to. Used
   // by the admin dashboard's storage panel to render a % used / left bar.

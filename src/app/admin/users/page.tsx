@@ -318,7 +318,7 @@ export default function AdminUsersPage() {
                   <ChevronLeft className="h-3.5 w-3.5" />
                   <span className="hidden sm:inline">Prev</span>
                 </button>
-                <div className="inline-flex h-9 min-w-[5rem] items-center justify-center rounded-xl border border-hairline bg-canvas px-3 text-xs font-semibold tabular-nums text-ink dark:border-hairline dark:bg-surface-2 dark:text-ink">
+                <div className="inline-flex h-9 min-w-20 items-center justify-center rounded-xl border border-hairline bg-canvas px-3 text-xs font-semibold tabular-nums text-ink dark:border-hairline dark:bg-surface-2 dark:text-ink">
                   Page {safePage} / {totalPages}
                 </div>
                 <button

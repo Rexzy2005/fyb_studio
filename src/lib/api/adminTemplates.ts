@@ -30,6 +30,8 @@ export type RemoteTemplateListItem = {
   coverHeight: number | null;
   publishedAt: string;
   updatedAt: string;
+  isReserved: boolean;
+  reservedByMyDept: boolean;
 };
 
 async function readError(res: Response): Promise<string> {

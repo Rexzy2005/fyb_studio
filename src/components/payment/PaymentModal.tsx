@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { ShieldCheck, X } from "lucide-react";
 
 import {
+  fetchActiveGrant,
   initializePayment,
   loadPaystackScript,
   openPaystackPopup,
@@ -38,6 +39,8 @@ type Stage =
 const FONT_JKT = "var(--font-plus-jakarta, var(--font-geist-sans)), sans-serif";
 const FONT_MONO = "var(--font-geist-mono), monospace";
 const FONT_SANS = "var(--font-geist-sans), sans-serif";
+const VERIFY_POLL_INTERVAL_MS = 2000;
+const VERIFY_MAX_WAIT_MS = 5 * 60 * 1000;
 
 export function PaymentModal({
   open,
@@ -133,6 +136,46 @@ function PaymentModalContent({
           ? "Confirming…"
           : `Pay ₦${(priceNgn ?? 1000).toLocaleString()}`;
 
+  function isRetryablePaystackMessage(message: string): boolean {
+    return /(not successful|pending|ongoing|processing|queued|timeout)/i.test(message);
+  }
+
+  function sleep(ms: number): Promise<void> {
+    return new Promise((resolve) => window.setTimeout(resolve, ms));
+  }
+
+  async function waitForPaymentGrant(reference: string) {
+    const start = Date.now();
+    let lastErrorMessage: string | null = null;
+
+    while (Date.now() - start < VERIFY_MAX_WAIT_MS) {
+      try {
+        const active = await fetchActiveGrant({ templateId, userDesignId });
+        if (active.grant) return { kind: "grant", reference } as const;
+      } catch {
+        // best-effort; fallback to verify below
+      }
+
+      try {
+        const verified = await verifyPayment(reference);
+        return { kind: "verify", reference: verified.grant.paystackReference } as const;
+      } catch (err) {
+        const message = err instanceof Error ? err.message : "";
+        if (isRetryablePaystackMessage(message)) {
+          lastErrorMessage = message;
+          await sleep(VERIFY_POLL_INTERVAL_MS);
+          continue;
+        }
+        throw err;
+      }
+    }
+
+    throw new Error(
+      lastErrorMessage ??
+        "Payment is taking too long to confirm. Please check your dashboard to resume."
+    );
+  }
+
   async function startPayment() {
     if (!customerEmail) {
       setStage({
@@ -175,15 +218,15 @@ function PaymentModalContent({
       });
 
       setStage({ kind: "verifying" });
-      const verifyResult = await verifyPayment(reference);
+      const confirmed = await waitForPaymentGrant(reference);
       recordPendingDownload({
-        reference: verifyResult.grant.paystackReference,
-        templateId: verifyResult.grant.templateId,
+        reference: confirmed.reference,
+        templateId,
         templateName,
-        userDesignId: verifyResult.grant.userDesignId,
+        userDesignId,
         paidAt: Date.now(),
       });
-      clearPaymentAttempt(verifyResult.grant.paystackReference);
+      clearPaymentAttempt(confirmed.reference);
       await onPaid();
       onClose();
     } catch (err) {

@@ -1704,6 +1704,8 @@ function PaymentRecoveryController({
   const inFlightRef = useRef(false);
   const resumeOnlyCheckedRef = useRef(false);
   const lastVerifyAtRef = useRef(0);
+  const stopRecoveryRef = useRef(false);
+  const lastReferenceRef = useRef<string | null>(null);
   const onCheckingChangeRef = useRef(onCheckingChange);
   const onExportRef = useRef(onExport);
 
@@ -1730,6 +1732,11 @@ function PaymentRecoveryController({
   useEffect(() => {
     const attempt = findPaymentAttemptForDesign(templateId, userDesignId);
     const reference = attempt?.reference ?? resumeReference;
+    const activeReference = reference ?? null;
+    if (activeReference !== lastReferenceRef.current) {
+      lastReferenceRef.current = activeReference;
+      stopRecoveryRef.current = false;
+    }
     if (!resumeRequested && !attempt && !reference) return;
     if (
       resumeRequested &&
@@ -1739,6 +1746,7 @@ function PaymentRecoveryController({
     ) {
       return;
     }
+    if (stopRecoveryRef.current) return;
     if (exporting || downloadChecking || inFlightRef.current) return;
 
     let cancelled = false;
@@ -1800,6 +1808,7 @@ function PaymentRecoveryController({
             )
           ) {
             clearPaymentAttempt(attempt.reference);
+            stopRecoveryRef.current = true;
           }
           if (!/not successful|pending|ongoing|processing|queued/i.test(message)) {
             console.warn("[payment] recovery check failed", err);

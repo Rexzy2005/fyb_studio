@@ -5,9 +5,11 @@ import { ShieldCheck, X } from "lucide-react";
 
 import {
   initializePayment,
+  loadPaystackScript,
   openPaystackPopup,
   recordPaymentEvent,
   verifyPayment,
+  type PaymentInitResponse,
 } from "@/lib/api/payments";
 import { recordPendingDownload } from "@/lib/payment/pendingDownloads";
 import {
@@ -56,12 +58,18 @@ function PaymentModalContent({
 }: Omit<Props, "open">) {
   const [stage, setStage] = useState<Stage>({ kind: "idle" });
   const [priceNgn, setPriceNgn] = useState<number | null>(null);
+  const [initData, setInitData] = useState<PaymentInitResponse | null>(null);
+  const [initError, setInitError] = useState<string | null>(null);
+  const [isPrepping, setIsPrepping] = useState(false);
   const backdropRef = useRef<HTMLDivElement>(null);
+  const initTokenRef = useRef(0);
 
   const submitting =
     stage.kind === "initializing" ||
     stage.kind === "popup" ||
     stage.kind === "verifying";
+
+  const isBusy = submitting || isPrepping;
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -78,9 +86,47 @@ function PaymentModalContent({
     return () => { document.body.style.overflow = prev; };
   }, []);
 
+  // Pre-initialize the payment while the modal is open so the Paystack
+  // popup can open immediately on click (avoids popup blockers on mobile).
+  useEffect(() => {
+    let cancelled = false;
+    const token = ++initTokenRef.current;
+
+    async function warmPayment() {
+      if (!customerEmail) return;
+      setIsPrepping(true);
+      setInitError(null);
+      try {
+        await onBeforeInitialize?.();
+        const init = await initializePayment({ templateId, userDesignId });
+        if (cancelled || initTokenRef.current !== token) return;
+        setInitData(init);
+        setPriceNgn(init.amountNgn);
+        await loadPaystackScript();
+      } catch (err) {
+        if (cancelled || initTokenRef.current !== token) return;
+        const message =
+          err instanceof Error
+            ? err.message
+            : "Payment could not be initialized. Please try again.";
+        setInitError(message);
+      } finally {
+        if (!cancelled && initTokenRef.current === token) setIsPrepping(false);
+      }
+    }
+
+    warmPayment();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [customerEmail, onBeforeInitialize, templateId, userDesignId]);
+
   const btnLabel =
     stage.kind === "initializing"
       ? "Preparing…"
+      : isPrepping
+        ? "Preparing…"
       : stage.kind === "popup"
         ? "Waiting for payment…"
         : stage.kind === "verifying"
@@ -98,8 +144,7 @@ function PaymentModalContent({
     setStage({ kind: "initializing" });
     let activeReference: string | null = null;
     try {
-      await onBeforeInitialize?.();
-      const init = await initializePayment({ templateId, userDesignId });
+      const init = initData ?? (await initializePayment({ templateId, userDesignId }));
       activeReference = init.reference;
       recordPaymentAttempt({
         reference: init.reference,
@@ -161,7 +206,7 @@ function PaymentModalContent({
       aria-modal="true"
       aria-label="Payment"
       onMouseDown={(e) => {
-        if (e.target === backdropRef.current && !submitting) onClose();
+        if (e.target === backdropRef.current && !isBusy) onClose();
       }}
       style={{
         background:
@@ -217,7 +262,7 @@ function PaymentModalContent({
           type="button"
           aria-label="Close"
           onClick={onClose}
-          disabled={submitting}
+          disabled={isBusy}
           className="absolute inline-flex items-center justify-center rounded-full transition active:scale-90 disabled:opacity-50"
           style={{
             top: 12, right: 12,
@@ -356,7 +401,7 @@ function PaymentModalContent({
               </div>
             ) : null}
 
-            {submitting ? (
+            {isBusy ? (
               <div
                 style={{
                   marginBottom: 12,
@@ -371,11 +416,26 @@ function PaymentModalContent({
                 <span className="fyb-dots" aria-hidden>
                   <span /> <span /> <span />
                 </span>
-                {stage.kind === "initializing"
+                {stage.kind === "initializing" || isPrepping
                   ? "Opening payment…"
                   : stage.kind === "popup"
                     ? "Waiting for Paystack…"
                     : "Confirming payment…"}
+              </div>
+            ) : null}
+
+            {initError && !submitting ? (
+              <div
+                style={{
+                  marginBottom: 12,
+                  padding: "10px 14px", borderRadius: 12,
+                  background: "rgba(239,68,68,0.10)",
+                  border: "1px solid rgba(239,68,68,0.32)",
+                  fontFamily: FONT_SANS, fontSize: 12.5,
+                  color: "#fca5a5",
+                }}
+              >
+                {initError}
               </div>
             ) : null}
 
@@ -386,7 +446,7 @@ function PaymentModalContent({
               <button
                 type="button"
                 onClick={startPayment}
-                disabled={submitting}
+                disabled={isBusy}
                 className="inline-flex flex-1 items-center justify-center rounded-2xl transition active:scale-95 disabled:cursor-not-allowed disabled:opacity-60 h-[56px] px-4 sm:h-[50px] sm:px-5"
                 style={{
                   fontFamily: FONT_MONO,
@@ -394,10 +454,10 @@ function PaymentModalContent({
                   fontWeight: 800,
                   letterSpacing: "0.08em",
                   textTransform: "uppercase",
-                  background: submitting
+                  background: isBusy
                     ? "rgba(255,215,0,0.18)"
                     : "#FFD700",
-                  color: submitting ? "rgba(255,255,255,0.7)" : "#000",
+                  color: isBusy ? "rgba(255,255,255,0.7)" : "#000",
                   boxShadow: submitting
                     ? "none"
                     : "0 12px 30px rgba(255,180,0,0.4), inset 0 1px 0 rgba(255,255,255,0.25)",
@@ -409,7 +469,7 @@ function PaymentModalContent({
               <button
                 type="button"
                 onClick={onClose}
-                disabled={submitting}
+                disabled={isBusy}
                 className="inline-flex flex-1 items-center justify-center rounded-2xl transition active:scale-95 disabled:opacity-50 h-[56px] px-4 sm:h-[50px] sm:px-5"
                 style={{
                   fontFamily: FONT_MONO,

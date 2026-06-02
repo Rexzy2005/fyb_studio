@@ -1,9 +1,8 @@
 "use client";
 
-import { signOut } from "next-auth/react";
 import { useState } from "react";
 import { Button } from "@/components/ui/Button";
-import { wipeAllClientStorage } from "@/lib/storage/wipeAll";
+import { hardSignOut } from "@/lib/auth/hardSignOut";
 
 export function SignOutButton() {
   const [pending, setPending] = useState(false);
@@ -14,8 +13,7 @@ export function SignOutButton() {
       loading={pending}
       onClick={async () => {
         setPending(true);
-        await wipeAllClientStorage();
-        await signOut({ callbackUrl: "/" });
+        await hardSignOut("/");
       }}
     >
       {pending ? "Signing out…" : "Sign out"}

@@ -37,8 +37,10 @@ function getClassYear(): number {
 }
 
 export default function UserTemplatesPage() {
-  const { data: session } = useSession();
-  const isHead = Boolean(session?.user?.isDepartmentHead);
+  const { data: session, status: sessionStatus } = useSession();
+  const isHead =
+    sessionStatus === "authenticated" &&
+    Boolean(session?.user?.isDepartmentHead);
   const [headEntry, setHeadEntry] = useState<{ id: string; name: string } | null>(null);
 
   const [initialLoad, setInitialLoad] = useState(true);
@@ -56,6 +58,10 @@ export default function UserTemplatesPage() {
     },
     [isHead],
   );
+
+  useEffect(() => {
+    if (!isHead) setHeadEntry(null);
+  }, [isHead]);
 
   const refreshSilently = useCallback(async () => {
     try {
@@ -413,7 +419,7 @@ export default function UserTemplatesPage() {
       </footer>
 
       <HeadEntryModal
-        open={headEntry !== null}
+        open={isHead && headEntry !== null}
         templateId={headEntry?.id ?? ""}
         templateName={headEntry?.name ?? ""}
         onClose={() => setHeadEntry(null)}

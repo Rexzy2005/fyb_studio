@@ -1,10 +1,9 @@
 "use client";
 
 import { useState } from "react";
-import { signOut } from "next-auth/react";
 import { LogOut } from "lucide-react";
 
-import { wipeAllClientStorage } from "@/lib/storage/wipeAll";
+import { hardSignOut } from "@/lib/auth/hardSignOut";
 
 /**
  * Dashboard sign-out control. Clears any local browser state we own (recent
@@ -18,8 +17,7 @@ export function SignOutButton() {
     if (signingOut) return;
     setSigningOut(true);
     try {
-      await wipeAllClientStorage();
-      await signOut({ callbackUrl: "/" });
+      await hardSignOut("/");
     } catch {
       setSigningOut(false);
     }

@@ -96,9 +96,11 @@ function PaymentModalContent({
       return;
     }
     setStage({ kind: "initializing" });
+    let activeReference: string | null = null;
     try {
       await onBeforeInitialize?.();
       const init = await initializePayment({ templateId, userDesignId });
+      activeReference = init.reference;
       recordPaymentAttempt({
         reference: init.reference,
         templateId,
@@ -117,6 +119,7 @@ function PaymentModalContent({
         email: customerEmail,
         onSuccess: () => {},
         onCancel: () => {
+          clearPaymentAttempt(init.reference);
           void recordPaymentEvent({
             reference: init.reference,
             event: "cancelled",
@@ -142,6 +145,7 @@ function PaymentModalContent({
       const message =
         err instanceof Error ? err.message : "Payment could not be completed. Please try again.";
       if (message === "Payment was cancelled") {
+        if (activeReference) clearPaymentAttempt(activeReference);
         setStage({ kind: "idle" });
         return;
       }

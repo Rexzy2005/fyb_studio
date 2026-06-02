@@ -12,10 +12,8 @@ import { getDb } from "./idb";
  *  - sessionStorage
  *  - Cache API entries (service-worker caches, if any)
  *
- * Does not touch httpOnly cookies (server-set, JS can't reach them) - NextAuth
- * signOut clears auth cookies; transient lock cookies (`fyb-lock-*`) expire on
- * their own within 60 minutes and are scoped per-template, so they pose no
- * cross-user risk.
+ * Does not touch httpOnly cookies (server-set, JS can't reach them). The
+ * hard sign-out flow calls `/api/auth/hard-signout` for auth-cookie cleanup.
  */
 export async function wipeAllClientStorage(): Promise<void> {
   if (typeof window === "undefined") return;

@@ -31,7 +31,6 @@ import {
   type PublicTemplateLockBlock,
 } from "@/lib/api/publicTemplates";
 import { LockedAccessModal } from "@/components/templates/LockedAccessModal";
-import { LaunchCountdownModal, type CountdownParts } from "@/components/templates/LaunchCountdownModal";
 import { ShareButton } from "@/components/templates/ShareButton";
 
 import { DesignWorkspace } from "@/components/editor/DesignWorkspace";
@@ -50,7 +49,6 @@ import {
   clearPaymentAttempt,
   findPaymentAttemptForDesign,
 } from "@/lib/payment/paymentAttempts";
-import { lockTemplate, fetchTemplateLock } from "@/lib/api/templateLocks";
 
 function deriveCategoryLabel(name: string, explicit: string | null): string {
   const e = explicit?.trim();
@@ -74,17 +72,6 @@ const STANDARD_EXPORT_SCALE = 2;
 const PAYMENT_GRANT_POLL_MS = 2000;
 const PAYMENT_VERIFY_FALLBACK_MS = 8000;
 
-const LAUNCH_AT = new Date("2026-05-27T09:00:00+01:00");
-
-function getCountdownParts(ms: number): CountdownParts {
-  const total = Math.max(0, Math.floor(ms / 1000));
-  const days = Math.floor(total / 86400);
-  const hours = Math.floor((total % 86400) / 3600);
-  const minutes = Math.floor((total % 3600) / 60);
-  const seconds = total % 60;
-  return { days, hours, minutes, seconds };
-}
-
 // Mobile devices (particularly iOS) have stricter canvas memory limits.
 // Use 1× on small screens so large canvases don't OOM the tab.
 function getExportScale(): 1 | 2 {
@@ -107,11 +94,6 @@ export default function UseTemplatePage({
   const viaShare = searchParams.get("via") === "share";
   const { data: session, status: sessionStatus } = useSession();
   const isHead = Boolean(session?.user?.isDepartmentHead);
-  const [isAdmin, setIsAdmin] = useState(false);
-  const [now, setNow] = useState<Date | null>(null);
-  const [hydrated, setHydrated] = useState(false);
-  const [reserveStatus, setReserveStatus] = useState<"idle" | "loading" | "reserved">("idle");
-  const [reserveError, setReserveError] = useState<string | null>(null);
 
   // Auth gate: unauthenticated visitors get redirected to sign-in with a
   // callback back to this exact template URL. Honors the loading state so
@@ -122,49 +104,6 @@ export default function UseTemplatePage({
     const target = `/signin?from=${encodeURIComponent(here)}`;
     router.replace(target);
   }, [sessionStatus, templateId, currentQuery, router]);
-
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        const res = await fetch("/api/admin/check");
-        if (!res.ok) return;
-        const data = (await res.json()) as { isAdmin?: boolean };
-        if (!cancelled) setIsAdmin(Boolean(data.isAdmin));
-      } catch (err) {
-        console.warn("[use] admin check failed", err);
-      } finally {
-        // No-op: admin check only affects bypass.
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  useEffect(() => {
-    setHydrated(true);
-    setNow(new Date());
-    const id = window.setInterval(() => setNow(new Date()), 1000);
-    return () => window.clearInterval(id);
-  }, []);
-
-  useEffect(() => {
-    if (!isHead || sessionStatus !== "authenticated") return;
-    let cancelled = false;
-    (async () => {
-      try {
-        const { lock, viewer } = await fetchTemplateLock(templateId);
-        if (cancelled) return;
-        if (lock && viewer?.fromSameDept) setReserveStatus("reserved");
-      } catch (err) {
-        console.warn("[use] lock fetch failed", err);
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [isHead, sessionStatus, templateId]);
 
   // Track whether the "shared with you" banner is showing (dismissible).
   const [shareBannerOpen, setShareBannerOpen] = useState(viaShare);
@@ -237,27 +176,6 @@ export default function UseTemplatePage({
       }
     };
   }, []);
-
-  const launchMs = hydrated && now ? LAUNCH_AT.getTime() - now.getTime() : null;
-  const isLaunchLive = hydrated && launchMs !== null ? launchMs <= 0 : false;
-  const shouldGateLaunch =
-    sessionStatus === "authenticated" &&
-    !isAdmin &&
-    !isLaunchLive;
-  const countdown = hydrated && launchMs !== null ? getCountdownParts(launchMs) : null;
-
-  async function handleReserve() {
-    if (reserveStatus !== "idle") return;
-    setReserveError(null);
-    setReserveStatus("loading");
-    try {
-      await lockTemplate(templateId);
-      setReserveStatus("reserved");
-    } catch (err) {
-      setReserveStatus("idle");
-      setReserveError(err instanceof Error ? err.message : "Could not reserve this design");
-    }
-  }
 
   // Load or create the user-design working copy.
   // IDB lookup and server lock-check run concurrently so returning users see
@@ -495,22 +413,6 @@ export default function UseTemplatePage({
           templateId={lockBlock.templateId}
           departmentName={lockBlock.departmentName}
           onClose={() => router.push("/templates")}
-        />
-      </div>
-    );
-  }
-
-  if (shouldGateLaunch) {
-    return (
-      <div className="min-h-dvh bg-canvas dark:bg-canvas">
-        <LaunchCountdownModal
-          open
-          countdown={countdown}
-          isHead={isHead}
-          reserveStatus={reserveStatus}
-          reserveError={reserveError}
-          onReserve={handleReserve}
-          onBack={() => router.push("/templates")}
         />
       </div>
     );
@@ -826,10 +728,13 @@ export default function UseTemplatePage({
     setDownloadChecking(true);
     let hasGrant = false;
     try {
-      const info = await fetchActiveGrant({
-        templateId: userDesign.templateId,
-        userDesignId: userDesign.id,
-      });
+      const info = await fetchActiveGrant(
+        {
+          templateId: userDesign.templateId,
+          userDesignId: userDesign.id,
+        },
+        { timeoutMs: 3000 }
+      );
       hasGrant = Boolean(info.grant);
     } catch (err) {
       console.error("[use] grant check failed", err);
@@ -1888,6 +1793,14 @@ function PaymentRecoveryController({
         } catch (err) {
           const message =
             err instanceof Error ? err.message : "Payment recovery check failed";
+          if (
+            attempt &&
+            /(cancelled|canceled|expired|failed|abandoned|reversed|not found)/i.test(
+              message
+            )
+          ) {
+            clearPaymentAttempt(attempt.reference);
+          }
           if (!/not successful|pending|ongoing|processing|queued/i.test(message)) {
             console.warn("[payment] recovery check failed", err);
           }

@@ -31,7 +31,7 @@ export function renderReceiptEmail(input: ReceiptTemplateInput): {
   const text = [
     `Hi ${firstName},`,
     ``,
-    `Thanks for your payment. Your download is unlocked for the next 24 hours.`,
+    `Thanks for your payment. Your dashboard keeps the finished export available for 12 hours after download.`,
     ``,
     `Receipt`,
     `--------`,
@@ -60,7 +60,7 @@ export function renderReceiptEmail(input: ReceiptTemplateInput): {
                 <div style="font-size:14px;color:#52525b;margin-top:6px;line-height:1.6;">
                   Your payment is confirmed and the download for
                   <strong style="color:#09090b;">${escapeHtml(input.templateName)}</strong>
-                  is unlocked for the next 24 hours.
+                  will stay available on your dashboard for 12 hours after download.
                 </div>
               </td>
             </tr>
@@ -77,7 +77,7 @@ export function renderReceiptEmail(input: ReceiptTemplateInput): {
             <tr>
               <td align="center" style="padding:24px 28px 28px 28px;">
                 <a href="${input.dashboardUrl}" style="display:inline-block;background:#09090b;color:#ffffff;text-decoration:none;padding:11px 18px;border-radius:10px;font-weight:600;font-size:14px;">Open your dashboard</a>
-                <div style="margin-top:14px;font-size:12px;color:#71717a;">Re-downloads of this design are free for the next 24 hours.</div>
+                <div style="margin-top:14px;font-size:12px;color:#71717a;">Finished exports stay on your dashboard for 12 hours.</div>
               </td>
             </tr>
           </table>

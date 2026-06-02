@@ -8,7 +8,8 @@ import type {
   UserDesignRecord,
 } from "./types";
 
-const TWENTY_FOUR_HOURS_MS = 24 * 60 * 60 * 1000;
+const IN_PROGRESS_RETENTION_MS = 24 * 60 * 60 * 1000;
+const PAID_EXPORT_RETENTION_MS = 12 * 60 * 60 * 1000;
 
 function assertBrowser(): void {
   if (typeof window === "undefined") {
@@ -47,9 +48,12 @@ export async function createInProgressDesign(
     assetUrlsByNodeId: input.assetUrlsByNodeId,
     inputs: emptyInputs(),
     createdAt: now.toISOString(),
-    expiresAt: new Date(now.getTime() + TWENTY_FOUR_HOURS_MS).toISOString(),
+    expiresAt: new Date(now.getTime() + IN_PROGRESS_RETENTION_MS).toISOString(),
     downloaded: false,
     lastDownloadedAt: null,
+    paidReference: null,
+    paidAt: null,
+    exportFile: null,
     thumbnail: null,
   };
   await db.put("userDesigns", record);
@@ -126,19 +130,40 @@ export async function saveInputs(
   await db.put("userDesigns", next);
 }
 
+export type MarkDownloadedInput = {
+  thumbnail: { blob: Blob; mime: string; width: number; height: number } | null;
+  exportFile: {
+    blob: Blob;
+    mime: string;
+    width: number;
+    height: number;
+    scale: number;
+    filename: string;
+  };
+  paidReference?: string | null;
+};
+
 export async function markDownloaded(
   id: string,
-  thumbnail: { blob: Blob; mime: string; width: number; height: number } | null
+  input: MarkDownloadedInput
 ): Promise<void> {
   assertBrowser();
   const db = await getDb();
   const existing = await db.get("userDesigns", id);
   if (!existing) return;
+  const now = new Date();
   const next: UserDesignRecord = {
     ...existing,
     downloaded: true,
-    lastDownloadedAt: new Date().toISOString(),
-    thumbnail,
+    lastDownloadedAt: now.toISOString(),
+    paidAt: now.toISOString(),
+    paidReference: input.paidReference ?? existing.paidReference ?? null,
+    expiresAt: new Date(now.getTime() + PAID_EXPORT_RETENTION_MS).toISOString(),
+    exportFile: {
+      ...input.exportFile,
+      savedAt: now.toISOString(),
+    },
+    thumbnail: input.thumbnail,
   };
   await db.put("userDesigns", next);
 }
@@ -155,7 +180,7 @@ export async function listDownloadedDesigns(): Promise<UserDesignRecord[]> {
   const all = await db.getAll("userDesigns");
   const now = Date.now();
   return all
-    .filter((r) => r.downloaded && new Date(r.expiresAt).getTime() > now)
+    .filter((r) => r.downloaded && Boolean(r.exportFile?.blob) && new Date(r.expiresAt).getTime() > now)
     .sort((a, b) => {
       const aT = a.lastDownloadedAt ?? a.createdAt;
       const bT = b.lastDownloadedAt ?? b.createdAt;

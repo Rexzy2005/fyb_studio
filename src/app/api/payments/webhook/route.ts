@@ -2,11 +2,31 @@ import { NextResponse } from "next/server";
 
 import { withErrorHandler } from "@/backend/errors/handler";
 import {
-  confirmPaymentByReference,
+  confirmPaymentFromPaystackWebhook,
 } from "@/backend/services/payment.service";
 import { isValidPaystackWebhookSignature } from "@/backend/services/paystack.service";
 
 export const runtime = "nodejs";
+
+type PaystackWebhookPayload = {
+  event?: string;
+  data?: {
+    reference?: unknown;
+    status?: unknown;
+    amount?: unknown;
+    currency?: unknown;
+    paid_at?: unknown;
+  };
+};
+
+function numericAmount(value: unknown): number | null {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value === "string" && value.trim().length > 0) {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+  return null;
+}
 
 /**
  * POST /api/payments/webhook
@@ -33,7 +53,7 @@ export const POST = withErrorHandler(async (req) => {
     );
   }
 
-  let payload: { event?: string; data?: { reference?: string } };
+  let payload: PaystackWebhookPayload;
   try {
     payload = JSON.parse(raw);
   } catch {
@@ -47,12 +67,35 @@ export const POST = withErrorHandler(async (req) => {
   }
 
   const reference = payload.data?.reference;
-  if (!reference || typeof reference !== "string") {
+  if (typeof reference !== "string" || reference.length === 0) {
     return NextResponse.json({ ok: true, ignored: "no reference" });
   }
 
+  const amount = numericAmount(payload.data?.amount);
+  if (amount === null) {
+    return NextResponse.json({ ok: true, ignored: "no amount" });
+  }
+
+  const currency =
+    typeof payload.data?.currency === "string" ? payload.data.currency : null;
+  if (!currency) {
+    return NextResponse.json({ ok: true, ignored: "no currency" });
+  }
+
+  const status =
+    typeof payload.data?.status === "string" ? payload.data.status : "success";
+  const paidAt =
+    typeof payload.data?.paid_at === "string" ? payload.data.paid_at : null;
+
   try {
-    await confirmPaymentByReference(reference, { source: "webhook" });
+    await confirmPaymentFromPaystackWebhook({
+      reference,
+      status,
+      amount,
+      currency,
+      paidAt,
+      raw: payload.data,
+    });
   } catch (err) {
     // Swallow - Paystack will retry forever otherwise. The original error is
     // logged for ops; downstream `/verify` calls will surface the right state

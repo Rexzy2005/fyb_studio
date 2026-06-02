@@ -77,6 +77,12 @@ function localStatusFromPaystack(status: string): PaymentStatus {
   return isPaymentStatus(status) ? status : "failed";
 }
 
+function dateFromPaystack(value: string | null | undefined): Date {
+  if (!value) return new Date();
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? new Date() : parsed;
+}
+
 function appendStatusHistory(
   payment: PaymentDoc,
   input: {
@@ -291,6 +297,28 @@ export type ConfirmedPayment = {
   grant: DownloadGrantDoc;
 };
 
+export type PaymentResumeTarget = {
+  templateId: string;
+  userDesignId: string | null;
+  status: PaymentStatus;
+};
+
+export async function getPaymentResumeTarget(
+  reference: string
+): Promise<PaymentResumeTarget | null> {
+  await connectDb();
+  const payment = await Payment.findOne({ paystackReference: reference })
+    .select("templateId userDesignId status")
+    .lean();
+
+  if (!payment) return null;
+  return {
+    templateId: String(payment.templateId),
+    userDesignId: payment.userDesignId ?? null,
+    status: payment.status,
+  };
+}
+
 /**
  * Confirm a payment by reference. Pulls the truth from Paystack, updates the
  * Payment row, and issues a DownloadGrant if successful.
@@ -423,6 +451,132 @@ export async function confirmPaymentByReference(
   // verify and the webhook path send the receipt without duplicating logic.
   // Idempotency: confirmPaymentByReference returns early on already-success
   // payments, so the receipt only sends once per payment.
+  void sendReceiptForPayment(payment).catch((err) => {
+    console.error("[payment] receipt dispatch failed", err);
+  });
+
+  return { payment, grant };
+}
+
+export type PaystackWebhookConfirmation = {
+  reference: string;
+  status: string;
+  amount: number;
+  currency: string;
+  paidAt?: string | null;
+  raw: unknown;
+};
+
+/**
+ * Confirm a payment from a webhook payload after the route has validated the
+ * Paystack signature. This avoids a second Paystack verify call in the webhook
+ * path, which lets bank-transfer completions issue download grants with lower
+ * latency.
+ */
+export async function confirmPaymentFromPaystackWebhook(
+  input: PaystackWebhookConfirmation
+): Promise<ConfirmedPayment> {
+  await connectDb();
+
+  const payment = await Payment.findOne({ paystackReference: input.reference });
+  if (!payment) {
+    throw new AppError(
+      "PAYMENT_NOT_FOUND",
+      "No matching payment for the provided reference",
+      404
+    );
+  }
+
+  if (payment.status === "success") {
+    const grant = await DownloadGrant.findOne({ paymentId: payment._id });
+    if (!grant) {
+      const reissued = await issueGrantForPayment(payment);
+      return { payment, grant: reissued };
+    }
+    return { payment, grant };
+  }
+
+  const paystackStatus = input.status || "success";
+  const nextStatus = localStatusFromPaystack(paystackStatus);
+  const now = new Date();
+  payment.lastVerifiedAt = now;
+  payment.paystackStatus = paystackStatus;
+  payment.providerResponse = input.raw;
+
+  if (nextStatus !== "success") {
+    payment.status = nextStatus;
+    if (PAYSTACK_FINAL_FAILURE_STATUSES.includes(nextStatus)) {
+      payment.failedAt = now;
+    }
+    if (nextStatus === "timeout") payment.timedOutAt = now;
+    payment.failureReason = `Paystack webhook reported '${paystackStatus}'`;
+    appendStatusHistory(payment, {
+      status: nextStatus,
+      source: "webhook",
+      message: payment.failureReason,
+      paystackStatus,
+      at: now,
+    });
+    await payment.save();
+    throw new AppError(
+      "PAYMENT_NOT_SUCCESSFUL",
+      `Payment was not successful (${paystackStatus})`,
+      402,
+      { paystackStatus }
+    );
+  }
+
+  if (input.amount < payment.amountKobo) {
+    payment.status = "failed";
+    payment.failedAt = now;
+    payment.failureReason = `Paid amount ${input.amount} below expected ${payment.amountKobo}`;
+    appendStatusHistory(payment, {
+      status: "failed",
+      source: "webhook",
+      message: payment.failureReason,
+      paystackStatus,
+      at: now,
+    });
+    await payment.save();
+    throw new AppError(
+      "PAYMENT_AMOUNT_MISMATCH",
+      "Paid amount is below the expected price",
+      402
+    );
+  }
+
+  if (input.currency.toUpperCase() !== payment.currency.toUpperCase()) {
+    payment.status = "failed";
+    payment.failedAt = now;
+    payment.failureReason = `Paid currency ${input.currency} did not match expected ${payment.currency}`;
+    appendStatusHistory(payment, {
+      status: "failed",
+      source: "webhook",
+      message: payment.failureReason,
+      paystackStatus,
+      at: now,
+    });
+    await payment.save();
+    throw new AppError(
+      "PAYMENT_CURRENCY_MISMATCH",
+      "Paid currency does not match the expected currency",
+      402
+    );
+  }
+
+  payment.status = "success";
+  payment.paidAt = dateFromPaystack(input.paidAt);
+  payment.failureReason = null;
+  appendStatusHistory(payment, {
+    status: "success",
+    source: "webhook",
+    message: "Paystack webhook confirmed successful payment",
+    paystackStatus,
+    at: now,
+  });
+  await payment.save();
+
+  const grant = await issueGrantForPayment(payment);
   void sendReceiptForPayment(payment).catch((err) => {
     console.error("[payment] receipt dispatch failed", err);
   });

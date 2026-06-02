@@ -196,5 +196,16 @@ export type UserDesignRecord = {
   expiresAt: IsoDateTime;
   downloaded: boolean;
   lastDownloadedAt: IsoDateTime | null;
+  paidReference?: string | null;
+  paidAt?: IsoDateTime | null;
+  exportFile?: {
+    blob: Blob;
+    mime: string;
+    width: number;
+    height: number;
+    scale: number;
+    filename: string;
+    savedAt: IsoDateTime;
+  } | null;
   thumbnail: { blob: Blob; mime: string; width: number; height: number } | null;
 };

@@ -10,6 +10,10 @@ import {
   verifyPayment,
 } from "@/lib/api/payments";
 import { recordPendingDownload } from "@/lib/payment/pendingDownloads";
+import {
+  clearPaymentAttempt,
+  recordPaymentAttempt,
+} from "@/lib/payment/paymentAttempts";
 
 type Props = {
   open: boolean;
@@ -17,6 +21,7 @@ type Props = {
   templateName: string;
   userDesignId: string | null;
   customerEmail: string | null;
+  onBeforeInitialize?: () => void | Promise<void>;
   onPaid: () => void | Promise<void>;
   onClose: () => void;
 };
@@ -45,6 +50,7 @@ function PaymentModalContent({
   templateName,
   userDesignId,
   customerEmail,
+  onBeforeInitialize,
   onPaid,
   onClose,
 }: Omit<Props, "open">) {
@@ -91,7 +97,16 @@ function PaymentModalContent({
     }
     setStage({ kind: "initializing" });
     try {
+      await onBeforeInitialize?.();
       const init = await initializePayment({ templateId, userDesignId });
+      recordPaymentAttempt({
+        reference: init.reference,
+        templateId,
+        templateName,
+        userDesignId,
+        amountNgn: init.amountNgn,
+        initializedAt: Date.now(),
+      });
       setPriceNgn(init.amountNgn);
       setStage({ kind: "popup" });
 
@@ -120,6 +135,7 @@ function PaymentModalContent({
         userDesignId: verifyResult.grant.userDesignId,
         paidAt: Date.now(),
       });
+      clearPaymentAttempt(verifyResult.grant.paystackReference);
       await onPaid();
       onClose();
     } catch (err) {

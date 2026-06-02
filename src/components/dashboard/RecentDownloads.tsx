@@ -1,7 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
-import Link from "next/link";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import {
   deleteUserDesign,
@@ -10,6 +9,7 @@ import {
   sweepExpiredDesigns,
 } from "@/lib/storage/userDesignRepo";
 import type { UserDesignRecord } from "@/lib/storage/types";
+import { downloadBlob } from "@/lib/download/browserDownload";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { ButtonLink } from "@/components/ui/Button";
 import { SectionHeader } from "@/components/dashboard/SectionHeader";
@@ -31,33 +31,36 @@ function formatExpiresIn(ms: number): string {
 export function RecentDownloads() {
   const [items, setItems] = useState<CardItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const objectUrlsRef = useRef<string[]>([]);
+
+  const revokeObjectUrls = useCallback(() => {
+    for (const url of objectUrlsRef.current) URL.revokeObjectURL(url);
+    objectUrlsRef.current = [];
+  }, []);
 
   const refresh = useCallback(async () => {
     await sweepExpiredDesigns();
     const records = await listDownloadedDesigns();
-    setItems((prev) => {
-      for (const it of prev) {
-        if (it.thumbnailUrl) URL.revokeObjectURL(it.thumbnailUrl);
-      }
-      return records.map((r) => ({
+    revokeObjectUrls();
+    const next = records.map((r) => {
+      const thumbnailUrl = r.thumbnail ? URL.createObjectURL(r.thumbnail.blob) : null;
+      if (thumbnailUrl) objectUrlsRef.current.push(thumbnailUrl);
+      return {
         record: r,
-        thumbnailUrl: r.thumbnail ? URL.createObjectURL(r.thumbnail.blob) : null,
-      }));
+        thumbnailUrl,
+      };
     });
+    setItems(next);
     setLoading(false);
-  }, []);
+  }, [revokeObjectUrls]);
 
   useEffect(() => {
-    void refresh();
+    const timer = window.setTimeout(() => void refresh(), 0);
     return () => {
-      setItems((prev) => {
-        for (const it of prev) {
-          if (it.thumbnailUrl) URL.revokeObjectURL(it.thumbnailUrl);
-        }
-        return [];
-      });
+      window.clearTimeout(timer);
+      revokeObjectUrls();
     };
-  }, [refresh]);
+  }, [refresh, revokeObjectUrls]);
 
   async function onDelete(id: string) {
     await deleteUserDesign(id);
@@ -69,7 +72,7 @@ export function RecentDownloads() {
       <SectionHeader
         eyebrow="Library"
         title="Recent downloads"
-        description="Saved on this device for 24 hours, then cleared."
+        description="Paid exports saved on this device for 12 hours, then cleared."
         count={loading ? null : items.length}
       />
 
@@ -99,6 +102,7 @@ export function RecentDownloads() {
         <ul className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
           {items.map(({ record, thumbnailUrl }) => {
             const remainingMs = msUntilExpiry(record);
+            const exportFile = record.exportFile ?? null;
             return (
               <li
                 key={record.id}
@@ -148,20 +152,25 @@ export function RecentDownloads() {
                     {record.categoryLabel}
                   </div>
                   <div className="mt-2 flex items-center gap-2">
-                    <Link
-                      href={`/templates/${record.templateId}/use?userDesignId=${record.id}`}
+                    <button
+                      type="button"
+                      disabled={!exportFile}
+                      onClick={() => {
+                        if (!exportFile) return;
+                        downloadBlob(exportFile.blob, exportFile.filename);
+                      }}
                       className="inline-flex items-center justify-center transition hover:scale-[0.98]"
                       style={{
                         ...caption,
                         height: 28,
                         padding: "0 12px",
-                        background: "var(--ink)",
-                        color: "#000",
+                        background: exportFile ? "var(--ink)" : "var(--surface-2)",
+                        color: exportFile ? "#000" : "var(--ink-faint)",
                         borderRadius: 100,
                       }}
                     >
-                      Edit
-                    </Link>
+                      {exportFile ? "Download" : "Unavailable"}
+                    </button>
                     <span style={{ ...micro, color: "var(--ink-faint)" }}>
                       {formatExpiresIn(remainingMs)}
                     </span>
@@ -212,7 +221,7 @@ function EmptyState() {
           Nothing here yet
         </span>
         <span style={{ ...bodySm, color: "var(--ink-muted)", fontWeight: 400 }}>
-          Pick a template, drop in your details, and your exports will appear here for 24 hours.
+          Pick a template, drop in your details, and your paid exports will appear here for 12 hours.
         </span>
       </div>
       <ButtonLink href="/templates" variant="primary" size="md">

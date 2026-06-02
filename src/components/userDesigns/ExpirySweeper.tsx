@@ -6,7 +6,8 @@ import { sweepExpiredDesigns } from "@/lib/storage/userDesignRepo";
 
 /**
  * Mounted at the root layout so any visit to the app prunes user designs
- * that have crossed their 24-hour expiry. No UI; runs once on mount and once
+ * that have crossed their local expiry. Paid exports currently stay for 12
+ * hours. No UI; runs once on mount and once
  * per hour while a tab is open.
  */
 export function ExpirySweeper() {

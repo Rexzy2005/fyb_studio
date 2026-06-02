@@ -4,7 +4,7 @@ import { use, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useSession } from "next-auth/react";
-import { ArrowLeft, BookmarkCheck, CheckCircle2, ChevronLeft, ChevronRight, Download, GraduationCap, Menu, X } from "lucide-react";
+import { ArrowLeft, CheckCircle2, ChevronLeft, ChevronRight, Download, GraduationCap, Menu, X } from "lucide-react";
 import imageCompression from "browser-image-compression";
 
 import type { NormalizedDesignV1 } from "@/lib/figma";
@@ -14,6 +14,7 @@ import { exportTemplatePng } from "@/lib/render/exportPng";
 import { useRemoteDesignAssets } from "@/lib/render/useRemoteDesignAssets";
 import { useTemplateEditorStore } from "@/lib/stores/templateEditorStore";
 import type { FieldConfig, UserDesignRecord } from "@/lib/storage/types";
+import { downloadBlob, safePngFilename } from "@/lib/download/browserDownload";
 import { groupFieldsBySection } from "@/lib/storage/fieldSections";
 import { sectionIcon } from "@/components/editor/SectionsManager";
 import { FormField } from "@/components/editor/FormField";
@@ -39,11 +40,16 @@ import { PaymentModal } from "@/components/payment/PaymentModal";
 import { ProgressModal } from "@/components/ui/ProgressModal";
 import { CurtainOpen } from "@/components/ui/CurtainOpen";
 import { useSimulatedProgress } from "@/components/ui/useSimulatedProgress";
-import { fetchActiveGrant, recordDownload } from "@/lib/api/payments";
+import { fetchActiveGrant, recordDownload, verifyPayment } from "@/lib/api/payments";
 import {
   clearPendingDownload,
   listPendingDownloads,
+  recordPendingDownload,
 } from "@/lib/payment/pendingDownloads";
+import {
+  clearPaymentAttempt,
+  findPaymentAttemptForDesign,
+} from "@/lib/payment/paymentAttempts";
 import { lockTemplate, fetchTemplateLock } from "@/lib/api/templateLocks";
 
 function deriveCategoryLabel(name: string, explicit: string | null): string {
@@ -65,6 +71,8 @@ function deriveCategoryLabel(name: string, explicit: string | null): string {
  * no risk of users accidentally exporting a low-resolution file.
  */
 const STANDARD_EXPORT_SCALE = 2;
+const PAYMENT_GRANT_POLL_MS = 2000;
+const PAYMENT_VERIFY_FALLBACK_MS = 8000;
 
 const LAUNCH_AT = new Date("2026-05-27T09:00:00+01:00");
 
@@ -93,6 +101,9 @@ export default function UseTemplatePage({
   const router = useRouter();
   const searchParams = useSearchParams();
   const requestedDesignId = searchParams.get("userDesignId");
+  const resumeRequested = searchParams.get("resume") === "1";
+  const resumeReference = searchParams.get("reference") ?? searchParams.get("trxref");
+  const currentQuery = searchParams.toString();
   const viaShare = searchParams.get("via") === "share";
   const { data: session, status: sessionStatus } = useSession();
   const isHead = Boolean(session?.user?.isDepartmentHead);
@@ -107,10 +118,10 @@ export default function UseTemplatePage({
   // we don't redirect on the initial render.
   useEffect(() => {
     if (sessionStatus !== "unauthenticated") return;
-    const here = `/templates/${templateId}/use${viaShare ? "?via=share" : ""}`;
+    const here = `/templates/${templateId}/use${currentQuery ? `?${currentQuery}` : ""}`;
     const target = `/signin?from=${encodeURIComponent(here)}`;
     router.replace(target);
-  }, [sessionStatus, templateId, viaShare, router]);
+  }, [sessionStatus, templateId, currentQuery, router]);
 
   useEffect(() => {
     let cancelled = false;
@@ -240,7 +251,7 @@ export default function UseTemplatePage({
     setReserveError(null);
     setReserveStatus("loading");
     try {
-      const lock = await lockTemplate(templateId);
+      await lockTemplate(templateId);
       setReserveStatus("reserved");
     } catch (err) {
       setReserveStatus("idle");
@@ -358,30 +369,31 @@ export default function UseTemplatePage({
     setSidebarCollapsed(v);
   }, []);
 
+  const collectImageInputs = useCallback((): UserDesignRecord["inputs"]["imageBlobsByNodeId"] => {
+    const imageBlobsByNodeId: UserDesignRecord["inputs"]["imageBlobsByNodeId"] = {};
+    for (const [nodeId, v] of Object.entries(previewImagesRef.current)) {
+      imageBlobsByNodeId[nodeId] = {
+        blob: v.blob,
+        mime: v.blob.type || "image/png",
+        objectFit: v.objectFit,
+      };
+    }
+    return imageBlobsByNodeId;
+  }, []);
+
   // Debounced persistence of text/color/image inputs to IDB.
   const persistTimer = useRef<number | null>(null);
   const schedulePersist = useCallback(() => {
     if (!userDesignId) return;
     if (persistTimer.current) window.clearTimeout(persistTimer.current);
     persistTimer.current = window.setTimeout(() => {
-      const imageBlobsByNodeId: Record<
-        string,
-        { blob: Blob; mime: string; objectFit: "cover" | "contain" }
-      > = {};
-      for (const [nodeId, v] of Object.entries(previewImagesRef.current)) {
-        imageBlobsByNodeId[nodeId] = {
-          blob: v.blob,
-          mime: v.blob.type || "image/png",
-          objectFit: v.objectFit,
-        };
-      }
       void saveInputs(userDesignId, {
         textByNodeId: previewTextByNodeId,
         colorByNodeId: previewColorByNodeId,
-        imageBlobsByNodeId,
+        imageBlobsByNodeId: collectImageInputs(),
       });
     }, 300);
-  }, [userDesignId, previewTextByNodeId, previewColorByNodeId]);
+  }, [userDesignId, previewTextByNodeId, previewColorByNodeId, collectImageInputs]);
 
   useEffect(() => {
     schedulePersist();
@@ -389,6 +401,19 @@ export default function UseTemplatePage({
       if (persistTimer.current) window.clearTimeout(persistTimer.current);
     };
   }, [schedulePersist, previewImageByNodeId]);
+
+  const persistInputsNow = useCallback(async () => {
+    if (!userDesignId) return;
+    if (persistTimer.current) {
+      window.clearTimeout(persistTimer.current);
+      persistTimer.current = null;
+    }
+    await saveInputs(userDesignId, {
+      textByNodeId: previewTextByNodeId,
+      colorByNodeId: previewColorByNodeId,
+      imageBlobsByNodeId: collectImageInputs(),
+    });
+  }, [userDesignId, previewTextByNodeId, previewColorByNodeId, collectImageInputs]);
 
   const hasEdits =
     Object.keys(previewTextByNodeId).length > 0 ||
@@ -699,10 +724,8 @@ export default function UseTemplatePage({
       //   - Defer the URL revoke long enough for the download to commit
       //     (Safari occasionally races the revoke and produces a 0-byte
       //     file otherwise).
-      triggerSystemDownload(
-        blob,
-        `${recordName.replaceAll(/[^a-z0-9-_ ]/gi, "").trim() || "template"}.png`,
-      );
+      const filename = safePngFilename(recordName);
+      downloadBlob(blob, filename);
 
       // Save a thumbnail at scale 1 for the dashboard recents.
       let thumbnail: { blob: Blob; mime: string; width: number; height: number } | null = null;
@@ -742,7 +765,25 @@ export default function UseTemplatePage({
         console.warn("[use] thumbnail render failed", err);
       }
 
-      await markDownloaded(userDesign.id, thumbnail);
+      const paidReference =
+        listPendingDownloads().find(
+          (p) =>
+            p.templateId === userDesign.templateId &&
+            (p.userDesignId ?? null) === (userDesign.id ?? null),
+        )?.reference ?? null;
+
+      await markDownloaded(userDesign.id, {
+        thumbnail,
+        paidReference,
+        exportFile: {
+          blob,
+          mime: blob.type || "image/png",
+          width: exportWidth,
+          height: exportHeight,
+          scale,
+          filename,
+        },
+      });
 
       // Server-side log + grant consumption. Done AFTER the user has the
       // file so a transient API hiccup doesn't block the download itself;
@@ -781,6 +822,7 @@ export default function UseTemplatePage({
   async function startExport() {
     if (exporting || downloadChecking) return;
     if (!userDesign) return;
+    await persistInputsNow();
     setDownloadChecking(true);
     let hasGrant = false;
     try {
@@ -1586,12 +1628,25 @@ export default function UseTemplatePage({
         hint="Larger designs and custom fonts can take a moment. Keep this tab open."
       />
 
+      <PaymentRecoveryController
+        templateId={userDesign.templateId}
+        templateName={recordName}
+        userDesignId={userDesign.id}
+        resumeRequested={resumeRequested}
+        resumeReference={resumeReference}
+        exporting={exporting}
+        downloadChecking={downloadChecking}
+        onCheckingChange={setDownloadChecking}
+        onExport={() => doExportPng(getExportScale())}
+      />
+
       <PaymentModal
         open={paymentModalOpen}
         templateId={userDesign.templateId}
         templateName={recordName}
         userDesignId={userDesign.id}
         customerEmail={session?.user?.email ?? null}
+        onBeforeInitialize={persistInputsNow}
         onClose={() => setPaymentModalOpen(false)}
         onPaid={async () => {
           setPaymentModalOpen(false);
@@ -1719,6 +1774,149 @@ function DownloadSuccessModal({
   );
 }
 
+function PaymentRecoveryController({
+  templateId,
+  templateName,
+  userDesignId,
+  resumeRequested,
+  resumeReference,
+  exporting,
+  downloadChecking,
+  onCheckingChange,
+  onExport,
+}: {
+  templateId: string;
+  templateName: string;
+  userDesignId: string;
+  resumeRequested: boolean;
+  resumeReference: string | null;
+  exporting: boolean;
+  downloadChecking: boolean;
+  onCheckingChange: (checking: boolean) => void;
+  onExport: () => Promise<void> | void;
+}) {
+  const [tick, setTick] = useState(0);
+  const inFlightRef = useRef(false);
+  const resumeOnlyCheckedRef = useRef(false);
+  const lastVerifyAtRef = useRef(0);
+  const onCheckingChangeRef = useRef(onCheckingChange);
+  const onExportRef = useRef(onExport);
+
+  useEffect(() => {
+    onCheckingChangeRef.current = onCheckingChange;
+    onExportRef.current = onExport;
+  }, [onCheckingChange, onExport]);
+
+  useEffect(() => {
+    const bump = () => setTick((value) => value + 1);
+    const onVisibility = () => {
+      if (document.visibilityState === "visible") bump();
+    };
+    window.addEventListener("focus", bump);
+    document.addEventListener("visibilitychange", onVisibility);
+    const interval = window.setInterval(bump, PAYMENT_GRANT_POLL_MS);
+    return () => {
+      window.removeEventListener("focus", bump);
+      document.removeEventListener("visibilitychange", onVisibility);
+      window.clearInterval(interval);
+    };
+  }, []);
+
+  useEffect(() => {
+    const attempt = findPaymentAttemptForDesign(templateId, userDesignId);
+    const reference = attempt?.reference ?? resumeReference;
+    if (!resumeRequested && !attempt && !reference) return;
+    if (
+      resumeRequested &&
+      !attempt &&
+      !reference &&
+      resumeOnlyCheckedRef.current
+    ) {
+      return;
+    }
+    if (exporting || downloadChecking || inFlightRef.current) return;
+
+    let cancelled = false;
+    inFlightRef.current = true;
+
+    const timer = window.setTimeout(() => {
+      void (async () => {
+        onCheckingChangeRef.current(true);
+        try {
+          const active = await fetchActiveGrant({ templateId, userDesignId });
+          if (cancelled) return;
+
+          if (active.grant) {
+            if (reference) {
+              recordPendingDownload({
+                reference,
+                templateId,
+                templateName,
+                userDesignId,
+                paidAt: Date.now(),
+              });
+            }
+            if (attempt) {
+              clearPaymentAttempt(attempt.reference);
+            }
+            await onExportRef.current();
+            return;
+          }
+
+          if (!reference) {
+            resumeOnlyCheckedRef.current = true;
+            return;
+          }
+
+          const now = Date.now();
+          if (now - lastVerifyAtRef.current < PAYMENT_VERIFY_FALLBACK_MS) {
+            return;
+          }
+          lastVerifyAtRef.current = now;
+
+          const verified = await verifyPayment(reference);
+          if (cancelled) return;
+          recordPendingDownload({
+            reference: verified.grant.paystackReference,
+            templateId: verified.grant.templateId,
+            templateName,
+            userDesignId: verified.grant.userDesignId,
+            paidAt: Date.now(),
+          });
+          clearPaymentAttempt(verified.grant.paystackReference);
+          await onExportRef.current();
+        } catch (err) {
+          const message =
+            err instanceof Error ? err.message : "Payment recovery check failed";
+          if (!/not successful|pending|ongoing|processing|queued/i.test(message)) {
+            console.warn("[payment] recovery check failed", err);
+          }
+        } finally {
+          if (!cancelled) onCheckingChangeRef.current(false);
+          inFlightRef.current = false;
+        }
+      })();
+    }, 0);
+
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+      inFlightRef.current = false;
+    };
+  }, [
+    tick,
+    templateId,
+    templateName,
+    userDesignId,
+    resumeRequested,
+    resumeReference,
+    exporting,
+    downloadChecking,
+  ]);
+
+  return null;
+}
+
 /* ─── Confetti puff (download celebration) ─────────────── */
 
 const SUCCESS_PUFF_COLORS = [
@@ -1839,38 +2037,4 @@ async function imageUrlToBlob(url: string): Promise<Blob | null> {
   } catch {
     return null;
   }
-}
-
-/**
- * Programmatically save a Blob as a file. Bypasses the browser's default
- * link-click heuristics by:
- *   - Mounting the <a> inside <body> (Safari requires this for .click()).
- *   - Firing a synthesised MouseEvent so popup-blockers treat it as a
- *     user-driven action (we're already inside a user click handler so
- *     this is legitimate).
- *   - Revoking the Object URL on a 4-second delay — long enough for every
- *     known browser to commit the download to disk, short enough that we
- *     don't leak memory on heavy exports.
- */
-function triggerSystemDownload(blob: Blob, filename: string): void {
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = filename;
-  a.rel = "noopener";
-  a.style.display = "none";
-  document.body.appendChild(a);
-  try {
-    a.dispatchEvent(
-      new MouseEvent("click", { bubbles: true, cancelable: true, view: window }),
-    );
-  } catch {
-    // Older browsers without MouseEvent constructor — fall back to .click().
-    a.click();
-  }
-  // Detach and revoke after a beat. setTimeout 0 isn't enough on Safari.
-  window.setTimeout(() => {
-    if (a.parentNode) a.parentNode.removeChild(a);
-    URL.revokeObjectURL(url);
-  }, 4000);
 }

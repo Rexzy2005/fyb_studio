@@ -174,7 +174,7 @@ export function renderWelcomeEmail(input: WelcomeTemplateInput): {
                 <tr><td style="height:8px;line-height:8px;font-size:8px;">&nbsp;</td></tr>
                 ${stepRow("02", "Drop your details", "Name, department, shout-outs, photo. Live preview as you type - no surprises.")}
                 <tr><td style="height:8px;line-height:8px;font-size:8px;">&nbsp;</td></tr>
-                ${stepRow("03", "Export print-ready PNG", "5-minute export. Yours to keep on your dashboard, free to re-download for 24 hours.")}
+                ${stepRow("03", "Export print-ready PNG", "5-minute export. Yours to keep on your dashboard, free to re-download for 12 hours.")}
               </table>
             </td>
           </tr>

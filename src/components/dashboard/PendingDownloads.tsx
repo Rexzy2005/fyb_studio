@@ -187,6 +187,7 @@ function resumeHref(row: Row): string {
   const params = new URLSearchParams();
   if (row.userDesignId) params.set("userDesignId", row.userDesignId);
   params.set("resume", "1");
+  if (row.reference) params.set("reference", row.reference);
   return `/templates/${row.templateId}/use?${params.toString()}`;
 }
 

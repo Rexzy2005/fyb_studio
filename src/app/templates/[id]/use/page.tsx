@@ -116,6 +116,7 @@ export default function UseTemplatePage({
   const [exporting, setExporting] = useState(false);
   const [exportStage, setExportStage] = useState<string>("");
   const [downloadChecking, setDownloadChecking] = useState(false);
+  const [exportChecking, setExportChecking] = useState(false);
   const [downloadSuccess, setDownloadSuccess] = useState(false);
   const [mobileDetailsOpen, setMobileDetailsOpen] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -439,6 +440,7 @@ export default function UseTemplatePage({
   }
 
   const recordName = userDesign.name;
+  const isDownloadChecking = exportChecking || (resumeRequested && downloadChecking);
 
   function onPreviewTextChange(nodeId: string, value: string) {
     const field = fieldConfig?.fields.find(
@@ -722,10 +724,10 @@ export default function UseTemplatePage({
   }
 
   async function startExport() {
-    if (exporting || downloadChecking) return;
+    if (exporting || exportChecking) return;
     if (!userDesign) return;
     await persistInputsNow();
-    setDownloadChecking(true);
+    setExportChecking(true);
     let hasGrant = false;
     try {
       const info = await fetchActiveGrant(
@@ -733,13 +735,13 @@ export default function UseTemplatePage({
           templateId: userDesign.templateId,
           userDesignId: userDesign.id,
         },
-        { timeoutMs: 3000 }
+        { timeoutMs: 8000 }
       );
       hasGrant = Boolean(info.grant);
     } catch (err) {
       console.error("[use] grant check failed", err);
     } finally {
-      setDownloadChecking(false);
+      setExportChecking(false);
     }
     if (hasGrant) {
       void doExportPng(getExportScale());
@@ -1059,17 +1061,17 @@ export default function UseTemplatePage({
               />
               <button
                 type="button"
-                disabled={exporting || downloadChecking}
+                disabled={exporting || isDownloadChecking}
                 onClick={startExport}
                 className="inline-flex h-9 items-center justify-center gap-2 rounded-xl px-4 text-xs font-bold uppercase transition active:scale-95 disabled:opacity-60"
                 style={{
-                  background: downloadChecking || exporting ? "var(--surface-2)" : "#FFD700",
-                  color: downloadChecking || exporting ? "var(--ink-muted)" : "#000",
-                  boxShadow: downloadChecking || exporting ? "none" : "0 6px 18px rgba(255,180,0,0.32)",
+                  background: isDownloadChecking || exporting ? "var(--surface-2)" : "#FFD700",
+                  color: isDownloadChecking || exporting ? "var(--ink-muted)" : "#000",
+                  boxShadow: isDownloadChecking || exporting ? "none" : "0 6px 18px rgba(255,180,0,0.32)",
                   letterSpacing: "0.06em",
                 }}
               >
-                {downloadChecking ? (
+                {isDownloadChecking ? (
                   <><span className="fyb-dots"><span /><span /><span /></span> Checking</>
                 ) : exporting ? (
                   "Exporting…"

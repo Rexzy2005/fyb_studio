@@ -7,6 +7,7 @@ import { ChevronLeft, ChevronRight, Search } from "lucide-react";
 import type { AdminUserListItem } from "@/backend/services/user.service";
 
 const PAGE_SIZE = 20;
+type UserStatusFilter = "all" | "onboarded" | "pending";
 
 type ApiResponse =
   | { users: AdminUserListItem[] }
@@ -38,6 +39,8 @@ export default function AdminUsersPage() {
   const [error, setError] = useState<string | null>(null);
   const [savingUserId, setSavingUserId] = useState<string | null>(null);
   const [search, setSearch] = useState("");
+  const [departmentFilter, setDepartmentFilter] = useState("all");
+  const [statusFilter, setStatusFilter] = useState<UserStatusFilter>("all");
   const [page, setPage] = useState(1);
 
   async function loadUsers(signal?: AbortSignal) {
@@ -103,10 +106,32 @@ export default function AdminUsersPage() {
     }
   }
 
+  const departmentOptions = useMemo(() => {
+    const byId = new Map<string, { id: string; name: string }>();
+    for (const user of users) {
+      if (!user.department) continue;
+      byId.set(user.department.id, {
+        id: user.department.id,
+        name: user.department.name,
+      });
+    }
+    return Array.from(byId.values()).sort((a, b) => a.name.localeCompare(b.name));
+  }, [users]);
+
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
-    if (!q) return users;
     return users.filter((u) => {
+      if (departmentFilter === "none" && u.department) return false;
+      if (
+        departmentFilter !== "all" &&
+        departmentFilter !== "none" &&
+        u.department?.id !== departmentFilter
+      ) {
+        return false;
+      }
+      if (statusFilter === "onboarded" && !u.isOnboarded) return false;
+      if (statusFilter === "pending" && u.isOnboarded) return false;
+      if (!q) return true;
       return (
         u.name.toLowerCase().includes(q) ||
         u.email.toLowerCase().includes(q) ||
@@ -114,7 +139,7 @@ export default function AdminUsersPage() {
         (u.department?.name ?? "").toLowerCase().includes(q)
       );
     });
-  }, [users, search]);
+  }, [users, search, departmentFilter, statusFilter]);
 
   // Reset to page 1 whenever the filter set shrinks (new search) so the
   // table doesn't show an empty page that's beyond the new last page.
@@ -128,7 +153,7 @@ export default function AdminUsersPage() {
   // matching results instead of an empty trailing page.
   useEffect(() => {
     setPage(1);
-  }, [search]);
+  }, [search, departmentFilter, statusFilter]);
 
   const pageStart = (safePage - 1) * PAGE_SIZE;
   const pageRows = filtered.slice(pageStart, pageStart + PAGE_SIZE);
@@ -139,6 +164,8 @@ export default function AdminUsersPage() {
     () => users.filter((u) => u.isOnboarded).length,
     [users]
   );
+  const hasActiveFilters =
+    Boolean(search.trim()) || departmentFilter !== "all" || statusFilter !== "all";
 
   return (
     <div className="h-full overflow-y-auto p-6">
@@ -169,15 +196,49 @@ export default function AdminUsersPage() {
           </div>
         </header>
 
-        <div className="relative max-w-md">
-          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-faint" />
-          <input
-            type="search"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search by name, email, username, department"
-            className="w-full rounded-xl border border-hairline bg-surface-1 py-2 pl-9 pr-3 text-sm text-ink placeholder:text-ink-faint focus:border-accent-blue focus:outline-none dark:border-hairline dark:bg-surface-1 dark:text-ink dark:placeholder:text-ink-faint"
-          />
+        <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_240px_180px]">
+          <div className="relative">
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-faint" />
+            <input
+              type="search"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search by name, email, username, department"
+              className="h-10 w-full rounded-xl border border-hairline bg-surface-1 pl-9 pr-3 text-sm text-ink placeholder:text-ink-faint focus:border-accent-blue focus:outline-none dark:border-hairline dark:bg-surface-1 dark:text-ink dark:placeholder:text-ink-faint"
+            />
+          </div>
+
+          <label className="sr-only" htmlFor="department-filter">
+            Filter by department
+          </label>
+          <select
+            id="department-filter"
+            value={departmentFilter}
+            onChange={(e) => setDepartmentFilter(e.target.value)}
+            className="h-10 rounded-xl border border-hairline bg-surface-1 px-3 text-sm text-ink outline-none transition focus:border-accent-blue dark:border-hairline dark:bg-surface-1 dark:text-ink"
+          >
+            <option value="all">All departments</option>
+            <option value="none">No department</option>
+            {departmentOptions.map((dept) => (
+              <option key={dept.id} value={dept.id}>
+                {dept.name}
+              </option>
+            ))}
+          </select>
+
+          <label className="sr-only" htmlFor="status-filter">
+            Filter by status
+          </label>
+          <select
+            id="status-filter"
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value as UserStatusFilter)}
+            className="h-10 rounded-xl border border-hairline bg-surface-1 px-3 text-sm text-ink outline-none transition focus:border-accent-blue dark:border-hairline dark:bg-surface-1 dark:text-ink"
+          >
+            <option value="all">All statuses</option>
+            <option value="onboarded">Onboarded</option>
+            <option value="pending">Pending</option>
+          </select>
         </div>
 
         {error ? (
@@ -218,7 +279,7 @@ export default function AdminUsersPage() {
                     >
                       {users.length === 0
                         ? "No users yet."
-                        : "No users match your search."}
+                        : "No users match your filters."}
                     </td>
                   </tr>
                 ) : (
@@ -305,7 +366,7 @@ export default function AdminUsersPage() {
                 <span className="font-semibold text-ink dark:text-ink tabular-nums">
                   {filtered.length}
                 </span>
-                {search.trim() ? " filtered" : ""}
+                {hasActiveFilters ? " filtered" : ""}
               </div>
               <div className="flex items-center gap-2">
                 <button

@@ -128,17 +128,32 @@ export default function AdminPaymentsPage() {
     });
   }, [payments, search, status]);
 
+  const rowStatusCounts = useMemo(() => {
+    return payments.reduce(
+      (acc, payment) => {
+        acc[payment.status] = (acc[payment.status] ?? 0) + 1;
+        return acc;
+      },
+      {} as Record<PaymentStatus, number>
+    );
+  }, [payments]);
+
   const stats = useMemo(() => {
     const counts = data?.summary.paymentStatusCounts;
     const count = (items: PaymentStatus[]) =>
       items.reduce((sum, item) => sum + (counts?.[item] ?? 0), 0);
     return {
-      successful: counts?.success ?? 0,
+      successful: data?.summary.successfulPayments ?? 0,
       active: count(ACTIVE_STATUSES),
       attention: count(ATTENTION_STATUSES),
       totalRows: payments.length,
     };
   }, [data, payments.length]);
+
+  const excludedRows = useMemo(
+    () => payments.filter((payment) => payment.isExcludedFromRevenue).length,
+    [payments]
+  );
 
   return (
     <div className="h-full overflow-y-auto bg-canvas/40 p-4 sm:p-6 lg:p-8 dark:bg-canvas/40">
@@ -155,6 +170,7 @@ export default function AdminPaymentsPage() {
             <p className="mt-1 max-w-2xl text-sm leading-relaxed text-ink-muted dark:text-ink-muted">
               Monitor every checkout attempt from pending through success,
               cancellation, timeout, expiry, and Paystack failure states.
+              Revenue cards exclude marked test users.
             </p>
           </div>
           <button
@@ -169,11 +185,17 @@ export default function AdminPaymentsPage() {
         </header>
 
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
-          <Stat label="Total revenue" value={data ? formatNgn(data.summary.totalRevenueNgn) : loading ? "..." : "₦0"} />
-          <Stat label="Successful payments" value={stats.successful.toLocaleString()} tone="success" />
+          <Stat label="Real revenue" value={data ? formatNgn(data.summary.totalRevenueNgn) : loading ? "..." : "₦0"} />
+          <Stat label="Real successful payments" value={stats.successful.toLocaleString()} tone="success" />
           <Stat label="Active attempts" value={stats.active.toLocaleString()} />
           <Stat label="Needs attention" value={stats.attention.toLocaleString()} tone={stats.attention ? "warning" : "normal"} />
         </div>
+
+        {excludedRows > 0 ? (
+          <div className="rounded-xl border border-hairline bg-surface-1 px-4 py-3 text-xs text-ink-muted dark:border-hairline dark:bg-surface-1 dark:text-ink-muted">
+            {excludedRows.toLocaleString()} test payment row{excludedRows === 1 ? "" : "s"} shown below but excluded from revenue calculations.
+          </div>
+        ) : null}
 
         <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
           <div className="relative w-full xl:max-w-md">
@@ -194,7 +216,7 @@ export default function AdminPaymentsPage() {
               const count =
                 option === "all"
                   ? stats.totalRows
-                  : data?.summary.paymentStatusCounts[option] ?? 0;
+                  : rowStatusCounts[option] ?? 0;
               return (
                 <button
                   key={option}
@@ -278,8 +300,13 @@ export default function AdminPaymentsPage() {
                               <div className="truncate font-medium text-ink dark:text-ink">
                                 {payment.userName ?? "Unknown user"}
                               </div>
-                              <div className="truncate text-xs text-ink-muted">
-                                {payment.userEmail ?? "No email"}
+                              <div className="mt-0.5 flex min-w-0 flex-wrap items-center gap-1.5 text-xs text-ink-muted">
+                                <span className="truncate">{payment.userEmail ?? "No email"}</span>
+                                {payment.isExcludedFromRevenue ? (
+                                  <span className="shrink-0 rounded-full border border-[rgba(245,158,11,0.28)] bg-[rgba(245,158,11,0.1)] px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-warning">
+                                    Test
+                                  </span>
+                                ) : null}
                               </div>
                             </div>
                           </td>
@@ -291,8 +318,13 @@ export default function AdminPaymentsPage() {
                               Started {formatDateTime(payment.initializedAt ?? payment.createdAt)}
                             </div>
                           </td>
-                          <td className="px-4 py-3 font-semibold tabular-nums text-ink dark:text-ink">
-                            {formatNgn(payment.amountNgn)}
+                          <td className="px-4 py-3 tabular-nums text-ink dark:text-ink">
+                            <div className="font-semibold">{formatNgn(payment.amountNgn)}</div>
+                            {payment.isExcludedFromRevenue ? (
+                              <div className="mt-1 text-[11px] text-ink-faint">
+                                Excluded from revenue
+                              </div>
+                            ) : null}
                           </td>
                           <td className="px-4 py-3">
                             <StatusPill status={payment.status} />

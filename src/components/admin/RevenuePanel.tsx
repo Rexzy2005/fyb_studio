@@ -78,7 +78,7 @@ export function RevenuePanel() {
             Revenue &amp; downloads
           </h2>
           <p className="mt-1 max-w-2xl text-xs leading-relaxed text-ink-muted sm:text-[13px] dark:text-ink-muted">
-            Paystack-confirmed earnings and customer download activity.
+            Paystack-confirmed earnings and customer download activity. Test users are excluded.
           </p>
         </div>
         {data ? (

@@ -4,6 +4,7 @@ import { connectDb } from "@/backend/db/client";
 import {
   DownloadEvent,
   Payment,
+  User,
   type PaymentStatus,
 } from "@/backend/db/models";
 
@@ -48,6 +49,7 @@ export type RecentPaymentRow = {
   templateName: string | null;
   userName: string | null;
   userEmail: string | null;
+  isExcludedFromRevenue: boolean;
   createdAt: string;
   initializedAt: string | null;
   expiresAt: string | null;
@@ -63,6 +65,13 @@ export type RecentPaymentRow = {
   }>;
 };
 
+export const REVENUE_EXCLUDED_EMAILS = [
+  "timothypererat2004@gmail.com",
+  "dogknottingbaby002@gmail.com",
+] as const;
+
+const REVENUE_EXCLUDED_EMAIL_SET = new Set<string>(REVENUE_EXCLUDED_EMAILS);
+
 const ALL_PAYMENT_STATUSES: PaymentStatus[] = [
   "pending",
   "success",
@@ -77,9 +86,44 @@ const ALL_PAYMENT_STATUSES: PaymentStatus[] = [
   "reversed",
 ];
 
+const ATTENTION_PAYMENT_STATUSES: PaymentStatus[] = [
+  "failed",
+  "abandoned",
+  "cancelled",
+  "expired",
+  "timeout",
+  "reversed",
+];
+
+type MongoMatch = Record<string, unknown>;
+type UserExclusion = { userId?: { $nin: mongoose.Types.ObjectId[] } };
+
+function isRevenueExcludedEmail(email: string | null | undefined): boolean {
+  return Boolean(email && REVENUE_EXCLUDED_EMAIL_SET.has(email.toLowerCase()));
+}
+
+async function getRevenueExcludedUserIds(): Promise<mongoose.Types.ObjectId[]> {
+  const users = await User.find({ email: { $in: REVENUE_EXCLUDED_EMAILS } })
+    .select("_id")
+    .lean<Array<{ _id: mongoose.Types.ObjectId }>>();
+  return users.map((user) => user._id);
+}
+
+function withoutRevenueExcludedUsers<const T extends MongoMatch>(
+  match: T,
+  excludedUserIds: mongoose.Types.ObjectId[]
+): T & UserExclusion {
+  if (excludedUserIds.length === 0) return match;
+  return {
+    ...match,
+    userId: { $nin: excludedUserIds },
+  };
+}
+
 export async function getRevenueSummary(): Promise<RevenueSummary> {
   await connectDb();
   const since = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+  const excludedUserIds = await getRevenueExcludedUserIds();
 
   const [
     successAgg,
@@ -96,17 +140,28 @@ export async function getRevenueSummary(): Promise<RevenueSummary> {
       totalKobo: number;
       count: number;
     }>([
-      { $match: { status: "success" } },
+      { $match: withoutRevenueExcludedUsers({ status: "success" }, excludedUserIds) },
       { $group: { _id: null, totalKobo: { $sum: "$amountKobo" }, count: { $sum: 1 } } },
     ]),
-    Payment.distinct("userId", { status: "success" }),
-    Payment.countDocuments({ status: "pending" }),
-    Payment.countDocuments({
-      status: {
-        $in: ["failed", "abandoned", "cancelled", "expired", "timeout", "reversed"],
-      },
-    }),
+    Payment.distinct(
+      "userId",
+      withoutRevenueExcludedUsers({ status: "success" }, excludedUserIds)
+    ),
+    Payment.countDocuments(
+      withoutRevenueExcludedUsers({ status: "pending" }, excludedUserIds)
+    ),
+    Payment.countDocuments(
+      withoutRevenueExcludedUsers(
+        {
+          status: {
+            $in: ATTENTION_PAYMENT_STATUSES,
+          },
+        },
+        excludedUserIds
+      )
+    ),
     Payment.aggregate<{ _id: PaymentStatus; count: number }>([
+      { $match: withoutRevenueExcludedUsers({}, excludedUserIds) },
       { $group: { _id: "$status", count: { $sum: 1 } } },
     ]),
     Payment.aggregate<{
@@ -114,11 +169,18 @@ export async function getRevenueSummary(): Promise<RevenueSummary> {
       totalKobo: number;
       count: number;
     }>([
-      { $match: { status: "success", paidAt: { $gte: since } } },
+      {
+        $match: withoutRevenueExcludedUsers(
+          { status: "success", paidAt: { $gte: since } },
+          excludedUserIds
+        ),
+      },
       { $group: { _id: null, totalKobo: { $sum: "$amountKobo" }, count: { $sum: 1 } } },
     ]),
-    DownloadEvent.countDocuments({}),
-    DownloadEvent.countDocuments({ occurredAt: { $gte: since } }),
+    DownloadEvent.countDocuments(withoutRevenueExcludedUsers({}, excludedUserIds)),
+    DownloadEvent.countDocuments(
+      withoutRevenueExcludedUsers({ occurredAt: { $gte: since } }, excludedUserIds)
+    ),
   ]);
 
   const successful = successAgg[0]?.count ?? 0;
@@ -170,6 +232,7 @@ export async function getRevenueDailyBuckets(
   // Truncate to start-of-UTC-day so the chart x-axis aligns with calendar
   // days regardless of the moment we ran the query.
   since.setUTCHours(0, 0, 0, 0);
+  const excludedUserIds = await getRevenueExcludedUserIds();
 
   const [paymentBuckets, downloadBuckets] = await Promise.all([
     Payment.aggregate<{
@@ -177,7 +240,12 @@ export async function getRevenueDailyBuckets(
       revenueKobo: number;
       payments: number;
     }>([
-      { $match: { status: "success", paidAt: { $gte: since } } },
+      {
+        $match: withoutRevenueExcludedUsers(
+          { status: "success", paidAt: { $gte: since } },
+          excludedUserIds
+        ),
+      },
       {
         $group: {
           _id: { $dateToString: { format: "%Y-%m-%d", date: "$paidAt", timezone: "UTC" } },
@@ -187,7 +255,12 @@ export async function getRevenueDailyBuckets(
       },
     ]),
     DownloadEvent.aggregate<{ _id: string; downloads: number }>([
-      { $match: { occurredAt: { $gte: since } } },
+      {
+        $match: withoutRevenueExcludedUsers(
+          { occurredAt: { $gte: since } },
+          excludedUserIds
+        ),
+      },
       {
         $group: {
           _id: { $dateToString: { format: "%Y-%m-%d", date: "$occurredAt", timezone: "UTC" } },
@@ -220,13 +293,14 @@ export async function getRevenueDailyBuckets(
 
 export async function getTopTemplates(limit = 5): Promise<TopTemplateRow[]> {
   await connectDb();
+  const excludedUserIds = await getRevenueExcludedUserIds();
 
   const paymentAgg = await Payment.aggregate<{
     _id: mongoose.Types.ObjectId;
     payments: number;
     revenueKobo: number;
   }>([
-    { $match: { status: "success" } },
+    { $match: withoutRevenueExcludedUsers({ status: "success" }, excludedUserIds) },
     {
       $group: {
         _id: "$templateId",
@@ -261,7 +335,12 @@ export async function getTopTemplates(limit = 5): Promise<TopTemplateRow[]> {
     _id: mongoose.Types.ObjectId;
     downloads: number;
   }>([
-    { $match: { templateId: { $in: templateIds } } },
+    {
+      $match: withoutRevenueExcludedUsers(
+        { templateId: { $in: templateIds } },
+        excludedUserIds
+      ),
+    },
     { $group: { _id: "$templateId", downloads: { $sum: 1 } } },
   ]);
   const downloadByTemplate = new Map<string, number>();
@@ -296,6 +375,7 @@ export async function getRecentPayments(limit = 20): Promise<RecentPaymentRow[]>
   return rows.map((r) => {
     const template = r.templateId as unknown as { name?: string } | null;
     const user = r.userId as unknown as { name?: string; email?: string } | null;
+    const userEmail = user?.email ?? null;
     return {
       id: String(r._id),
       amountNgn: r.amountKobo / 100,
@@ -304,7 +384,8 @@ export async function getRecentPayments(limit = 20): Promise<RecentPaymentRow[]>
       paystackReference: r.paystackReference,
       templateName: template?.name ?? null,
       userName: user?.name ?? null,
-      userEmail: user?.email ?? null,
+      userEmail,
+      isExcludedFromRevenue: isRevenueExcludedEmail(userEmail),
       createdAt: r.createdAt.toISOString(),
       initializedAt: r.initializedAt ? new Date(r.initializedAt).toISOString() : null,
       expiresAt: r.expiresAt ? new Date(r.expiresAt).toISOString() : null,

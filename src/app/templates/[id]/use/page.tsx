@@ -34,6 +34,7 @@ import { LockedAccessModal } from "@/components/templates/LockedAccessModal";
 import { ShareButton } from "@/components/templates/ShareButton";
 
 import { DesignWorkspace } from "@/components/editor/DesignWorkspace";
+import { WorkspaceTour } from "@/components/editor/WorkspaceTour";
 import { useGoogleFonts } from "@/components/editor/useGoogleFonts";
 import { PaymentModal } from "@/components/payment/PaymentModal";
 import { ProgressModal } from "@/components/ui/ProgressModal";
@@ -872,6 +873,7 @@ export default function UseTemplatePage({
           <button
             type="button"
             onClick={() => setMobileDetailsOpen(true)}
+            data-workspace-tour="mobile-details"
             className="inline-flex h-9 items-center justify-center rounded-xl px-3 text-xs font-semibold transition active:scale-95"
             style={{
               background: "#FFD700",
@@ -1063,6 +1065,7 @@ export default function UseTemplatePage({
                 type="button"
                 disabled={exporting || isDownloadChecking}
                 onClick={startExport}
+                data-workspace-tour="desktop-download"
                 className="inline-flex h-9 items-center justify-center gap-2 rounded-xl px-4 text-xs font-bold uppercase transition active:scale-95 disabled:opacity-60"
                 style={{
                   background: isDownloadChecking || exporting ? "var(--surface-2)" : "#FFD700",
@@ -1103,6 +1106,7 @@ export default function UseTemplatePage({
         </main>
 
         <aside
+          data-workspace-tour="desktop-details"
           className="hidden h-full w-80 flex-col bg-surface-1 lg:flex xl:w-95"
           style={{ borderLeft: "1px solid rgba(255,215,0,0.12)" }}
         >
@@ -1280,6 +1284,7 @@ export default function UseTemplatePage({
             type="button"
             disabled={exporting || downloadChecking}
             onClick={startExport}
+            data-workspace-tour="mobile-download"
             className="inline-flex h-11 flex-1 items-center justify-center gap-2 rounded-2xl px-4 text-sm font-bold transition active:scale-95 disabled:opacity-60"
             style={{
               background: downloadChecking || exporting ? "var(--surface-2)" : "#FFD700",
@@ -1526,6 +1531,8 @@ export default function UseTemplatePage({
           </div>
         </div>
       ) : null}
+
+      <WorkspaceTour />
 
       <ProgressModal
         open={exporting}

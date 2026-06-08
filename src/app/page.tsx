@@ -1626,12 +1626,12 @@ const SIGNOUT_WEEK: Array<{
   blurb: string;
   color: string;
 }> = [
-  { day: "Mon", date: "Day 01", title: "Corporate Day",  vibe: "Suit & tie",       blurb: "Blazers, ties, heels, briefcases. The class shows up looking like the LinkedIn version of itself.", color: "#FFD700" },
-  { day: "Tue", date: "Day 02", title: "Costume Day",    vibe: "Pick a character", blurb: "Superheroes, anime, cartoons, throwback villains. The group chat decides the theme by Sunday night.",   color: "#FF8C42" },
-  { day: "Wed", date: "Day 03", title: "Old School Day", vibe: "Throwback fits",   blurb: "70s flares, 90s denim, school uniforms reimagined. Mama's wardrobe meets the gram.",                   color: "#FF6B6B" },
-  { day: "Thu", date: "Day 04", title: "Cultural Day",   vibe: "Heritage on",      blurb: "Ankara, agbada, gele, isi-agu, atiku. Every state shows up, every culture takes a bow.",               color: "#4ECDC4" },
-  { day: "Fri", date: "Day 05", title: "Jersey Day",     vibe: "Squad colours",    blurb: "Football kits, basketball jerseys, dept colours. Pick your team. Wear it loud.",                       color: "#A855F7" },
-  { day: "Sat", date: "Day 06", title: "Party Night",    vibe: "Headline event",   blurb: "DJ booked. Decor up. The night every flyer, banner, and save-the-date has been pointing to.",          color: "#EC4899" },
+  { day: "Mon", date: "Day 01", title: "Corporate Day",   vibe: "Suit & tie",       blurb: "Blazers, ties, heels, briefcases. The class shows up looking like the LinkedIn version of itself.", color: "#FFD700" },
+  { day: "Tue", date: "Day 02", title: "Costume Day",     vibe: "Pick a character", blurb: "Superheroes, anime, cartoons, throwback villains. The group chat decides the theme by Sunday night.", color: "#FF8C42" },
+  { day: "Wed", date: "Day 03", title: "Jersey Day",      vibe: "Squad colours",    blurb: "Football kits, basketball jerseys, department colours. Pick your team. Wear it loud.",              color: "#A855F7" },
+  { day: "Thu", date: "Day 04", title: "Jean Day",        vibe: "Denim all day",    blurb: "Blue jeans, jackets, skirts, and clean sneakers. Keep it casual, sharp, and photo-ready.",          color: "#4ECDC4" },
+  { day: "Fri", date: "Day 05", title: "Cultural Day",    vibe: "Heritage on",      blurb: "Ankara, agbada, gele, isi-agu, atiku. Every state shows up, every culture takes a bow.",            color: "#FF6B6B" },
+  { day: "Sat", date: "Day 06", title: "Remembrance Day", vibe: "Memory lane",      blurb: "The stories, the faces, the throwbacks, and the moments that made the final year unforgettable.",    color: "#EC4899" },
 ] as const;
 
 function WallOfClass({ classYear }: { classYear: number }) {
@@ -1658,9 +1658,9 @@ function WallOfClass({ classYear }: { classYear: number }) {
 
       <div className="mx-auto px-5 sm:px-8" style={{ maxWidth: 1400, position: "relative" }}>
         <div ref={headerRef} className="nv-stagger" style={{ textAlign: "center", marginBottom: "clamp(40px,5vw,72px)" }}>
-          <NvEyebrow color="rgba(255,215,0,0.7)">Seven days, one ceremony</NvEyebrow>
+          <NvEyebrow color="rgba(255,215,0,0.7)">FYB week, one ceremony</NvEyebrow>
           <h2 style={{ ...jkt, fontWeight: 800, fontSize: "clamp(32px, 6vw, 84px)", lineHeight: 0.95, letterSpacing: "-0.03em", textTransform: "uppercase", marginTop: 18 }}>
-            Sign-out week <span className="nv-shimmer-text">{classYear}</span>
+            FYB week <span className="nv-shimmer-text">{classYear}</span>
           </h2>
           <p style={{ ...sans, fontSize: "clamp(14px,1.3vw,17px)", color: "rgba(255,255,255,0.4)", marginTop: 18, maxWidth: "60ch", marginLeft: "auto", marginRight: "auto", lineHeight: 1.65 }}>
             The week your campus turns into a stage. Every day deserves a poster - a flyer for the hangout, a banner for the photoshoot, a save-the-date for the party.

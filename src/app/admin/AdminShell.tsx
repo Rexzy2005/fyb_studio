@@ -6,6 +6,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
   CreditCard,
+  Building2,
   LayoutDashboard,
   LayoutGrid,
   Menu,
@@ -35,6 +36,7 @@ type NavItem = {
 const NAV: NavItem[] = [
   { href: "/admin", label: "Dashboard", icon: LayoutDashboard },
   { href: "/admin/templates", label: "Templates", icon: LayoutGrid, prefix: true },
+  { href: "/admin/departments", label: "Departments", icon: Building2, prefix: true },
   { href: "/admin/reservations", label: "Reservations", icon: ShieldCheck, prefix: true },
   { href: "/admin/payments", label: "Payment History", icon: CreditCard, prefix: true },
   { href: "/admin/templates/new", label: "Create Template", icon: PlusSquare },

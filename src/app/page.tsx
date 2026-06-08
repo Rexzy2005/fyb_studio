@@ -28,32 +28,6 @@ function getClassYear() {
   return now.getMonth() >= 7 ? now.getFullYear() + 1 : now.getFullYear();
 }
 
-function fybTarget(classYear: number): Date {
-  const d = new Date(classYear, 4, 15);
-  return d > new Date() ? d : new Date(classYear + 1, 4, 15);
-}
-
-type Tick = { d: string; h: string; m: string; s: string } | null;
-
-function useCountdown(target: Date): Tick {
-  const [tick, setTick] = useState<Tick>(null);
-  useEffect(() => {
-    function compute() {
-      const diff = Math.max(0, target.getTime() - Date.now());
-      setTick({
-        d: String(Math.floor(diff / 864e5)).padStart(2, "0"),
-        h: String(Math.floor((diff % 864e5) / 36e5)).padStart(2, "0"),
-        m: String(Math.floor((diff % 36e5) / 6e4)).padStart(2, "0"),
-        s: String(Math.floor((diff % 6e4) / 1e3)).padStart(2, "0"),
-      });
-    }
-    compute();
-    const id = setInterval(compute, 1000);
-    return () => clearInterval(id);
-  }, [target]);
-  return tick;
-}
-
 function useReveal() {
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -672,8 +646,6 @@ function FlipNum({ value, color = "#FFD700" }: { value: string; color?: string }
 const AVATAR_COLS = ["rgba(255,215,0,0.2)", "rgba(255,107,107,0.18)", "rgba(78,205,196,0.18)", "rgba(168,85,247,0.18)", "rgba(249,115,22,0.18)"] as const;
 
 function Hero({ classYear }: { classYear: number }) {
-  const target = fybTarget(classYear);
-  const tick = useCountdown(target);
   const { status } = useSession();
   const isAuthed = status === "authenticated";
 
@@ -838,7 +810,7 @@ function Hero({ classYear }: { classYear: number }) {
           )}
         </div>
 
-        {/* Avatars + countdown stack */}
+        {/* Avatars */}
         <div
           style={{
             marginTop: "clamp(40px,5vw,64px)",
@@ -876,47 +848,6 @@ function Hero({ classYear }: { classYear: number }) {
             </div>
           </div>
 
-          {/* Stadium countdown - now centered & on its own pedestal */}
-          {tick && (
-            <div
-              style={{
-                display: "flex", alignItems: "center", gap: 12,
-                paddingLeft: 18, paddingRight: 0,
-                borderLeft: "1px solid rgba(255,215,0,0.18)",
-                perspective: 600,
-              }}
-            >
-              <div>
-                <div style={{ ...mono, fontSize: 8, letterSpacing: "0.22em", color: "rgba(255,215,0,0.5)", textTransform: "uppercase", marginBottom: 6 }}>
-                  Kick-off in
-                </div>
-                <div style={{ display: "flex", alignItems: "baseline", gap: 6 }}>
-                  {[{ v: tick.d, u: "D" }, { v: tick.h, u: "H" }, { v: tick.m, u: "M" }, { v: tick.s, u: "S" }].map(({ v, u }, idx) => (
-                    <span key={u} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 4 }}>
-                      <span
-                        style={{
-                          display: "inline-flex",
-                          justifyContent: "center",
-                          alignItems: "center",
-                          minWidth: 38,
-                          height: 44,
-                          padding: "0 6px",
-                          fontSize: "clamp(20px, 2.2vw, 28px)",
-                          background: "linear-gradient(180deg, rgba(255,215,0,0.1), rgba(255,140,66,0.05))",
-                          border: "1px solid rgba(255,215,0,0.25)",
-                          borderRadius: 8,
-                          boxShadow: "inset 0 1px 0 rgba(255,255,255,0.08), 0 8px 24px rgba(255,140,66,0.1)",
-                        }}
-                      >
-                        <FlipNum value={v} color={["#FFD700", "#FF8C42", "#FF6B6B", "#4ECDC4"][idx]} />
-                      </span>
-                      <span style={{ ...mono, fontSize: 8, letterSpacing: "0.2em", color: "rgba(255,215,0,0.4)" }}>{u}</span>
-                    </span>
-                  ))}
-                </div>
-              </div>
-            </div>
-          )}
         </div>
       </div>
 

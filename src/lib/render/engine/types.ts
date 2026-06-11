@@ -15,6 +15,7 @@ export type RenderOpts = {
     { source: CanvasImageSource; objectFit: "cover" | "contain"; preservePaintScaleMode?: boolean }
   >;
   previewColorByNodeId?: Record<string, string>;
+  abortSignal?: AbortSignal;
   // When true, the canvas backend does not paint TEXT nodes - text is composited
   // separately via the SVG layer (see SvgTextLayerBuilder).
   skipText: boolean;

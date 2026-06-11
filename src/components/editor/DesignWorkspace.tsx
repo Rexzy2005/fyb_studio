@@ -6,12 +6,57 @@ import { Maximize2, Minus, Plus } from "lucide-react";
 import type { NormalizedDesignV1, NormalizedNode } from "@/lib/figma";
 import { CanvasBackend } from "@/lib/render/engine/backends/canvasBackend";
 import { renderTree } from "@/lib/render/engine/renderTree";
-import { buildTextSvg } from "@/lib/render/engine/svgTextLayer";
+import { buildEmbeddedFontFacesStyle } from "@/lib/render/features/embedFonts";
 import { hitTestNodeId } from "@/lib/render/hitTest";
 import { useTemplateEditorStore } from "@/lib/stores/templateEditorStore";
 import type { FieldConfig } from "@/lib/storage/types";
 
 import { computeRenderOrder } from "./types";
+
+const embeddedFontFacesCache = new Map<string, Promise<string>>();
+
+function stableStringify(value: unknown): string {
+  if (value === null || typeof value !== "object") {
+    const primitive = JSON.stringify(value);
+    return primitive === undefined ? "undefined" : primitive;
+  }
+  if (Array.isArray(value)) return `[${value.map(stableStringify).join(",")}]`;
+
+  const entries = Object.entries(value as Record<string, unknown>)
+    .filter(([, v]) => typeof v !== "undefined")
+    .sort(([a], [b]) => a.localeCompare(b));
+  return `{${entries.map(([k, v]) => `${JSON.stringify(k)}:${stableStringify(v)}`).join(",")}}`;
+}
+
+function stableStringMapKey(map: Record<string, string>): string {
+  return stableStringify(map);
+}
+
+function stableImageMapKey(
+  map: Record<string, { url: string; objectFit: "cover" | "contain"; preservePaintScaleMode?: boolean }>,
+): string {
+  const visualMap: Record<string, { url: string; objectFit: "cover" | "contain"; preservePaintScaleMode: boolean }> = {};
+  for (const [id, entry] of Object.entries(map)) {
+    visualMap[id] = {
+      url: entry.url,
+      objectFit: entry.objectFit,
+      preservePaintScaleMode: Boolean(entry.preservePaintScaleMode),
+    };
+  }
+  return stableStringify(visualMap);
+}
+
+function stableFontsKey(fonts: string[] | undefined): string {
+  return [...new Set(fonts ?? [])].sort((a, b) => a.localeCompare(b)).join("|");
+}
+
+function loadEmbeddedFontFacesStyle(fonts: string[], key: string): Promise<string> {
+  const cached = embeddedFontFacesCache.get(key);
+  if (cached) return cached;
+  const promise = buildEmbeddedFontFacesStyle(fonts).catch(() => "");
+  embeddedFontFacesCache.set(key, promise);
+  return promise;
+}
 
 type Props = {
   design: NormalizedDesignV1;
@@ -588,14 +633,15 @@ export function DesignWorkspace({
           >
             <CanvasShapesLayer
               design={design}
+              fieldConfig={fieldConfig}
+              previewTextByNodeId={previewTextByNodeId}
               orderedNodeIds={ordered}
               colorOverrideByNodeId={colorOverrideByNodeId}
               previewImageByNodeId={previewImageByNodeId}
             />
-            <SvgTextLayer
+            <GuidesLayer
               design={design}
               fieldConfig={fieldConfig}
-              previewTextByNodeId={previewTextByNodeId}
               selectedNodeId={selectedNodeId}
               showGuides={showGuides}
             />
@@ -635,10 +681,14 @@ export function DesignWorkspace({
 
 function CanvasShapesLayer({
   design,
+  fieldConfig,
+  previewTextByNodeId,
   colorOverrideByNodeId,
   previewImageByNodeId,
 }: {
   design: NormalizedDesignV1;
+  fieldConfig: FieldConfig;
+  previewTextByNodeId: Record<string, string>;
   // Kept for API parity even though the unified renderer pulls the order itself.
   orderedNodeIds?: string[];
   colorOverrideByNodeId: Record<string, string>;
@@ -650,6 +700,12 @@ function CanvasShapesLayer({
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const imagesRef = useRef(new Map<string, HTMLImageElement>());
   const [imageTick, setImageTick] = useState(0);
+  const [fontFacesStyle, setFontFacesStyle] = useState("");
+  const fieldConfigKey = useMemo(() => stableStringify(fieldConfig), [fieldConfig]);
+  const previewTextKey = useMemo(() => stableStringMapKey(previewTextByNodeId), [previewTextByNodeId]);
+  const colorOverrideKey = useMemo(() => stableStringMapKey(colorOverrideByNodeId), [colorOverrideByNodeId]);
+  const previewImageKey = useMemo(() => stableImageMapKey(previewImageByNodeId), [previewImageByNodeId]);
+  const fontsKey = useMemo(() => stableFontsKey(design.assets?.fonts), [design.assets?.fonts]);
 
   // Eager-load preview images into HTMLImageElements; bumps imageTick on completion
   // so the render effect picks them up.
@@ -686,11 +742,27 @@ function CanvasShapesLayer({
     return () => {
       cancelled = true;
     };
-  }, [previewImageByNodeId]);
+  }, [previewImageKey]);
+
+  useEffect(() => {
+    let cancelled = false;
+    void loadEmbeddedFontFacesStyle(design.assets?.fonts ?? [], fontsKey)
+      .then((style) => {
+        if (!cancelled) setFontFacesStyle((current) => (current === style ? current : style));
+      })
+      .catch(() => {
+        if (!cancelled) setFontFacesStyle((current) => (current === "" ? current : ""));
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [fontsKey]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
+    const controller = new AbortController();
+    const signal = controller.signal;
     const dpr = window.devicePixelRatio || 1;
     // Exact design dimensions for CSS sizing; only the bitmap pixels are
     // rounded (mandatory for canvas) and the transform compensates so design
@@ -713,9 +785,14 @@ function CanvasShapesLayer({
     const backend = new CanvasBackend({
       ctx,
       opts: {
+        previewTextByNodeId,
         previewColorByNodeId: undefined,
-        skipText: true,
+        abortSignal: signal,
+        skipText: false,
       },
+      design,
+      fieldConfig,
+      fontFacesStyle,
       colorOverrideByNodeId,
       resolvePreviewImage: (id) => {
         const url = previewImageByNodeId[id]?.url;
@@ -731,15 +808,27 @@ function CanvasShapesLayer({
       },
     });
 
-    let cancelled = false;
-    void renderTree(design, backend, { skipText: true })
+    const raf = requestAnimationFrame(() => {
+      void renderTree(design, backend, { previewTextByNodeId, abortSignal: signal, skipText: false })
       .catch((err) => {
-        if (!cancelled) console.error("[render] tree render failed", err);
+        if (signal.aborted) return;
+        if (err instanceof DOMException && err.name === "AbortError") return;
+        console.error("[render] tree render failed", err);
       });
+    });
     return () => {
-      cancelled = true;
+      controller.abort();
+      cancelAnimationFrame(raf);
     };
-  }, [design, colorOverrideByNodeId, imageTick, previewImageByNodeId]);
+  }, [
+    design,
+    fieldConfigKey,
+    fontFacesStyle,
+    colorOverrideKey,
+    imageTick,
+    previewImageKey,
+    previewTextKey,
+  ]);
 
   return <canvas ref={canvasRef} className="absolute inset-0" />;
 }
@@ -912,68 +1001,27 @@ function WatermarkOverlay({
   );
 }
 
-function SvgTextLayer({
+function GuidesLayer({
   design,
   fieldConfig,
-  previewTextByNodeId,
   selectedNodeId,
   showGuides,
 }: {
   design: NormalizedDesignV1;
   fieldConfig: FieldConfig;
-  previewTextByNodeId: Record<string, string>;
   selectedNodeId: string | null;
   showGuides: boolean;
 }) {
   const selected = selectedNodeId ? design.nodesById[selectedNodeId] : undefined;
-  const [fontEpoch, setFontEpoch] = useState(0);
-
-  useEffect(() => {
-    if (typeof document === "undefined" || !document.fonts) return;
-    let cancelled = false;
-    const bump = () => {
-      if (!cancelled) setFontEpoch((v) => v + 1);
-    };
-
-    void document.fonts.ready.then(bump).catch(() => {});
-    document.fonts.addEventListener?.("loadingdone", bump);
-    document.fonts.addEventListener?.("loadingerror", bump);
-
-    return () => {
-      cancelled = true;
-      document.fonts.removeEventListener?.("loadingdone", bump);
-      document.fonts.removeEventListener?.("loadingerror", bump);
-    };
-  }, []);
-
-  // Build the text layer SVG via the shared engine so editor and PNG export stay in lockstep.
-  // Editor guide rectangles are appended below for every configured field; keep
-  // them out of the shared text SVG so text fields do not get double outlines.
-  const svgInner = useMemo(
-    () => {
-      void fontEpoch;
-      return buildTextSvg({ design, fieldConfig, previewTextByNodeId, includeGuides: false });
-    },
-    [design, fieldConfig, previewTextByNodeId, fontEpoch],
-  );
-
-  // The shared builder returns a full <svg ...>...</svg> string with its own viewBox.
-  // We inline its <defs> and body content into the React-controlled <svg> so click
-  // targets and overlays from the editor compose cleanly above it.
-  const innerHtml = useMemo(() => {
-    const match = svgInner.match(/<svg[^>]*>([\s\S]*)<\/svg>/);
-    return match ? match[1] : svgInner;
-  }, [svgInner]);
 
   return (
     <svg
-      className="absolute inset-0"
+      className="pointer-events-none absolute inset-0"
       width={design.canvas.width}
       height={design.canvas.height}
       viewBox={`0 0 ${design.canvas.width} ${design.canvas.height}`}
       dangerouslySetInnerHTML={{
         __html:
-          innerHtml +
           (showGuides
             ? fieldConfig.fields
                 .map((f) => {

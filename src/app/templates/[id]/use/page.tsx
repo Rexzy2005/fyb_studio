@@ -4,13 +4,14 @@ import { use, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useSession } from "next-auth/react";
-import { ArrowLeft, CheckCircle2, ChevronLeft, ChevronRight, Download, GraduationCap, Menu, X } from "lucide-react";
+import { ArrowLeft, CheckCircle2, ChevronLeft, ChevronRight, CreditCard, Eye, GraduationCap, Menu, X } from "lucide-react";
 import imageCompression from "browser-image-compression";
 
 import type { NormalizedDesignV1 } from "@/lib/figma";
 import { composeImageMap } from "@/lib/render/composeImageMap";
 import { usePluginImages } from "@/lib/render/usePluginImages";
 import { exportTemplatePng } from "@/lib/render/exportPng";
+import { buildUserDesignExportImages } from "@/lib/render/exportUserDesign";
 import { useRemoteDesignAssets } from "@/lib/render/useRemoteDesignAssets";
 import { useTemplateEditorStore } from "@/lib/stores/templateEditorStore";
 import type { FieldConfig, UserDesignRecord } from "@/lib/storage/types";
@@ -36,11 +37,18 @@ import { ShareButton } from "@/components/templates/ShareButton";
 import { DesignWorkspace } from "@/components/editor/DesignWorkspace";
 import { WorkspaceTour } from "@/components/editor/WorkspaceTour";
 import { useGoogleFonts } from "@/components/editor/useGoogleFonts";
-import { PaymentModal } from "@/components/payment/PaymentModal";
 import { ProgressModal } from "@/components/ui/ProgressModal";
 import { CurtainOpen } from "@/components/ui/CurtainOpen";
 import { useSimulatedProgress } from "@/components/ui/useSimulatedProgress";
-import { fetchActiveGrant, recordDownload, verifyPayment } from "@/lib/api/payments";
+import {
+  fetchActiveGrant,
+  initializePayment,
+  loadPaystackScript,
+  openPaystackPopup,
+  recordDownload,
+  recordPaymentEvent,
+  verifyPayment,
+} from "@/lib/api/payments";
 import {
   clearPendingDownload,
   listPendingDownloads,
@@ -49,6 +57,7 @@ import {
 import {
   clearPaymentAttempt,
   findPaymentAttemptForDesign,
+  recordPaymentAttempt,
 } from "@/lib/payment/paymentAttempts";
 
 function deriveCategoryLabel(name: string, explicit: string | null): string {
@@ -72,6 +81,7 @@ function deriveCategoryLabel(name: string, explicit: string | null): string {
 const STANDARD_EXPORT_SCALE = 2;
 const PAYMENT_GRANT_POLL_MS = 2000;
 const PAYMENT_VERIFY_FALLBACK_MS = 8000;
+type MobilePaymentStage = "checking" | "opening" | "paying";
 
 // Mobile devices (particularly iOS) have stricter canvas memory limits.
 // Use 1× on small screens so large canvases don't OOM the tab.
@@ -117,17 +127,18 @@ export default function UseTemplatePage({
   const [exporting, setExporting] = useState(false);
   const [exportStage, setExportStage] = useState<string>("");
   const [downloadChecking, setDownloadChecking] = useState(false);
-  const [exportChecking, setExportChecking] = useState(false);
   const [downloadSuccess, setDownloadSuccess] = useState(false);
   const [mobileDetailsOpen, setMobileDetailsOpen] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [mobileReadyToPay, setMobileReadyToPay] = useState(false);
+  const [mobilePaymentStage, setMobilePaymentStage] = useState<MobilePaymentStage | null>(null);
+  const [mobilePaymentError, setMobilePaymentError] = useState<string | null>(null);
   const [autoFitNonce, setAutoFitNonce] = useState(0);
   const [mobileFormPage, setMobileFormPage] = useState(0);
   const mobileFormScrollRef = useRef<HTMLDivElement | null>(null);
   const [desktopFormPage, setDesktopFormPage] = useState(0);
   const desktopFormScrollRef = useRef<HTMLDivElement | null>(null);
 
-  const [paymentModalOpen, setPaymentModalOpen] = useState(false);
   const [previewTextByNodeId, setPreviewTextByNodeId] = useState<Record<string, string>>({});
   const [previewImageByNodeId, setPreviewImageByNodeId] = useState<Record<
     string,
@@ -358,22 +369,26 @@ export default function UseTemplatePage({
   }, [fieldConfig]);
 
   const desktopGroups = userFormGroups;
-  const desktopSectionCount = Math.max(1, desktopGroups.length);
+  const desktopReviewStep = desktopGroups.length;
+  const desktopFlowStepCount = Math.max(1, desktopGroups.length + 1);
+  const isDesktopReviewStep = desktopFormPage >= desktopReviewStep;
   const currentDesktopSection = desktopGroups[
     Math.min(desktopFormPage, desktopGroups.length - 1)
   ];
   const mobileSections = userFormGroups;
-  const mobileSectionCount = Math.max(1, mobileSections.length);
+  const mobileReviewStep = mobileSections.length;
+  const mobileFlowStepCount = Math.max(1, mobileSections.length + 1);
+  const isMobileReviewStep = mobileFormPage >= mobileReviewStep;
   const currentMobileSection = mobileSections[
     Math.min(mobileFormPage, mobileSections.length - 1)
   ];
 
   // Clamp desktop page if section count changes
   useEffect(() => {
-    if (desktopFormPage >= desktopSectionCount) {
-      setDesktopFormPage(Math.max(0, desktopSectionCount - 1));
+    if (desktopFormPage >= desktopFlowStepCount) {
+      setDesktopFormPage(Math.max(0, desktopFlowStepCount - 1));
     }
-  }, [desktopSectionCount, desktopFormPage]);
+  }, [desktopFlowStepCount, desktopFormPage]);
 
   useEffect(() => {
     if (!mobileDetailsOpen) return;
@@ -381,6 +396,12 @@ export default function UseTemplatePage({
     const raf = requestAnimationFrame(() => mobileFormScrollRef.current?.scrollTo({ top: 0 }));
     return () => cancelAnimationFrame(raf);
   }, [mobileDetailsOpen]);
+
+  useEffect(() => {
+    if (mobileFormPage >= mobileFlowStepCount) {
+      setMobileFormPage(Math.max(0, mobileFlowStepCount - 1));
+    }
+  }, [mobileFlowStepCount, mobileFormPage]);
 
   // While the auth-gate effect is redirecting an unauthenticated user, show
   // a quiet loading state instead of flashing the workspace UI.
@@ -441,7 +462,14 @@ export default function UseTemplatePage({
   }
 
   const recordName = userDesign.name;
-  const isDownloadChecking = exportChecking || (resumeRequested && downloadChecking);
+  const mobilePaymentLabel =
+    mobilePaymentStage === "checking"
+      ? "Checking..."
+      : mobilePaymentStage === "opening"
+        ? "Opening Paystack..."
+        : mobilePaymentStage === "paying"
+          ? "Waiting for payment..."
+          : null;
 
   function onPreviewTextChange(nodeId: string, value: string) {
     const field = fieldConfig?.fields.find(
@@ -562,47 +590,27 @@ export default function UseTemplatePage({
       // was supplied by the plugin (logos, decorative imagery, default
       // portraits) rendered as a transparent placeholder in the PNG even
       // though the editor showed it correctly.
-      const imageBlobs: Record<
-        string,
-        { blob: Blob; objectFit: "cover" | "contain"; preservePaintScaleMode?: boolean }
-      > = {};
+      const imageBlobs = await buildUserDesignExportImages({
+        design: normalized,
+        fieldConfig,
+        userImagesByNodeId: Object.fromEntries(
+          Object.entries(previewImagesRef.current).map(([nodeId, entry]) => [
+            nodeId,
+            { blob: entry.blob, objectFit: entry.objectFit },
+          ]),
+        ),
+        designAssetImagesByNodeId: designAssetImageByNodeId,
+      });
 
       // 1. Plugin originals - these may be data URLs, blob URLs, or
       // Cloudinary URLs; fetch them into Blobs for the export renderer.
-      await Promise.all(
-        Object.entries(pluginImageByNodeId).map(async ([nodeId, entry]) => {
-          const blob = await imageUrlToBlob(entry.url);
-          if (blob) {
-            imageBlobs[nodeId] = {
-              blob,
-              objectFit: entry.objectFit,
-              preservePaintScaleMode: entry.preservePaintScaleMode,
-            };
-          }
-        })
-      );
+      
 
       // 2. User-uploaded previews override plugin originals.
-      for (const [nodeId, v] of Object.entries(previewImageByNodeId)) {
-        if (v.blob) {
-          imageBlobs[nodeId] = { blob: v.blob, objectFit: v.objectFit };
-        }
-      }
+      
 
       // 3. Admin design assets — overrides per field.imageSource setting.
-      for (const f of fieldConfig.fields) {
-        if (f.kind !== "image") continue;
-        if (f.imageSource !== "design_asset") continue;
-        const asset = designAssetImageByNodeId[f.nodeId];
-        if (asset) {
-          imageBlobs[f.nodeId] = {
-            blob: asset.blob,
-            objectFit: f.imageBehavior?.fit ?? f.cropRule ?? "cover",
-          };
-        } else {
-          delete imageBlobs[f.nodeId];
-        }
-      }
+      
 
       setExportStage("Rendering design");
       const {
@@ -724,13 +732,21 @@ export default function UseTemplatePage({
     }
   }
 
-  async function startExport() {
-    if (exporting || exportChecking) return;
+  async function startMobilePayToDownload() {
+    if (exporting || mobilePaymentStage) return;
     if (!userDesign) return;
-    await persistInputsNow();
-    setExportChecking(true);
-    let hasGrant = false;
+    if (!session?.user?.email) {
+      setMobilePaymentError("No email found on your account. Sign out and back in, then retry.");
+      return;
+    }
+
+    setMobilePaymentError(null);
+    let activeReference: string | null = null;
+
     try {
+      await persistInputsNow();
+
+      setMobilePaymentStage("checking");
       const info = await fetchActiveGrant(
         {
           templateId: userDesign.templateId,
@@ -738,17 +754,100 @@ export default function UseTemplatePage({
         },
         { timeoutMs: 8000 }
       );
-      hasGrant = Boolean(info.grant);
+      if (info.grant) {
+        await doExportPng(getExportScale());
+        return;
+      }
+
+      setMobilePaymentStage("opening");
+      const init = await initializePayment({
+        templateId: userDesign.templateId,
+        userDesignId: userDesign.id,
+      });
+      activeReference = init.reference;
+      recordPaymentAttempt({
+        reference: init.reference,
+        templateId: userDesign.templateId,
+        templateName: recordName,
+        userDesignId: userDesign.id,
+        amountNgn: init.amountNgn,
+        initializedAt: Date.now(),
+      });
+      await loadPaystackScript();
+
+      setMobilePaymentStage("paying");
+      const reference = await openPaystackPopup({
+        publicKey: init.publicKey,
+        reference: init.reference,
+        amountKobo: init.amountKobo,
+        email: session.user.email,
+        onSuccess: () => {},
+        onCancel: () => {
+          clearPaymentAttempt(init.reference);
+          void recordPaymentEvent({
+            reference: init.reference,
+            event: "cancelled",
+          }).catch((err) => {
+            console.error("[payment] cancel event failed", err);
+          });
+        },
+      });
+
+      recordPendingDownload({
+        reference,
+        templateId: userDesign.templateId,
+        templateName: recordName,
+        userDesignId: userDesign.id,
+        paidAt: Date.now(),
+      });
+      clearPaymentAttempt(reference);
+
+      void verifyPayment(reference)
+        .then((verified) => {
+          recordPendingDownload({
+            reference: verified.grant.paystackReference,
+            templateId: verified.grant.templateId,
+            templateName: recordName,
+            userDesignId: verified.grant.userDesignId,
+            paidAt: Date.now(),
+          });
+          clearPaymentAttempt(verified.grant.paystackReference);
+          void recordDownload({
+            templateId: verified.grant.templateId,
+            userDesignId: verified.grant.userDesignId,
+            scale: getExportScale(),
+          })
+            .then(() => {
+              clearPendingDownload(verified.grant.paystackReference);
+            })
+            .catch(() => {
+              // The normal export path may already have consumed the grant.
+            });
+        })
+        .catch((err) => {
+          console.warn("[payment] background verification failed", err);
+        });
+
+      await doExportPng(getExportScale());
     } catch (err) {
-      console.error("[use] grant check failed", err);
+      const message =
+        err instanceof Error ? err.message : "Payment could not be completed. Please try again.";
+      if (message === "Payment was cancelled") {
+        if (activeReference) clearPaymentAttempt(activeReference);
+        return;
+      }
+      setMobilePaymentError(message);
     } finally {
-      setExportChecking(false);
+      setMobilePaymentStage(null);
     }
-    if (hasGrant) {
-      void doExportPng(getExportScale());
-      return;
-    }
-    setPaymentModalOpen(true);
+  }
+
+  async function returnToMobileCanvasPreview() {
+    await persistInputsNow();
+    setMobileDetailsOpen(false);
+    setMobileReadyToPay(true);
+    setMobilePaymentError(null);
+    setAutoFitNonce((n) => n + 1);
   }
 
   function resetUserWorkspace() {
@@ -758,8 +857,17 @@ export default function UseTemplatePage({
     setPreviewTextByNodeId({});
     setPreviewColorByNodeId({});
     setPreviewImageByNodeId({});
+    setMobileReadyToPay(false);
+    setMobilePaymentError(null);
     resetView();
     setAutoFitNonce((n) => n + 1);
+  }
+
+  function openMobileDetailsFlow() {
+    setMobileReadyToPay(false);
+    setMobilePaymentError(null);
+    setMobileFormPage(0);
+    setMobileDetailsOpen(true);
   }
 
   return (
@@ -872,7 +980,7 @@ export default function UseTemplatePage({
           />
           <button
             type="button"
-            onClick={() => setMobileDetailsOpen(true)}
+            onClick={openMobileDetailsFlow}
             data-workspace-tour="mobile-details"
             className="inline-flex h-9 items-center justify-center rounded-xl px-3 text-xs font-semibold transition active:scale-95"
             style={{
@@ -881,7 +989,7 @@ export default function UseTemplatePage({
               letterSpacing: "0.02em",
             }}
           >
-            Details
+            Edit
           </button>
         </div>
       </div>
@@ -1061,27 +1169,6 @@ export default function UseTemplatePage({
                 variant="pill"
                 size={36}
               />
-              <button
-                type="button"
-                disabled={exporting || isDownloadChecking}
-                onClick={startExport}
-                data-workspace-tour="desktop-download"
-                className="inline-flex h-9 items-center justify-center gap-2 rounded-xl px-4 text-xs font-bold uppercase transition active:scale-95 disabled:opacity-60"
-                style={{
-                  background: isDownloadChecking || exporting ? "var(--surface-2)" : "#FFD700",
-                  color: isDownloadChecking || exporting ? "var(--ink-muted)" : "#000",
-                  boxShadow: isDownloadChecking || exporting ? "none" : "0 6px 18px rgba(255,180,0,0.32)",
-                  letterSpacing: "0.06em",
-                }}
-              >
-                {isDownloadChecking ? (
-                  <><span className="fyb-dots"><span /><span /><span /></span> Checking</>
-                ) : exporting ? (
-                  "Exporting…"
-                ) : (
-                  <><Download className="h-3.5 w-3.5" /> Download PNG</>
-                )}
-              </button>
             </div>
           </div>
 
@@ -1129,7 +1216,14 @@ export default function UseTemplatePage({
             </div>
             <div className="flex items-center justify-between gap-2">
               <div className="min-w-0 flex items-center gap-2">
-                {currentDesktopSection ? (() => {
+                {isDesktopReviewStep ? (
+                  <span
+                    className="grid h-7 w-7 shrink-0 place-items-center rounded-lg"
+                    style={{ background: "rgba(255,215,0,0.1)", border: "1px solid rgba(255,215,0,0.2)" }}
+                  >
+                    <CreditCard className="h-3.5 w-3.5" style={{ color: "#FFD700" }} />
+                  </span>
+                ) : currentDesktopSection ? (() => {
                   const Icon = sectionIcon(currentDesktopSection.section.icon);
                   return (
                     <span
@@ -1142,10 +1236,10 @@ export default function UseTemplatePage({
                 })() : null}
                 <div className="min-w-0">
                   <div className="truncate text-sm font-semibold text-ink dark:text-ink">
-                    {currentDesktopSection?.section.label ?? "Your details"}
+                    {isDesktopReviewStep ? "Preview and payment" : currentDesktopSection?.section.label ?? "Your details"}
                   </div>
                   <div className="text-[10px] uppercase" style={{ color: "rgba(255,255,255,0.4)", letterSpacing: "0.14em" }}>
-                    Section {Math.min(desktopFormPage + 1, desktopSectionCount)} of {desktopSectionCount}
+                    Section {Math.min(desktopFormPage + 1, desktopFlowStepCount)} of {desktopFlowStepCount}
                   </div>
                 </div>
               </div>
@@ -1153,17 +1247,21 @@ export default function UseTemplatePage({
                 className="shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold"
                 style={{ background: "rgba(255,215,0,0.08)", color: "rgba(255,215,0,0.7)", letterSpacing: "0.05em" }}
               >
-                {currentDesktopSection?.fields.length ?? 0}
+                {isDesktopReviewStep ? "Pay" : currentDesktopSection?.fields.length ?? 0}
               </span>
             </div>
             {/* Section dots - tappable */}
-            {desktopSectionCount > 1 && (
+            {desktopFlowStepCount > 1 && (
               <div className="mt-3 flex items-center gap-1.5">
-                {desktopGroups.map((g, idx) => {
+                {Array.from({ length: desktopFlowStepCount }).map((_, idx) => {
                   const active = idx === desktopFormPage;
+                  const label =
+                    idx === desktopReviewStep
+                      ? "Preview and payment"
+                      : desktopGroups[idx]?.section.label ?? `Step ${idx + 1}`;
                   return (
                     <button
-                      key={g.section.id}
+                      key={idx}
                       type="button"
                       onClick={() => {
                         setDesktopFormPage(idx);
@@ -1171,7 +1269,7 @@ export default function UseTemplatePage({
                           desktopFormScrollRef.current?.scrollTo({ top: 0, behavior: "smooth" })
                         );
                       }}
-                      aria-label={`Go to ${g.section.label}`}
+                      aria-label={`Go to ${label}`}
                       className="rounded-full transition-all"
                       style={{
                         height: 4,
@@ -1187,26 +1285,109 @@ export default function UseTemplatePage({
 
           {/* Scrollable section content */}
           <div ref={desktopFormScrollRef} className="min-h-0 flex-1 overflow-y-auto p-3 xl:p-4">
-            <div className="space-y-2">
-              {(currentDesktopSection?.fields ?? []).map((f) => (
-                <FormField
-                  key={f.id}
-                  field={f}
-                  previewTextByNodeId={previewTextByNodeId}
-                  previewImageByNodeId={previewImageByNodeId}
-                  imageLoadingByNodeId={imageLoadingByNodeId}
-                  previewColorByNodeId={previewColorByNodeId}
-                  onPreviewTextChange={onPreviewTextChange}
-                  onPreviewImageChange={onPreviewImageChange}
-                  onPreviewColorChange={onPreviewColorChange}
-                  density="compact"
-                />
-              ))}
-            </div>
+            {isDesktopReviewStep ? (
+              <div className="space-y-3">
+                <section
+                  className="overflow-hidden rounded-2xl"
+                  style={{
+                    border: "1px solid rgba(255,215,0,0.18)",
+                    background: "linear-gradient(180deg, rgba(255,215,0,0.08), rgba(255,255,255,0.025))",
+                  }}
+                >
+                  <div className="px-4 py-4">
+                    <div
+                      className="mb-2 inline-flex items-center gap-2 rounded-full px-3 py-1 text-[10px] font-bold uppercase"
+                      style={{
+                        background: "rgba(255,215,0,0.1)",
+                        color: "#FFD700",
+                        letterSpacing: "0.16em",
+                      }}
+                    >
+                      <Eye className="h-3.5 w-3.5" />
+                      Ready to export
+                    </div>
+                    <h2 className="text-lg font-bold tracking-tight text-ink dark:text-ink">
+                      Review and pay for your final design.
+                    </h2>
+                  </div>
+                </section>
+
+                <section
+                  className="overflow-hidden rounded-2xl"
+                  style={{
+                    border: "1px solid rgba(255,215,0,0.18)",
+                    background: "rgba(255,255,255,0.025)",
+                  }}
+                >
+                  <div className="border-b border-hairline px-4 py-3 dark:border-hairline">
+                    <div
+                      className="text-[10px] font-bold uppercase"
+                      style={{ color: "rgba(255,215,0,0.75)", letterSpacing: "0.18em" }}
+                    >
+                      Payment breakdown
+                    </div>
+                    <div className="mt-1 truncate text-sm font-semibold text-ink dark:text-ink">
+                      {recordName}
+                    </div>
+                  </div>
+                  <div className="px-4 py-3">
+                    <div className="flex items-center justify-between gap-3 py-2 text-sm">
+                      <span className="text-ink-muted dark:text-ink-muted">Print-ready PNG</span>
+                      <span className="font-semibold text-ink dark:text-ink">NGN 1,000</span>
+                    </div>
+                    <div className="flex items-center justify-between gap-3 py-2 text-sm">
+                      <span className="text-ink-muted dark:text-ink-muted">Template editing</span>
+                      <span className="font-semibold text-ink dark:text-ink">Included</span>
+                    </div>
+                    <div className="flex items-center justify-between gap-3 border-t border-dashed border-hairline pt-4 dark:border-hairline">
+                      <span
+                        className="text-[10px] font-bold uppercase"
+                        style={{ color: "rgba(255,215,0,0.75)", letterSpacing: "0.18em" }}
+                      >
+                        Total due
+                      </span>
+                      <span className="text-2xl font-black tracking-tight text-ink dark:text-ink">
+                        NGN 1,000
+                      </span>
+                    </div>
+                  </div>
+                </section>
+
+                {mobilePaymentError ? (
+                  <div
+                    className="rounded-2xl px-3 py-2 text-xs"
+                    style={{
+                      background: "rgba(239,68,68,0.12)",
+                      border: "1px solid rgba(239,68,68,0.28)",
+                      color: "#fca5a5",
+                    }}
+                  >
+                    {mobilePaymentError}
+                  </div>
+                ) : null}
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {(currentDesktopSection?.fields ?? []).map((f) => (
+                  <FormField
+                    key={f.id}
+                    field={f}
+                    previewTextByNodeId={previewTextByNodeId}
+                    previewImageByNodeId={previewImageByNodeId}
+                    imageLoadingByNodeId={imageLoadingByNodeId}
+                    previewColorByNodeId={previewColorByNodeId}
+                    onPreviewTextChange={onPreviewTextChange}
+                    onPreviewImageChange={onPreviewImageChange}
+                    onPreviewColorChange={onPreviewColorChange}
+                    density="compact"
+                  />
+                ))}
+              </div>
+            )}
           </div>
 
           {/* Back / Next pager */}
-          {desktopSectionCount > 1 && (
+          {desktopFlowStepCount > 1 && (
             <div
               className="px-4 py-2.5"
               style={{ borderTop: "1px solid rgba(255,215,0,0.1)" }}
@@ -1234,22 +1415,34 @@ export default function UseTemplatePage({
                 </button>
                 <button
                   type="button"
-                  disabled={desktopFormPage >= desktopSectionCount - 1}
+                  disabled={Boolean(mobilePaymentStage)}
                   onClick={() => {
-                    setDesktopFormPage((p) => Math.min(desktopSectionCount - 1, p + 1));
+                    if (isDesktopReviewStep) {
+                      void startMobilePayToDownload();
+                      return;
+                    }
+                    setDesktopFormPage((p) => Math.min(desktopFlowStepCount - 1, p + 1));
                     requestAnimationFrame(() =>
                       desktopFormScrollRef.current?.scrollTo({ top: 0, behavior: "smooth" })
                     );
                   }}
                   className="inline-flex h-9 flex-1 items-center justify-center gap-1.5 rounded-xl px-3 text-xs font-semibold uppercase transition disabled:opacity-30"
                   style={{
-                    background: desktopFormPage >= desktopSectionCount - 1 ? "rgba(255,255,255,0.05)" : "#FFD700",
-                    color: desktopFormPage >= desktopSectionCount - 1 ? "rgba(255,255,255,0.5)" : "#000",
+                    background: mobilePaymentStage ? "rgba(255,255,255,0.05)" : "#FFD700",
+                    color: mobilePaymentStage ? "rgba(255,255,255,0.5)" : "#000",
                     letterSpacing: "0.06em",
                   }}
                 >
-                  Next
-                  <ChevronRight className="h-3.5 w-3.5" />
+                  {mobilePaymentLabel ? (
+                    <><span className="fyb-dots"><span /><span /><span /></span> {mobilePaymentLabel}</>
+                  ) : isDesktopReviewStep ? (
+                    <><CreditCard className="h-3.5 w-3.5" /> Download</>
+                  ) : (
+                    <>
+                      Next
+                      <ChevronRight className="h-3.5 w-3.5" />
+                    </>
+                  )}
                 </button>
               </div>
             </div>
@@ -1266,10 +1459,23 @@ export default function UseTemplatePage({
           boxShadow: "0 -8px 24px rgba(0,0,0,0.4)",
         }}
       >
-        <div className="mx-auto flex w-full max-w-xl items-center gap-2">
+        <div className="mx-auto flex w-full max-w-xl flex-col gap-2">
+          {mobilePaymentError ? (
+            <div
+              className="rounded-2xl px-3 py-2 text-xs"
+              style={{
+                background: "rgba(239,68,68,0.12)",
+                border: "1px solid rgba(239,68,68,0.28)",
+                color: "#fca5a5",
+              }}
+            >
+              {mobilePaymentError}
+            </div>
+          ) : null}
+          <div className="flex items-center gap-2">
           <button
             type="button"
-            disabled={exporting || downloadChecking || !hasEdits}
+            disabled={exporting || downloadChecking || Boolean(mobilePaymentStage) || !hasEdits}
             onClick={resetUserWorkspace}
             className="inline-flex h-11 flex-1 items-center justify-center rounded-2xl px-4 text-sm font-semibold transition disabled:opacity-40 active:scale-95"
             style={{
@@ -1282,195 +1488,302 @@ export default function UseTemplatePage({
           </button>
           <button
             type="button"
-            disabled={exporting || downloadChecking}
-            onClick={startExport}
+            disabled={exporting || downloadChecking || Boolean(mobilePaymentStage)}
+            onClick={mobileReadyToPay ? startMobilePayToDownload : openMobileDetailsFlow}
             data-workspace-tour="mobile-download"
             className="inline-flex h-11 flex-1 items-center justify-center gap-2 rounded-2xl px-4 text-sm font-bold transition active:scale-95 disabled:opacity-60"
             style={{
-              background: downloadChecking || exporting ? "var(--surface-2)" : "#FFD700",
-              color: downloadChecking || exporting ? "var(--ink-muted)" : "#000",
-              boxShadow: downloadChecking || exporting ? "none" : "0 8px 24px rgba(255,180,0,0.32)",
+              background: downloadChecking || exporting || mobilePaymentStage ? "var(--surface-2)" : "#FFD700",
+              color: downloadChecking || exporting || mobilePaymentStage ? "var(--ink-muted)" : "#000",
+              boxShadow: downloadChecking || exporting || mobilePaymentStage ? "none" : "0 8px 24px rgba(255,180,0,0.32)",
             }}
           >
-            {downloadChecking ? (
+            {mobilePaymentLabel ? (
+              <><span className="fyb-dots"><span /><span /><span /></span> {mobilePaymentLabel}</>
+            ) : downloadChecking ? (
               <><span className="fyb-dots"><span /><span /><span /></span> Checking…</>
             ) : exporting ? (
               "Exporting…"
+            ) : mobileReadyToPay ? (
+              <><CreditCard className="h-4 w-4" /> Download</>
             ) : (
-              <><Download className="h-4 w-4" /> Download PNG</>
+              <><ChevronRight className="h-4 w-4" /> Fill details</>
             )}
           </button>
+          </div>
         </div>
       </div>
 
       {mobileDetailsOpen ? (
         <div
-          className="fixed inset-0 z-40 lg:hidden flex flex-col"
-          role="dialog"
-          aria-modal="true"
-          /* Use 100dvh so when the on-screen keyboard opens the visible
-             viewport shrinks and the sheet shrinks with it - keeping the
-             Back/Next buttons above the keyboard at all times. */
+          className="fixed inset-0 z-40 flex flex-col bg-canvas lg:hidden dark:bg-canvas"
           style={{ height: "100dvh" }}
         >
-          <button
-            type="button"
-            className="absolute inset-0 bg-black/40"
-            aria-label="Close details"
-            onClick={() => setMobileDetailsOpen(false)}
-          />
-          <div
-            className="relative mt-auto flex flex-col overflow-hidden rounded-t-3xl border border-hairline bg-surface-1 shadow-2xl dark:border-hairline dark:bg-surface-1"
-            /* Sheet fills up to ~88% of the *visible* viewport (which
-               excludes the keyboard on supporting browsers). The flex-col
-               layout ensures the bottom action bar stays anchored. */
-            style={{ maxHeight: "88dvh", minHeight: "240px" }}
+          <header
+            className="shrink-0 px-4 py-3"
+            style={{
+              background: "rgba(9,9,9,0.96)",
+              borderBottom: "1px solid rgba(255,215,0,0.14)",
+              boxShadow: "0 1px 0 rgba(255,215,0,0.06)",
+            }}
           >
-            {/* Header - shrink-0 so it doesn't get squeezed */}
-            <div className="flex shrink-0 items-center justify-between gap-3 border-b border-hairline px-4 py-3 dark:border-hairline">
-              <div className="min-w-0">
-                <div className="flex items-center gap-2">
-                  {currentMobileSection
-                    ? (() => {
-                        const Icon = sectionIcon(currentMobileSection.section.icon);
-                        return <Icon className="h-4 w-4 shrink-0 text-ink-muted dark:text-ink-muted" />;
-                      })()
-                    : null}
-                  <div className="truncate text-sm font-semibold text-ink dark:text-ink">
-                    {currentMobileSection?.section.label ?? "Your details"}
-                  </div>
-                </div>
-                <div className="mt-0.5 text-xs text-ink-muted dark:text-ink-muted">
-                  Section {Math.min(mobileFormPage + 1, mobileSectionCount)} of {mobileSectionCount}
-                </div>
-              </div>
+            <div className="flex items-center justify-between gap-3">
               <button
                 type="button"
                 onClick={() => setMobileDetailsOpen(false)}
-                className="inline-flex h-9 items-center justify-center rounded-xl border border-hairline bg-surface-1 px-3 text-xs font-medium text-ink hover:bg-canvas dark:border-hairline dark:bg-surface-1 dark:text-ink dark:hover:bg-surface-2"
+                className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl transition active:scale-95"
+                style={{
+                  border: "1px solid rgba(255,215,0,0.22)",
+                  background: "rgba(255,215,0,0.05)",
+                  color: "#FFD700",
+                }}
+                aria-label="Back to canvas"
               >
-                Close
+                <ArrowLeft className="h-5 w-5" />
               </button>
-            </div>
 
-            {/* Section progress dots - tappable for direct jump. */}
-            {mobileSectionCount > 1 ? (
-              <div className="flex shrink-0 items-center justify-center gap-1.5 border-b border-hairline px-4 py-2 dark:border-hairline">
-                {mobileSections.map((g, idx) => {
-                  const active = idx === mobileFormPage;
-                  return (
-                    <button
-                      key={g.section.id}
-                      type="button"
-                      onClick={() => {
-                        setMobileFormPage(idx);
-                        requestAnimationFrame(() =>
-                          mobileFormScrollRef.current?.scrollTo({ top: 0, behavior: "smooth" })
-                        );
-                      }}
-                      aria-label={`Go to section ${g.section.label}`}
-                      className={
-                        "h-1.5 rounded-full transition-all " +
-                        (active
-                          ? "w-6 bg-surface-1 dark:bg-surface-2"
-                          : "w-1.5 bg-surface-2")
-                      }
-                    />
-                  );
-                })}
-              </div>
-            ) : null}
-
-            {/* Scrollable form region - flex-1 fills remaining space.
-                Critical: this is what scrolls when keyboard pops up,
-                not the whole sheet. */}
-            <div
-              ref={mobileFormScrollRef}
-              className="flex-1 min-h-0 overflow-y-auto overscroll-contain px-4 py-4"
-              style={{ WebkitOverflowScrolling: "touch" }}
-            >
-              <div className="space-y-3">
-                {(currentMobileSection?.fields ?? []).map((f) => (
-                  <FormField
-                    key={f.id}
-                    field={f}
-                    previewTextByNodeId={previewTextByNodeId}
-                    previewImageByNodeId={previewImageByNodeId}
-                    imageLoadingByNodeId={imageLoadingByNodeId}
-                    previewColorByNodeId={previewColorByNodeId}
-                    onPreviewTextChange={onPreviewTextChange}
-                    onPreviewImageChange={onPreviewImageChange}
-                    onPreviewColorChange={onPreviewColorChange}
-                    density="comfortable"
-                  />
-                ))}
-                {/* Soft spacer so the last field can scroll above any
-                    floating focus rings without crowding the action bar. */}
-                <div aria-hidden style={{ height: 12 }} />
-              </div>
-            </div>
-
-            {/* Sticky action bar - anchored at the BOTTOM of the sheet
-                via flex layout, so the on-screen keyboard never covers
-                Back/Next. Safe-area padding accounts for iOS home bar. */}
-            <div
-              className="shrink-0 border-t border-hairline px-4 pt-3 dark:border-hairline"
-              style={{
-                paddingBottom: "calc(env(safe-area-inset-bottom) + 12px)",
-                background: "var(--surface-1)",
-              }}
-            >
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  disabled={mobileFormPage <= 0}
-                  onClick={() => {
-                    setMobileFormPage((p) => Math.max(0, p - 1));
-                    requestAnimationFrame(() =>
-                      mobileFormScrollRef.current?.scrollTo({ top: 0, behavior: "smooth" })
-                    );
-                  }}
-                  className="inline-flex h-12 flex-1 items-center justify-center gap-2 rounded-2xl border border-hairline bg-surface-1 px-4 text-sm font-semibold text-ink hover:bg-canvas disabled:opacity-50 dark:border-hairline dark:bg-surface-1 dark:text-ink dark:hover:bg-surface-2"
+              <div className="min-w-0 flex-1 text-center">
+                <div
+                  className="truncate text-[10px] font-semibold uppercase"
+                  style={{ color: "rgba(255,215,0,0.7)", letterSpacing: "0.18em" }}
                 >
-                  <ChevronLeft className="h-4 w-4" />
-                  Back
-                </button>
-                {mobileFormPage >= mobileSectionCount - 1 ? (
+                  Details flow
+                </div>
+                <div className="mt-0.5 truncate text-sm font-semibold text-ink dark:text-ink">
+                  {isMobileReviewStep
+                    ? "Preview and payment"
+                    : currentMobileSection?.section.label ?? "Your details"}
+                </div>
+              </div>
+
+              <div
+                className="grid h-10 w-10 shrink-0 place-items-center rounded-2xl text-xs font-bold"
+                style={{
+                  border: "1px solid rgba(255,215,0,0.22)",
+                  background: "rgba(255,215,0,0.08)",
+                  color: "#FFD700",
+                  fontVariantNumeric: "tabular-nums",
+                }}
+              >
+                {Math.min(mobileFormPage + 1, mobileFlowStepCount)}
+              </div>
+            </div>
+
+            <div className="mt-3 flex items-center gap-1.5">
+              {Array.from({ length: mobileFlowStepCount }).map((_, idx) => {
+                const active = idx === mobileFormPage;
+                const label =
+                  idx === mobileReviewStep
+                    ? "Preview and payment"
+                    : mobileSections[idx]?.section.label ?? `Step ${idx + 1}`;
+                return (
                   <button
-                    type="button"
-                    onClick={() => setMobileDetailsOpen(false)}
-                    className="inline-flex h-12 flex-1 items-center justify-center gap-2 rounded-2xl px-4 text-sm font-bold transition active:scale-95"
-                    style={{
-                      background: "#FFD700",
-                      color: "#000",
-                      boxShadow: "0 8px 22px rgba(255,180,0,0.3)",
-                    }}
-                  >
-                    Done
-                  </button>
-                ) : (
-                  <button
+                    key={idx}
                     type="button"
                     onClick={() => {
-                      setMobileFormPage((p) => Math.min(mobileSectionCount - 1, p + 1));
+                      setMobileFormPage(idx);
                       requestAnimationFrame(() =>
                         mobileFormScrollRef.current?.scrollTo({ top: 0, behavior: "smooth" })
                       );
                     }}
-                    className="inline-flex h-12 flex-1 items-center justify-center gap-2 rounded-2xl px-4 text-sm font-bold transition active:scale-95"
+                    aria-label={`Go to ${label}`}
+                    className="h-1.5 rounded-full transition-all"
                     style={{
-                      background: "#FFD700",
-                      color: "#000",
-                      boxShadow: "0 8px 22px rgba(255,180,0,0.3)",
+                      width: active ? 28 : 7,
+                      background: active ? "#FFD700" : "rgba(255,255,255,0.18)",
                     }}
-                  >
-                    Next
-                    <ChevronRight className="h-4 w-4" />
-                  </button>
-                )}
-              </div>
+                  />
+                );
+              })}
             </div>
-          </div>
+          </header>
+
+          <main
+            ref={mobileFormScrollRef}
+            className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-5"
+            style={{ WebkitOverflowScrolling: "touch" }}
+          >
+            {isMobileReviewStep ? (
+              <div className="mx-auto flex w-full max-w-xl flex-col gap-4">
+                <section
+                  className="overflow-hidden rounded-3xl"
+                  style={{
+                    border: "1px solid rgba(255,215,0,0.18)",
+                    background: "linear-gradient(180deg, rgba(255,215,0,0.08), rgba(255,255,255,0.025))",
+                  }}
+                >
+                  <div className="px-4 py-4">
+                    <div
+                      className="mb-2 inline-flex items-center gap-2 rounded-full px-3 py-1 text-[10px] font-bold uppercase"
+                      style={{
+                        background: "rgba(255,215,0,0.1)",
+                        color: "#FFD700",
+                        letterSpacing: "0.16em",
+                      }}
+                    >
+                      <Eye className="h-3.5 w-3.5" />
+                      Ready to preview
+                    </div>
+                    <h2 className="text-xl font-bold tracking-tight text-ink dark:text-ink">
+                      Review your design on the canvas before payment.
+                    </h2>
+                  </div>
+                </section>
+
+                <section
+                  className="overflow-hidden rounded-3xl"
+                  style={{
+                    border: "1px solid rgba(255,215,0,0.18)",
+                    background: "rgba(255,255,255,0.025)",
+                  }}
+                >
+                  <div className="border-b border-hairline px-4 py-3 dark:border-hairline">
+                    <div
+                      className="text-[10px] font-bold uppercase"
+                      style={{ color: "rgba(255,215,0,0.75)", letterSpacing: "0.18em" }}
+                    >
+                      Payment breakdown
+                    </div>
+                    <div className="mt-1 truncate text-sm font-semibold text-ink dark:text-ink">
+                      {recordName}
+                    </div>
+                  </div>
+                  <div className="px-4 py-3">
+                    <div className="flex items-center justify-between gap-3 py-2 text-sm">
+                      <span className="text-ink-muted dark:text-ink-muted">Print-ready PNG</span>
+                      <span className="font-semibold text-ink dark:text-ink">NGN 1,000</span>
+                    </div>
+                    <div className="flex items-center justify-between gap-3 py-2 text-sm">
+                      <span className="text-ink-muted dark:text-ink-muted">Template editing</span>
+                      <span className="font-semibold text-ink dark:text-ink">Included</span>
+                    </div>
+                    <div className="flex items-center justify-between gap-3 border-t border-dashed border-hairline pt-4 dark:border-hairline">
+                      <span
+                        className="text-[10px] font-bold uppercase"
+                        style={{ color: "rgba(255,215,0,0.75)", letterSpacing: "0.18em" }}
+                      >
+                        Total due
+                      </span>
+                      <span className="text-2xl font-black tracking-tight text-ink dark:text-ink">
+                        NGN 1,000
+                      </span>
+                    </div>
+                  </div>
+                </section>
+              </div>
+            ) : (
+              <div className="mx-auto w-full max-w-xl">
+                <div className="mb-4 flex items-center gap-3">
+                  {currentMobileSection
+                    ? (() => {
+                        const Icon = sectionIcon(currentMobileSection.section.icon);
+                        return (
+                          <span
+                            className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl"
+                            style={{
+                              background: "rgba(255,215,0,0.1)",
+                              border: "1px solid rgba(255,215,0,0.2)",
+                            }}
+                          >
+                            <Icon className="h-5 w-5" style={{ color: "#FFD700" }} />
+                          </span>
+                        );
+                      })()
+                    : null}
+                  <div className="min-w-0">
+                    <div className="truncate text-lg font-bold text-ink dark:text-ink">
+                      {currentMobileSection?.section.label ?? "Your details"}
+                    </div>
+                    <div className="text-xs text-ink-muted dark:text-ink-muted">
+                      Section {Math.min(mobileFormPage + 1, mobileFlowStepCount)} of {mobileFlowStepCount}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="space-y-3">
+                  {(currentMobileSection?.fields ?? []).map((f) => (
+                    <FormField
+                      key={f.id}
+                      field={f}
+                      previewTextByNodeId={previewTextByNodeId}
+                      previewImageByNodeId={previewImageByNodeId}
+                      imageLoadingByNodeId={imageLoadingByNodeId}
+                      previewColorByNodeId={previewColorByNodeId}
+                      onPreviewTextChange={onPreviewTextChange}
+                      onPreviewImageChange={onPreviewImageChange}
+                      onPreviewColorChange={onPreviewColorChange}
+                      density="comfortable"
+                    />
+                  ))}
+                  <div aria-hidden style={{ height: 12 }} />
+                </div>
+              </div>
+            )}
+          </main>
+
+          <footer
+            className="shrink-0 border-t border-hairline px-4 pt-3 dark:border-hairline"
+            style={{
+              paddingBottom: "calc(env(safe-area-inset-bottom) + 12px)",
+              background: "rgba(9,9,9,0.96)",
+            }}
+          >
+            <div className="mx-auto flex w-full max-w-xl items-center gap-2">
+              <button
+                type="button"
+                disabled={mobileFormPage <= 0}
+                onClick={() => {
+                  setMobileFormPage((p) => Math.max(0, p - 1));
+                  requestAnimationFrame(() =>
+                    mobileFormScrollRef.current?.scrollTo({ top: 0, behavior: "smooth" })
+                  );
+                }}
+                className="inline-flex h-12 flex-1 items-center justify-center gap-2 rounded-2xl px-4 text-sm font-semibold transition disabled:opacity-40 active:scale-95"
+                style={{
+                  border: "1px solid rgba(255,255,255,0.1)",
+                  background: "rgba(255,255,255,0.04)",
+                  color: "rgba(255,255,255,0.7)",
+                }}
+              >
+                <ChevronLeft className="h-4 w-4" />
+                Back
+              </button>
+              {isMobileReviewStep ? (
+                <button
+                  type="button"
+                  onClick={returnToMobileCanvasPreview}
+                  className="inline-flex h-12 flex-[1.35] items-center justify-center gap-2 rounded-2xl px-4 text-sm font-bold transition active:scale-95"
+                  style={{
+                    background: "#FFD700",
+                    color: "#000",
+                    boxShadow: "0 8px 22px rgba(255,180,0,0.3)",
+                  }}
+                >
+                  <Eye className="h-4 w-4" />
+                  Preview design
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMobileFormPage((p) => Math.min(mobileFlowStepCount - 1, p + 1));
+                    requestAnimationFrame(() =>
+                      mobileFormScrollRef.current?.scrollTo({ top: 0, behavior: "smooth" })
+                    );
+                  }}
+                  className="inline-flex h-12 flex-[1.35] items-center justify-center gap-2 rounded-2xl px-4 text-sm font-bold transition active:scale-95"
+                  style={{
+                    background: "#FFD700",
+                    color: "#000",
+                    boxShadow: "0 8px 22px rgba(255,180,0,0.3)",
+                  }}
+                >
+                  Next
+                  <ChevronRight className="h-4 w-4" />
+                </button>
+              )}
+            </div>
+          </footer>
         </div>
       ) : null}
 
@@ -1514,7 +1827,7 @@ export default function UseTemplatePage({
                 type="button"
                 onClick={() => {
                   setMobileMenuOpen(false);
-                  setMobileDetailsOpen(true);
+                  openMobileDetailsFlow();
                 }}
                 className="mt-1 flex w-full items-center gap-3 rounded-2xl px-3 py-3 text-left text-sm font-medium text-ink hover:bg-canvas dark:text-ink dark:hover:bg-surface-2/60"
               >
@@ -1552,20 +1865,6 @@ export default function UseTemplatePage({
         downloadChecking={downloadChecking}
         onCheckingChange={setDownloadChecking}
         onExport={() => doExportPng(getExportScale())}
-      />
-
-      <PaymentModal
-        open={paymentModalOpen}
-        templateId={userDesign.templateId}
-        templateName={recordName}
-        userDesignId={userDesign.id}
-        customerEmail={session?.user?.email ?? null}
-        onBeforeInitialize={persistInputsNow}
-        onClose={() => setPaymentModalOpen(false)}
-        onPaid={async () => {
-          setPaymentModalOpen(false);
-          await doExportPng(getExportScale());
-        }}
       />
 
       {downloadSuccess && (
@@ -1953,19 +2252,3 @@ function firePuff(canvas: HTMLCanvasElement | null): (() => void) | void {
 
 /* ─── Download + image helpers ─────────────────────────── */
 
-/**
- * Convert an image URL into a Blob. Plugin-original images may come from the
- * FYB extractor as data URLs or from published templates as Cloudinary URLs;
- * the export pipeline needs real Blobs either way.
- *
- * Returns null on any failure so the caller can fall back to a placeholder.
- */
-async function imageUrlToBlob(url: string): Promise<Blob | null> {
-  try {
-    const res = await fetch(url, { cache: "force-cache" });
-    if (!res.ok) return null;
-    return await res.blob();
-  } catch {
-    return null;
-  }
-}

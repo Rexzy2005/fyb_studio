@@ -2,10 +2,12 @@ import type {
   AffineMatrix,
   BlendMode,
   NormalizedContainerNode,
+  NormalizedDesignV1,
   NormalizedFill,
   NormalizedNode,
   NormalizedShapeNode,
   NormalizedStroke,
+  NormalizedTextNode,
 } from "@/lib/figma";
 
 import { drawImageCoverContain, drawImagePlaceholder } from "@/lib/render/drawImage";
@@ -26,6 +28,8 @@ import {
 } from "@/lib/render/features/path2d";
 import { boundsPathAt as makeBoundsPath } from "@/lib/render/features/path2d";
 import { applyAlignedStroke } from "@/lib/render/features/strokes/alignment";
+import { buildTextSvg } from "@/lib/render/engine/svgTextLayer";
+import type { FieldConfig } from "@/lib/storage/types";
 
 import type { ClipGeometry, RenderBackend, RenderOpts } from "../types";
 
@@ -52,6 +56,9 @@ const BLEND_MODE_TO_CANVAS: Partial<Record<BlendMode, GlobalCompositeOperation>>
 export type CanvasBackendDeps = {
   ctx: CanvasRenderingContext2D;
   opts: RenderOpts;
+  design: NormalizedDesignV1;
+  fieldConfig: FieldConfig;
+  fontFacesStyle?: string;
   // Map of color overrides resolved upstream from the field config (one per node).
   colorOverrideByNodeId: Record<string, string>;
   // Image lookup the backend uses for IMAGE fills with a user override.
@@ -68,6 +75,9 @@ export type CanvasBackendDeps = {
 export class CanvasBackend implements RenderBackend {
   private readonly ctx: CanvasRenderingContext2D;
   private readonly opts: RenderOpts;
+  private readonly design: NormalizedDesignV1;
+  private readonly fieldConfig: FieldConfig;
+  private readonly fontFacesStyle: string;
   private readonly colorOverride: Record<string, string>;
   private readonly resolvePreviewImage: CanvasBackendDeps["resolvePreviewImage"];
 
@@ -78,6 +88,9 @@ export class CanvasBackend implements RenderBackend {
   constructor(deps: CanvasBackendDeps) {
     this.ctx = deps.ctx;
     this.opts = deps.opts;
+    this.design = deps.design;
+    this.fieldConfig = deps.fieldConfig;
+    this.fontFacesStyle = deps.fontFacesStyle ?? "";
     this.colorOverride = deps.colorOverrideByNodeId;
     this.resolvePreviewImage = deps.resolvePreviewImage;
     // High-quality image scaling: matters for design-fidelity rendering of
@@ -86,6 +99,12 @@ export class CanvasBackend implements RenderBackend {
     // softer/jaggier results on downscale.
     this.ctx.imageSmoothingEnabled = true;
     (this.ctx as unknown as { imageSmoothingQuality?: ImageSmoothingQuality }).imageSmoothingQuality = "high";
+  }
+
+  private throwIfAborted(): void {
+    if (this.opts.abortSignal?.aborted) {
+      throw new DOMException("Render aborted", "AbortError");
+    }
   }
 
   pushAlpha(alpha: number): void {
@@ -184,6 +203,68 @@ export class CanvasBackend implements RenderBackend {
 
   async drawContainer(node: NormalizedContainerNode): Promise<void> {
     await this.drawNonText(node);
+  }
+
+  async drawText(node: NormalizedTextNode): Promise<void> {
+    this.throwIfAborted();
+    const ctx = this.ctx;
+    const canvas = ctx.canvas;
+    const designWidth = Math.max(1, this.design.canvas.width);
+    const designHeight = Math.max(1, this.design.canvas.height);
+
+    const svg = buildTextSvg({
+      design: this.design,
+      fieldConfig: this.fieldConfig,
+      previewTextByNodeId: this.opts.previewTextByNodeId ?? {},
+      includeGuides: false,
+      onlyTextNodeIds: new Set([node.id]),
+      includeOpacity: false,
+      includeBlendMode: false,
+    });
+
+    let hdSvg = svg
+      .replace(/(<svg [^>]*?\bwidth=)"[^"]*"/, `$1"${canvas.width}"`)
+      .replace(/(<svg [^>]*?\bheight=)"[^"]*"/, `$1"${canvas.height}"`);
+
+    if (this.fontFacesStyle) {
+      if (/<defs>/.test(hdSvg)) {
+        hdSvg = hdSvg.replace(/<defs>/, `<defs>${this.fontFacesStyle}`);
+      } else {
+        hdSvg = hdSvg.replace(/(<svg [^>]*>)/, `$1<defs>${this.fontFacesStyle}</defs>`);
+      }
+    }
+
+    const blob = new Blob([hdSvg], { type: "image/svg+xml;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    try {
+      const img = new Image();
+      img.decoding = "async";
+      img.width = canvas.width;
+      img.height = canvas.height;
+      img.src = url;
+      if (typeof img.decode === "function") {
+        await img.decode();
+      } else {
+        await new Promise<void>((resolve, reject) => {
+          img.onload = () => resolve();
+          img.onerror = () => reject(new Error("SVG text node failed to load"));
+        });
+      }
+      this.throwIfAborted();
+      ctx.drawImage(
+        img,
+        0,
+        0,
+        canvas.width,
+        canvas.height,
+        0,
+        0,
+        designWidth,
+        designHeight,
+      );
+    } finally {
+      URL.revokeObjectURL(url);
+    }
   }
 
   /**

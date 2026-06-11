@@ -35,6 +35,18 @@ export type BuildTextSvgInput = {
   fieldConfig: FieldConfig;
   previewTextByNodeId: Record<string, string>;
   includeGuides: boolean;
+  /**
+   * Optional node filter used by the canvas compositor. When provided, only
+   * matching TEXT nodes are emitted while ancestors still contribute clips.
+   */
+  onlyTextNodeIds?: ReadonlySet<string>;
+  /**
+   * The DOM/SVG overlay owns its opacity. The canvas compositor already has
+   * opacity on the 2D context stack, so it disables emitted opacity to avoid
+   * applying alpha twice.
+   */
+  includeOpacity?: boolean;
+  includeBlendMode?: boolean;
 };
 
 /**
@@ -46,7 +58,15 @@ export type BuildTextSvgInput = {
  * call into this - see `engine/renderTree.ts` for the unified flow.
  */
 export function buildTextSvg(input: BuildTextSvgInput): string {
-  const { design, fieldConfig, previewTextByNodeId, includeGuides } = input;
+  const {
+    design,
+    fieldConfig,
+    previewTextByNodeId,
+    includeGuides,
+    onlyTextNodeIds,
+    includeOpacity = true,
+    includeBlendMode = true,
+  } = input;
   const configured = new Map(fieldConfig.fields.map((f) => [f.nodeId, f] as const));
 
   const measureCtx = (() => {
@@ -698,11 +718,11 @@ export function buildTextSvg(input: BuildTextSvgInput): string {
 
       if (local && m) {
         const matrix = `matrix(${m.a} ${m.b} ${m.c} ${m.d} ${m.tx} ${m.ty})`;
-        const opacityAttr = nodeOpacity < 1 ? ` opacity="${nodeOpacity}"` : "";
+        const opacityAttr = includeOpacity && nodeOpacity < 1 ? ` opacity="${nodeOpacity}"` : "";
         return `<g transform="${escapeAttr(matrix)}"${shadowFilterAttr}${opacityAttr}>${paths}</g>`;
       }
       const translate = local ? ` transform="translate(${node.frame.x} ${node.frame.y})"` : "";
-      const opacityAttr = nodeOpacity < 1 ? ` opacity="${nodeOpacity}"` : "";
+      const opacityAttr = includeOpacity && nodeOpacity < 1 ? ` opacity="${nodeOpacity}"` : "";
       return `<g${translate}${shadowFilterAttr}${opacityAttr}>${paths}</g>`;
     }
 
@@ -1035,7 +1055,7 @@ export function buildTextSvg(input: BuildTextSvgInput): string {
     const shadowFilterAttr = ensureTextEffectFilter(node);
 
     const baselineAttr = useAlphabeticBaseline ? "" : ` dominant-baseline="text-before-edge"`;
-    const opacityAttr = nodeOpacity < 1 ? ` opacity="${nodeOpacity}"` : "";
+    const opacityAttr = includeOpacity && nodeOpacity < 1 ? ` opacity="${nodeOpacity}"` : "";
     const textEl = `<text xml:space="preserve" x="${x}" y="${y}" fill="${escapeAttr(fillCss)}" font-size="${layout.fontSize}" font-weight="${resolvedText.fontWeight}" font-style="${fontStyle}" text-decoration="${textDecoration}" text-anchor="${anchor}"${baselineAttr}${strokeAttrs}${shadowFilterAttr}${opacityAttr} ${transform ? `transform="${escapeAttr(transform)}"` : ""} style="white-space:pre;font-family:${escapeAttr(fontFamily)};letter-spacing:${escapeAttr(letterSpacingCss)};">${tspans}</text>`;
 
     const matrix =
@@ -1128,16 +1148,20 @@ export function buildTextSvg(input: BuildTextSvgInput): string {
     if (!node.visible) return "";
     if (node.opacity <= 0) return "";
     if (node.isMask) return "";
-    const self = node.kind === "text" ? renderTextNode(node) + renderGuidesForText(node) : "";
+    const self =
+      node.kind === "text" && (!onlyTextNodeIds || onlyTextNodeIds.has(node.id))
+        ? renderTextNode(node) + renderGuidesForText(node)
+        : "";
     const children = renderChildren(id);
     if (!self && !children) return "";
     const clipPath =
       node.kind === "container" && node.clipsContent
         ? ` clip-path="url(#${escapeAttr(ensureClipPath(node))})"`
         : "";
-    const blendMode = svgBlendMode(node.blendMode);
+    const blendMode = includeBlendMode ? svgBlendMode(node.blendMode) : null;
     const blendStyle = blendMode ? ` style="mix-blend-mode:${blendMode};"` : "";
-    return `<g opacity="${node.opacity}"${clipPath}${blendStyle}>${self}${children}</g>`;
+    const opacityAttr = includeOpacity ? ` opacity="${node.opacity}"` : "";
+    return `<g${opacityAttr}${clipPath}${blendStyle}>${self}${children}</g>`;
   }
 
   const body = design.rootIds.map((rid) => renderGroup(rid)).join("\n");

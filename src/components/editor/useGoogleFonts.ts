@@ -8,9 +8,13 @@ import { ensureGoogleFontsLoaded, normalizeGoogleFontFamilies } from "@/lib/font
 // Runtime Google Fonts loader for when the Figma export provides font family names.
 // Safe no-op when fonts array is empty.
 export function useGoogleFonts(fontFamilies: string[]) {
+  const fontFamiliesKey = fontFamilies.join("|");
   const families = useMemo(() => {
     return normalizeGoogleFontFamilies(fontFamilies);
-  }, [fontFamilies]);
+    // The callers often build font arrays inline, so use the value key instead
+    // of the array object identity.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fontFamiliesKey]);
 
   useEffect(() => {
     if (families.length === 0) return;

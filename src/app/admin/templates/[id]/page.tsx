@@ -79,7 +79,6 @@ export default function TemplateEditorPage({
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [normalizing, setNormalizing] = useState(false);
-  const saveTimerRef = useRef<number | null>(null);
   const [savingConfig, setSavingConfig] = useState(false);
 
   const [publishModalOpen, setPublishModalOpen] = useState(false);
@@ -168,7 +167,6 @@ export default function TemplateEditorPage({
 
   useEffect(() => {
     return () => {
-      if (saveTimerRef.current) window.clearTimeout(saveTimerRef.current);
       for (const v of Object.values(previewImagesRef.current)) {
         if (v._revoke) URL.revokeObjectURL(v.url);
       }
@@ -236,18 +234,13 @@ export default function TemplateEditorPage({
   }, [record]);
 
   /**
-   * Synchronously flush any pending debounced save. Returns once the write
-   * has landed in storage. Registered with the dirty store so the admin
-   * shell can call it when the user picks "Save & continue" on the
-   * unsaved-changes prompt - guarantees no edits get lost on navigation.
+   * Persist the current in-memory editor snapshot. Registered with the dirty
+   * store so the admin shell can call it only when the admin explicitly picks
+   * "Save & continue" on the unsaved-changes prompt.
    */
   const flushPendingSave = useCallback(async () => {
     const current = latestRecordRef.current;
     if (!current || mode !== "draft") return;
-    if (saveTimerRef.current) {
-      window.clearTimeout(saveTimerRef.current);
-      saveTimerRef.current = null;
-    }
     setSavingConfig(true);
     try {
       await repo.upsertDraft({
@@ -263,8 +256,8 @@ export default function TemplateEditorPage({
     }
   }, [mode, repo, setDirty]);
 
-  // Register/unregister the flush callback with the dirty store. Cleared on
-  // unmount + when leaving draft mode so the prompt won't fire stale.
+  // Register/unregister the explicit save callback with the dirty store.
+  // Cleared on unmount + when leaving draft mode so the prompt won't fire stale.
   useEffect(() => {
     setFlushSave(mode === "draft" ? flushPendingSave : null);
     return () => {
@@ -528,69 +521,32 @@ export default function TemplateEditorPage({
     }
   }
 
-  /**
-   * Persist a draft snapshot to local storage with a 1 minute debounce.
-   * Trailing-edge: the most recent change wins, prior in-flight writes are
-   * cancelled. Triggered by any editable field (name, fieldConfig). Published
-   * templates skip the debounced save - their edits are committed via the
-   * explicit Update flow.
-   *
-   * Also flips the cross-cutting `dirty` flag so the admin shell can prompt
-   * before navigation if the debounce hasn't settled yet.
-   */
-  function scheduleDraftSave(next: TemplateRecord) {
+  function markDraftDirty() {
     if (mode !== "draft") return;
-    setSavingConfig(true);
-    setError(null);
     setDirty(true);
-    if (saveTimerRef.current) {
-      window.clearTimeout(saveTimerRef.current);
-    }
-    saveTimerRef.current = window.setTimeout(async () => {
-      saveTimerRef.current = null;
-      try {
-        const updated = await repo.upsertDraft({
-          id: next.id,
-          name: next.name,
-          designJson: next.designJson,
-          normalized: next.normalized,
-          fieldConfig: next.fieldConfig,
-        });
-        setRecord(updated);
-        setDirty(false);
-      } catch (e) {
-        setError(e instanceof Error ? e.message : "Failed to save draft");
-      } finally {
-        setSavingConfig(false);
-      }
-    }, 60_000);
   }
 
   async function updateFieldConfig(nextConfig: TemplateRecord["fieldConfig"]) {
     if (!record) return;
     const next = { ...record, fieldConfig: nextConfig };
     setRecord(next);
-    scheduleDraftSave(next);
+    markDraftDirty();
   }
 
   function updateName(nextName: string) {
     if (!record) return;
     const next = { ...record, name: nextName };
     setRecord(next);
-    scheduleDraftSave(next);
+    markDraftDirty();
   }
 
   /**
-   * Flush any pending debounced save and persist immediately, then navigate
-   * the admin to the templates list. Used by the explicit "Save to draft"
-   * button so admins always know their work is durably stored.
+   * Persist immediately, then navigate the admin to the templates list. Used
+   * by the explicit "Save to draft" button so admins always know their work
+   * is durably stored.
    */
   async function saveDraftAndExit() {
     if (!record) return;
-    if (saveTimerRef.current) {
-      window.clearTimeout(saveTimerRef.current);
-      saveTimerRef.current = null;
-    }
     setSavingConfig(true);
     try {
       await repo.upsertDraft({
@@ -600,6 +556,7 @@ export default function TemplateEditorPage({
         normalized: record.normalized,
         fieldConfig: record.fieldConfig,
       });
+      setDirty(false);
       router.push("/admin/templates");
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to save draft");
@@ -609,10 +566,6 @@ export default function TemplateEditorPage({
   }
 
   function cancelAndStartOver() {
-    if (saveTimerRef.current) {
-      window.clearTimeout(saveTimerRef.current);
-      saveTimerRef.current = null;
-    }
     router.push("/admin/templates/new");
   }
 

@@ -18,6 +18,7 @@ export async function renderTree(
   backend: RenderBackend,
   opts: RenderOpts,
 ): Promise<void> {
+  throwIfAborted(opts);
   backend.drawCanvasBackground(
     design.canvas.backgrounds,
     design.canvas.background?.css,
@@ -26,7 +27,14 @@ export async function renderTree(
   );
 
   for (const rootId of design.rootIds) {
+    throwIfAborted(opts);
     await walk(rootId, design, backend, opts, 1);
+  }
+}
+
+function throwIfAborted(opts: RenderOpts): void {
+  if (opts.abortSignal?.aborted) {
+    throw new DOMException("Render aborted", "AbortError");
   }
 }
 
@@ -37,6 +45,7 @@ async function walk(
   opts: RenderOpts,
   inheritedAlpha: number,
 ): Promise<void> {
+  throwIfAborted(opts);
   const node = design.nodesById[id] as NormalizedNode | undefined;
   if (!node) return;
   if (!node.visible) return;
@@ -45,36 +54,36 @@ async function walk(
   // Mask nodes are not painted directly - they're consumed by mask siblings.
   if (node.isMask) return;
 
-  backend.pushAlpha(alpha);
-  if (node.blendMode && node.blendMode !== "PASS_THROUGH") {
-    backend.pushBlendMode(node.blendMode);
-  }
-
-  if (node.kind === "container" && node.clipsContent) {
-    backend.pushClip({ kind: "frame", node });
-  }
-
+  const pushedBlend = Boolean(node.blendMode && node.blendMode !== "PASS_THROUGH");
+  const pushedClip = node.kind === "container" && node.clipsContent;
   const hasEffects = node.effects && node.effects.length > 0;
+
+  backend.pushAlpha(alpha);
+  if (pushedBlend) backend.pushBlendMode(node.blendMode);
+  if (pushedClip) backend.pushClip({ kind: "frame", node });
   if (hasEffects) backend.pushEffects(node);
 
-  if (node.kind === "text") {
-    if (!opts.skipText && backend.drawText) {
-      await backend.drawText(node);
+  try {
+    if (node.kind === "text") {
+      if (!opts.skipText && backend.drawText) {
+        await backend.drawText(node);
+      }
+    } else if (node.kind === "shape") {
+      await backend.drawShape(node);
+    } else {
+      await backend.drawContainer(node);
     }
-  } else if (node.kind === "shape") {
-    await backend.drawShape(node);
-  } else {
-    await backend.drawContainer(node);
+    throwIfAborted(opts);
+
+    // Walk children - handling sibling masks: a child with isMask=true clips all subsequent siblings.
+    const childIds = design.childrenById[id] ?? [];
+    await walkChildren(childIds, design, backend, opts, alpha);
+  } finally {
+    if (hasEffects) backend.popEffects();
+    if (pushedClip) backend.popClip();
+    if (pushedBlend) backend.popBlendMode();
+    backend.popAlpha();
   }
-
-  // Walk children - handling sibling masks: a child with isMask=true clips all subsequent siblings.
-  const childIds = design.childrenById[id] ?? [];
-  await walkChildren(childIds, design, backend, opts, alpha);
-
-  if (hasEffects) backend.popEffects();
-  if (node.kind === "container" && node.clipsContent) backend.popClip();
-  if (node.blendMode && node.blendMode !== "PASS_THROUGH") backend.popBlendMode();
-  backend.popAlpha();
 }
 
 async function walkChildren(
@@ -88,24 +97,28 @@ async function walkChildren(
   // all siblings rendered after it (within the same parent), until the parent
   // ends or another mask resets it. We honour that lazily here.
   let activeMaskClipPushed = false;
-  for (const cid of childIds) {
-    const node = design.nodesById[cid];
-    if (!node) continue;
-    if (node.isMask) {
-      // End any previous mask, push a new one.
-      if (activeMaskClipPushed) backend.popClip();
-      activeMaskClipPushed = false;
-      // For ALPHA/LUMINANCE masks the renderer uses the mask node's frame as a
-      // path-based clip. (Vector masks in arbitrary paths fall back to the
-      // node's bounding rect for now - a follow-up will route them through
-      // applyMask.ts when full alpha-channel masking lands.)
-      if (node.kind !== "text") {
-        backend.pushClip({ kind: "frame", node });
-        activeMaskClipPushed = true;
+  try {
+    for (const cid of childIds) {
+      throwIfAborted(opts);
+      const node = design.nodesById[cid];
+      if (!node) continue;
+      if (node.isMask) {
+        // End any previous mask, push a new one.
+        if (activeMaskClipPushed) backend.popClip();
+        activeMaskClipPushed = false;
+        // For ALPHA/LUMINANCE masks the renderer uses the mask node's frame as a
+        // path-based clip. (Vector masks in arbitrary paths fall back to the
+        // node's bounding rect for now - a follow-up will route them through
+        // applyMask.ts when full alpha-channel masking lands.)
+        if (node.kind !== "text") {
+          backend.pushClip({ kind: "frame", node });
+          activeMaskClipPushed = true;
+        }
+        continue;
       }
-      continue;
+      await walk(cid, design, backend, opts, alpha);
     }
-    await walk(cid, design, backend, opts, alpha);
+  } finally {
+    if (activeMaskClipPushed) backend.popClip();
   }
-  if (activeMaskClipPushed) backend.popClip();
 }

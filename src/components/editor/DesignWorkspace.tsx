@@ -6,14 +6,12 @@ import { Maximize2, Minus, Plus } from "lucide-react";
 import type { NormalizedDesignV1, NormalizedNode } from "@/lib/figma";
 import { CanvasBackend } from "@/lib/render/engine/backends/canvasBackend";
 import { renderTree } from "@/lib/render/engine/renderTree";
-import { buildEmbeddedFontFacesStyle } from "@/lib/render/features/embedFonts";
+import { buildTextSvg } from "@/lib/render/engine/svgTextLayer";
 import { hitTestNodeId } from "@/lib/render/hitTest";
 import { useTemplateEditorStore } from "@/lib/stores/templateEditorStore";
 import type { FieldConfig } from "@/lib/storage/types";
 
 import { computeRenderOrder } from "./types";
-
-const embeddedFontFacesCache = new Map<string, Promise<string>>();
 
 function stableStringify(value: unknown): string {
   if (value === null || typeof value !== "object") {
@@ -26,10 +24,6 @@ function stableStringify(value: unknown): string {
     .filter(([, v]) => typeof v !== "undefined")
     .sort(([a], [b]) => a.localeCompare(b));
   return `{${entries.map(([k, v]) => `${JSON.stringify(k)}:${stableStringify(v)}`).join(",")}}`;
-}
-
-function stableStringMapKey(map: Record<string, string>): string {
-  return stableStringify(map);
 }
 
 function stableImageMapKey(
@@ -46,16 +40,8 @@ function stableImageMapKey(
   return stableStringify(visualMap);
 }
 
-function stableFontsKey(fonts: string[] | undefined): string {
-  return [...new Set(fonts ?? [])].sort((a, b) => a.localeCompare(b)).join("|");
-}
-
-function loadEmbeddedFontFacesStyle(fonts: string[], key: string): Promise<string> {
-  const cached = embeddedFontFacesCache.get(key);
-  if (cached) return cached;
-  const promise = buildEmbeddedFontFacesStyle(fonts).catch(() => "");
-  embeddedFontFacesCache.set(key, promise);
-  return promise;
+function stableStringMapKey(map: Record<string, string>): string {
+  return stableStringify(map);
 }
 
 type Props = {
@@ -634,10 +620,14 @@ export function DesignWorkspace({
             <CanvasShapesLayer
               design={design}
               fieldConfig={fieldConfig}
-              previewTextByNodeId={previewTextByNodeId}
               orderedNodeIds={ordered}
               colorOverrideByNodeId={colorOverrideByNodeId}
               previewImageByNodeId={previewImageByNodeId}
+            />
+            <SvgTextLayer
+              design={design}
+              fieldConfig={fieldConfig}
+              previewTextByNodeId={previewTextByNodeId}
             />
             <GuidesLayer
               design={design}
@@ -682,13 +672,11 @@ export function DesignWorkspace({
 function CanvasShapesLayer({
   design,
   fieldConfig,
-  previewTextByNodeId,
   colorOverrideByNodeId,
   previewImageByNodeId,
 }: {
   design: NormalizedDesignV1;
   fieldConfig: FieldConfig;
-  previewTextByNodeId: Record<string, string>;
   // Kept for API parity even though the unified renderer pulls the order itself.
   orderedNodeIds?: string[];
   colorOverrideByNodeId: Record<string, string>;
@@ -700,26 +688,31 @@ function CanvasShapesLayer({
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const imagesRef = useRef(new Map<string, HTMLImageElement>());
   const [imageTick, setImageTick] = useState(0);
-  const [fontFacesStyle, setFontFacesStyle] = useState("");
   const fieldConfigKey = useMemo(() => stableStringify(fieldConfig), [fieldConfig]);
-  const previewTextKey = useMemo(() => stableStringMapKey(previewTextByNodeId), [previewTextByNodeId]);
   const colorOverrideKey = useMemo(() => stableStringMapKey(colorOverrideByNodeId), [colorOverrideByNodeId]);
   const previewImageKey = useMemo(() => stableImageMapKey(previewImageByNodeId), [previewImageByNodeId]);
-  const fontsKey = useMemo(() => stableFontsKey(design.assets?.fonts), [design.assets?.fonts]);
+  const fieldConfigRef = useRef(fieldConfig);
+  const colorOverrideByNodeIdRef = useRef(colorOverrideByNodeId);
+  const previewImageByNodeIdRef = useRef(previewImageByNodeId);
+
+  useEffect(() => {
+    fieldConfigRef.current = fieldConfig;
+    colorOverrideByNodeIdRef.current = colorOverrideByNodeId;
+    previewImageByNodeIdRef.current = previewImageByNodeId;
+  }, [colorOverrideByNodeId, fieldConfig, previewImageByNodeId]);
 
   // Eager-load preview images into HTMLImageElements; bumps imageTick on completion
   // so the render effect picks them up.
   useEffect(() => {
     let cancelled = false;
-    const ids = Object.keys(previewImageByNodeId).filter(
-      (id) => previewImageByNodeId[id]?.url,
-    );
+    const imageMap = previewImageByNodeIdRef.current;
+    const ids = Object.keys(imageMap).filter((id) => imageMap[id]?.url);
     const keep = new Set(ids);
     for (const existingId of imagesRef.current.keys()) {
       if (!keep.has(existingId)) imagesRef.current.delete(existingId);
     }
     for (const id of ids) {
-      const url = previewImageByNodeId[id]?.url;
+      const url = imageMap[id]?.url;
       if (!url) continue;
       const existing = imagesRef.current.get(id);
       if (existing && existing.src === url && existing.complete && existing.naturalWidth > 0) continue;
@@ -743,20 +736,6 @@ function CanvasShapesLayer({
       cancelled = true;
     };
   }, [previewImageKey]);
-
-  useEffect(() => {
-    let cancelled = false;
-    void loadEmbeddedFontFacesStyle(design.assets?.fonts ?? [], fontsKey)
-      .then((style) => {
-        if (!cancelled) setFontFacesStyle((current) => (current === style ? current : style));
-      })
-      .catch(() => {
-        if (!cancelled) setFontFacesStyle((current) => (current === "" ? current : ""));
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [fontsKey]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -785,21 +764,20 @@ function CanvasShapesLayer({
     const backend = new CanvasBackend({
       ctx,
       opts: {
-        previewTextByNodeId,
         previewColorByNodeId: undefined,
         abortSignal: signal,
-        skipText: false,
+        skipText: true,
       },
       design,
-      fieldConfig,
-      fontFacesStyle,
-      colorOverrideByNodeId,
+      fieldConfig: fieldConfigRef.current,
+      colorOverrideByNodeId: colorOverrideByNodeIdRef.current,
       resolvePreviewImage: (id) => {
-        const url = previewImageByNodeId[id]?.url;
+        const imageMap = previewImageByNodeIdRef.current;
+        const url = imageMap[id]?.url;
         if (!url) return undefined;
         const img = imagesRef.current.get(id);
         if (!img || !img.complete || img.naturalWidth === 0) return undefined;
-        const entry = previewImageByNodeId[id];
+        const entry = imageMap[id];
         return {
           source: img,
           objectFit: entry.objectFit,
@@ -809,7 +787,7 @@ function CanvasShapesLayer({
     });
 
     const raf = requestAnimationFrame(() => {
-      void renderTree(design, backend, { previewTextByNodeId, abortSignal: signal, skipText: false })
+      void renderTree(design, backend, { abortSignal: signal, skipText: true })
       .catch((err) => {
         if (signal.aborted) return;
         if (err instanceof DOMException && err.name === "AbortError") return;
@@ -823,11 +801,9 @@ function CanvasShapesLayer({
   }, [
     design,
     fieldConfigKey,
-    fontFacesStyle,
     colorOverrideKey,
     imageTick,
     previewImageKey,
-    previewTextKey,
   ]);
 
   return <canvas ref={canvasRef} className="absolute inset-0" />;
@@ -997,6 +973,62 @@ function WatermarkOverlay({
       }}
       className="pointer-events-none absolute inset-0"
       aria-hidden
+    />
+  );
+}
+
+function SvgTextLayer({
+  design,
+  fieldConfig,
+  previewTextByNodeId,
+}: {
+  design: NormalizedDesignV1;
+  fieldConfig: FieldConfig;
+  previewTextByNodeId: Record<string, string>;
+}) {
+  const [fontEpoch, setFontEpoch] = useState(0);
+  const previewTextKey = useMemo(() => stableStringMapKey(previewTextByNodeId), [previewTextByNodeId]);
+  const fieldConfigKey = useMemo(() => stableStringify(fieldConfig), [fieldConfig]);
+
+  useEffect(() => {
+    if (typeof document === "undefined" || !document.fonts) return;
+    let cancelled = false;
+    const bump = () => {
+      if (!cancelled) setFontEpoch((value) => value + 1);
+    };
+
+    void document.fonts.ready.then(bump).catch(() => {});
+    document.fonts.addEventListener?.("loadingdone", bump);
+    document.fonts.addEventListener?.("loadingerror", bump);
+
+    return () => {
+      cancelled = true;
+      document.fonts.removeEventListener?.("loadingdone", bump);
+      document.fonts.removeEventListener?.("loadingerror", bump);
+    };
+  }, []);
+
+  const svgInner = useMemo(() => {
+    void previewTextKey;
+    void fieldConfigKey;
+    void fontEpoch;
+    const svg = buildTextSvg({
+      design,
+      fieldConfig,
+      previewTextByNodeId,
+      includeGuides: false,
+    });
+    const match = svg.match(/<svg[^>]*>([\s\S]*)<\/svg>/);
+    return match ? match[1] : svg;
+  }, [design, fieldConfig, fieldConfigKey, fontEpoch, previewTextByNodeId, previewTextKey]);
+
+  return (
+    <svg
+      className="pointer-events-none absolute inset-0"
+      width={design.canvas.width}
+      height={design.canvas.height}
+      viewBox={`0 0 ${design.canvas.width} ${design.canvas.height}`}
+      dangerouslySetInnerHTML={{ __html: svgInner }}
     />
   );
 }

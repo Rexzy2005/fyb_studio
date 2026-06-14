@@ -25,12 +25,16 @@ export const POST = withErrorHandler(async (req) => {
 
   const result = await initializePayment({
     userId: session.user.id,
+    email: session.user.email ?? `${session.user.id}@fyb-studio.local`,
     templateId: body.templateId,
     userDesignId: body.userDesignId ?? null,
+    callbackUrl: new URL("/api/payments/callback", req.url).toString(),
   });
 
   return NextResponse.json({
     reference: result.reference,
+    accessCode: result.accessCode,
+    authorizationUrl: result.authorizationUrl,
     amountKobo: result.amountKobo,
     amountNgn: result.amountNgn,
     currency: result.currency,

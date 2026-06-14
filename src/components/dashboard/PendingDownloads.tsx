@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Loader2 } from "lucide-react";
 
 import {
@@ -26,6 +27,7 @@ import { safePngFilename } from "@/lib/download/browserDownload";
 import { exportUserDesignPng } from "@/lib/render/exportUserDesign";
 import { getUserDesign, markDownloaded } from "@/lib/storage/userDesignRepo";
 import { SectionHeader } from "@/components/dashboard/SectionHeader";
+import { ProgressModal } from "@/components/ui/ProgressModal";
 import { bodySm, caption, micro } from "@/lib/ui/typography";
 
 type Row = {
@@ -39,12 +41,25 @@ type Row = {
 };
 
 export function PendingDownloads() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const autoDownload = searchParams.get("autoDownload") === "1";
+  const autoReference = searchParams.get("reference");
+  const autoTemplateId = searchParams.get("templateId");
+  const autoUserDesignId = searchParams.get("userDesignId");
   const [serverGrants, setServerGrants] = useState<PendingGrant[] | null>(null);
   const [localEntries, setLocalEntries] = useState<PendingDownload[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [downloadBusyKey, setDownloadBusyKey] = useState<string | null>(null);
   const [downloadError, setDownloadError] = useState<string | null>(null);
   const [downloadableDesignIds, setDownloadableDesignIds] = useState<Set<string>>(new Set());
+  const [designAvailabilityReady, setDesignAvailabilityReady] = useState(false);
+  const [autoStarted, setAutoStarted] = useState(false);
+  const [autoDownloadStarted, setAutoDownloadStarted] = useState(false);
+  const [downloadProgress, setDownloadProgress] = useState<{
+    percent: number;
+    subtitle: string;
+  } | null>(null);
 
   const loadServerGrants = useCallback(async () => {
     const attempts = listPaymentAttempts();
@@ -66,8 +81,8 @@ export function PendingDownloads() {
       }),
     );
 
+    setDesignAvailabilityReady(false);
     const grants = await fetchPendingGrants();
-    setServerGrants(grants);
     const activeKeys = new Set(
       grants.map((g) => `${g.templateId}:${g.userDesignId ?? ""}`),
     );
@@ -78,7 +93,6 @@ export function PendingDownloads() {
     if (filtered.length !== pending.length) {
       reconcilePendingDownloads(new Set(filtered.map((m) => m.reference)));
     }
-    setLocalEntries(filtered);
 
     const existingDesignIds = await Promise.all(
       grants.map(async (grant) => {
@@ -88,6 +102,9 @@ export function PendingDownloads() {
       }),
     );
     setDownloadableDesignIds(new Set(existingDesignIds.filter((id): id is string => Boolean(id))));
+    setLocalEntries(filtered);
+    setServerGrants(grants);
+    setDesignAvailabilityReady(true);
   }, []);
 
   useEffect(() => {
@@ -121,6 +138,36 @@ export function PendingDownloads() {
     };
   }, [loadServerGrants]);
 
+  useEffect(() => {
+    if (!autoDownload || autoStarted) return;
+    if (!autoReference) return;
+
+    let cancelled = false;
+    setAutoStarted(true);
+    void (async () => {
+      try {
+        const verified = await verifyPayment(autoReference);
+        if (cancelled) return;
+        recordPendingDownload({
+          reference: verified.grant.paystackReference,
+          templateId: verified.grant.templateId,
+          templateName: "Your design",
+          userDesignId: verified.grant.userDesignId,
+          paidAt: Date.now(),
+        });
+        clearPaymentAttempt(verified.grant.paystackReference);
+        await loadServerGrants();
+      } catch {
+        // The webhook may have already created the grant, or Paystack may
+        // still be settling. The normal grant refresh below remains authoritative.
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [autoDownload, autoReference, autoStarted, loadServerGrants]);
+
   const rows = useMemo<Row[]>(() => {
     if (!serverGrants) return [];
     const localByKey = new Map<string, PendingDownload>();
@@ -144,29 +191,23 @@ export function PendingDownloads() {
     if (!row.userDesignId) return;
     const key = `${row.templateId}:${row.userDesignId}`;
     setDownloadBusyKey(key);
+    setDownloadProgress({ percent: 8, subtitle: "Loading your saved design" });
     setDownloadError(null);
     try {
       const record = await getUserDesign(row.userDesignId);
-      if (!record) throw new Error("The saved edit is no longer available on this device.");
-
-      const exported = await exportUserDesignPng({ record, scale: 2 });
-      downloadBlob(exported.blob, safePngFilename(record.name));
-
-      let thumbnail: { blob: Blob; mime: string; width: number; height: number } | null = null;
-      try {
-        const thumb = await exportUserDesignPng({ record, scale: 1 });
-        thumbnail = {
-          blob: thumb.blob,
-          mime: thumb.blob.type || "image/png",
-          width: thumb.width,
-          height: thumb.height,
-        };
-      } catch {
-        thumbnail = null;
+      if (!record) {
+        router.push(resumeHref(row));
+        return;
       }
 
+      setDownloadProgress({ percent: 24, subtitle: "Preparing a high-resolution PNG" });
+      const exported = await exportUserDesignPng({ record, scale: 2 });
+      setDownloadProgress({ percent: 76, subtitle: "Starting browser download" });
+      downloadBlob(exported.blob, safePngFilename(record.name));
+
+      setDownloadProgress({ percent: 88, subtitle: "Saving download history" });
       await markDownloaded(record.id, {
-        thumbnail,
+        thumbnail: null,
         paidReference: row.reference,
         exportFile: {
           blob: exported.blob,
@@ -178,6 +219,7 @@ export function PendingDownloads() {
         },
       });
 
+      setDownloadProgress({ percent: 96, subtitle: "Finalizing" });
       await recordDownload({
         templateId: row.templateId,
         userDesignId: row.userDesignId,
@@ -185,21 +227,78 @@ export function PendingDownloads() {
       });
       if (row.reference) clearPendingDownload(row.reference);
       await loadServerGrants();
+      router.replace("/dashboard?justDownloaded=1");
     } catch (err) {
       setDownloadError(
         err instanceof Error ? err.message : "Could not download this design from the dashboard.",
       );
     } finally {
       setDownloadBusyKey(null);
+      setDownloadProgress(null);
     }
   }
 
+  useEffect(() => {
+    if (!autoDownload || !autoStarted || autoDownloadStarted) return;
+    if (downloadBusyKey) return;
+    if (serverGrants === null) return;
+    if (!designAvailabilityReady) return;
+
+    const row = rows.find((item) => {
+      if (autoReference && item.reference === autoReference) return true;
+      if (autoUserDesignId && item.userDesignId === autoUserDesignId) return true;
+      if (autoTemplateId && item.templateId === autoTemplateId) return true;
+      return false;
+    });
+
+    if (!row) return;
+    setAutoDownloadStarted(true);
+    if (!row.canDownloadHere) {
+      setDownloadError(
+        "Payment confirmed. Click Resume to reopen your design and finish the download."
+      );
+      router.replace("/dashboard?resumePayment=1");
+      return;
+    }
+
+    void downloadFromDashboard(row);
+    // downloadFromDashboard is intentionally not a dependency; this effect is
+    // keyed by the loaded rows and should fire once per dashboard redirect.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    autoDownload,
+    autoStarted,
+    autoDownloadStarted,
+    autoReference,
+    autoUserDesignId,
+    autoTemplateId,
+    rows,
+    serverGrants,
+    designAvailabilityReady,
+    downloadBusyKey,
+    router,
+  ]);
+
   const isLoading = serverGrants === null && error === null;
+  const busyRow = downloadBusyKey
+    ? rows.find((row) => `${row.templateId}:${row.userDesignId}` === downloadBusyKey)
+    : null;
 
   if (!isLoading && rows.length === 0 && error === null) return null;
 
   return (
     <section className="flex flex-col gap-7">
+      <ProgressModal
+        open={Boolean(downloadBusyKey)}
+        title="Preparing your download"
+        subtitle={
+          downloadProgress?.subtitle ??
+          (busyRow ? busyRow.templateName : "Rendering your design")
+        }
+        percent={downloadProgress?.percent}
+        hint="Keep this tab open. Your file will download automatically."
+      />
+
       <SectionHeader
         eyebrow="Action needed"
         title="Finish your download"

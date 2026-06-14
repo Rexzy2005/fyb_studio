@@ -9,9 +9,8 @@ export const runtime = "nodejs";
  * GET /api/payments/callback
  *
  * Paystack redirects here after hosted/redirect-style payment completion.
- * We only use it to route the browser back to the user's editing page. The
- * actual delivery decision still happens through the signed webhook or the
- * authenticated verify endpoint.
+ * Route the browser to the dashboard, where the pending-download controller
+ * verifies the reference if needed and starts the download when possible.
  */
 export const GET = withErrorHandler(async (req) => {
   const url = new URL(req.url);
@@ -32,12 +31,13 @@ export const GET = withErrorHandler(async (req) => {
   }
 
   const params = new URLSearchParams({
-    resume: "1",
+    autoDownload: "1",
     reference,
   });
   if (target.userDesignId) params.set("userDesignId", target.userDesignId);
+  params.set("templateId", target.templateId);
 
   return NextResponse.redirect(
-    new URL(`/templates/${target.templateId}/use?${params.toString()}`, url.origin)
+    new URL(`/dashboard?${params.toString()}`, url.origin)
   );
 });

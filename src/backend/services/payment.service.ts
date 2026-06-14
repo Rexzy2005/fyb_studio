@@ -16,6 +16,7 @@ import { env } from "@/backend/env";
 import { AppError } from "@/backend/errors/app-error";
 import {
   generatePaystackReference,
+  initializePaystackTransaction,
   verifyPaystackTransaction,
 } from "./paystack.service";
 
@@ -201,6 +202,8 @@ export async function listPendingGrantsForUser(
 
 export type InitPaymentResult = {
   reference: string;
+  accessCode: string | null;
+  authorizationUrl: string | null;
   amountKobo: number;
   amountNgn: number;
   currency: "NGN";
@@ -217,8 +220,10 @@ export type InitPaymentResult = {
  */
 export async function initializePayment(opts: {
   userId: string;
+  email: string;
   templateId: string;
   userDesignId: string | null;
+  callbackUrl?: string | null;
 }): Promise<InitPaymentResult> {
   await connectDb();
   if (!mongoose.Types.ObjectId.isValid(opts.templateId)) {
@@ -260,16 +265,52 @@ export async function initializePayment(opts: {
   const quote = quoteDownloadPrice();
 
   if (existing) {
-    return {
-      reference: existing.paystackReference,
-      amountKobo: existing.amountKobo,
-      amountNgn: existing.amountKobo / 100,
-      currency: "NGN",
-      publicKey,
-    };
+    if (!existing.paystackAccessCode) {
+      await Payment.updateOne(
+        { _id: existing._id },
+        {
+          $set: {
+            status: "expired",
+            expiredAt: now,
+            failureReason:
+              "Legacy payment attempt could not be resumed without Paystack access code",
+          },
+          $push: {
+            statusHistory: {
+              status: "expired",
+              source: "system",
+              message:
+                "Legacy payment attempt could not be resumed without Paystack access code",
+              at: now,
+            },
+          },
+        }
+      );
+    } else {
+      return {
+        reference: existing.paystackReference,
+        accessCode: existing.paystackAccessCode,
+        authorizationUrl: existing.paystackAuthorizationUrl ?? null,
+        amountKobo: existing.amountKobo,
+        amountNgn: existing.amountKobo / 100,
+        currency: "NGN",
+        publicKey,
+      };
+    }
   }
 
   const reference = generatePaystackReference();
+  const paystack = await initializePaystackTransaction({
+    email: opts.email,
+    amountKobo: quote.amountKobo,
+    reference,
+    callbackUrl: opts.callbackUrl,
+    metadata: {
+      userId: opts.userId,
+      templateId: opts.templateId,
+      userDesignId: opts.userDesignId,
+    },
+  });
   await Payment.create({
     userId: userObjectId,
     templateId: templateObjectId,
@@ -277,6 +318,8 @@ export async function initializePayment(opts: {
     amountKobo: quote.amountKobo,
     currency: "NGN",
     paystackReference: reference,
+    paystackAccessCode: paystack.accessCode,
+    paystackAuthorizationUrl: paystack.authorizationUrl,
     status: "pending",
     initializedAt: now,
     expiresAt: attemptExpiresAt(now),
@@ -292,6 +335,8 @@ export async function initializePayment(opts: {
 
   return {
     reference,
+    accessCode: paystack.accessCode,
+    authorizationUrl: paystack.authorizationUrl,
     amountKobo: quote.amountKobo,
     amountNgn: quote.amountNgn,
     currency: "NGN",

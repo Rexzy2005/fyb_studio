@@ -22,6 +22,7 @@ function emptyInputs(): UserDesignInputs {
 }
 
 export type CreateInProgressInput = {
+  id?: string;
   templateId: string;
   name: string;
   categoryLabel: string;
@@ -38,7 +39,7 @@ export async function createInProgressDesign(
   const db = await getDb();
   const now = new Date();
   const record: UserDesignRecord = {
-    id: nanoid(),
+    id: input.id ?? nanoid(),
     templateId: input.templateId,
     name: input.name,
     categoryLabel: input.categoryLabel,

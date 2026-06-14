@@ -191,6 +191,9 @@ function PaymentModalContent({
       activeReference = init.reference;
       recordPaymentAttempt({
         reference: init.reference,
+        accessCode: init.accessCode,
+        publicKey: init.publicKey,
+        amountKobo: init.amountKobo,
         templateId,
         templateName,
         userDesignId,
@@ -203,6 +206,7 @@ function PaymentModalContent({
       const reference = await openPaystackPopup({
         publicKey: init.publicKey,
         reference: init.reference,
+        accessCode: init.accessCode,
         amountKobo: init.amountKobo,
         email: customerEmail,
         onSuccess: () => {},

@@ -4,6 +4,14 @@ import { env } from "@/backend/env";
 import { AppError } from "@/backend/errors/app-error";
 
 const PAYSTACK_BASE = "https://api.paystack.co";
+const PAYSTACK_INIT_TIMEOUT_MS = 8000;
+const PAYSTACK_VERIFY_TIMEOUT_MS = 10000;
+
+export type PaystackInitializeResult = {
+  reference: string;
+  accessCode: string;
+  authorizationUrl: string;
+};
 
 export type PaystackVerifyResult = {
   status: "success" | "failed" | "abandoned" | string;
@@ -30,6 +38,85 @@ function requireSecretKey(): string {
   return key;
 }
 
+function createPaystackTimeout(timeoutMs: number): {
+  signal: AbortSignal;
+  clear: () => void;
+} {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  return {
+    signal: controller.signal,
+    clear: () => clearTimeout(timer),
+  };
+}
+
+export async function initializePaystackTransaction(input: {
+  email: string;
+  amountKobo: number;
+  reference: string;
+  callbackUrl?: string | null;
+  metadata?: Record<string, unknown>;
+}): Promise<PaystackInitializeResult> {
+  const secret = requireSecretKey();
+  const timeout = createPaystackTimeout(PAYSTACK_INIT_TIMEOUT_MS);
+  let res: Response;
+  try {
+    res = await fetch(`${PAYSTACK_BASE}/transaction/initialize`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${secret}`,
+        Accept: "application/json",
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        email: input.email,
+        amount: input.amountKobo,
+        reference: input.reference,
+        callback_url: input.callbackUrl ?? undefined,
+        metadata: input.metadata,
+      }),
+      cache: "no-store",
+      signal: timeout.signal,
+    });
+  } catch (err) {
+    if (err instanceof Error && err.name === "AbortError") {
+      throw new AppError(
+        "PAYMENT_INIT_FAILED",
+        "Paystack took too long to start checkout. Please try again.",
+        504
+      );
+    }
+    throw err;
+  } finally {
+    timeout.clear();
+  }
+
+  const body = (await safeJson(res)) as {
+    status?: boolean;
+    message?: string;
+    data?: {
+      reference?: string;
+      access_code?: string;
+      authorization_url?: string;
+    };
+  } | null;
+
+  if (!res.ok || !body?.status || !body.data?.access_code) {
+    throw new AppError(
+      "PAYMENT_INIT_FAILED",
+      extractMessage(body) ?? "Paystack could not initialize the transaction",
+      502,
+      { paystackStatus: res.status }
+    );
+  }
+
+  return {
+    reference: body.data.reference ?? input.reference,
+    accessCode: body.data.access_code,
+    authorizationUrl: body.data.authorization_url ?? "",
+  };
+}
+
 /**
  * Server-side verification of a Paystack transaction. Called BOTH from the
  * popup-callback handler and from the webhook - Paystack guarantees at-least-
@@ -53,8 +140,13 @@ export async function verifyPaystackTransaction(
 
   let lastError: unknown;
   for (let attempt = 0; attempt < 2; attempt++) {
+    const timeout = createPaystackTimeout(PAYSTACK_VERIFY_TIMEOUT_MS);
     try {
-      const res = await fetch(url, { headers, cache: "no-store" });
+      const res = await fetch(url, {
+        headers,
+        cache: "no-store",
+        signal: timeout.signal,
+      });
       if (!res.ok) {
         // 4xx from Paystack is authoritative - no point retrying. Read the
         // body so the AppError carries Paystack's message back to the client.
@@ -105,8 +197,14 @@ export async function verifyPaystackTransaction(
       };
     } catch (err) {
       lastError = err;
+      if (err instanceof Error && err.name === "AbortError") {
+        lastError = new Error("Paystack verification timed out");
+        continue;
+      }
       // Don't retry AppError - those are deterministic.
       if (err instanceof AppError) throw err;
+    } finally {
+      timeout.clear();
     }
   }
 

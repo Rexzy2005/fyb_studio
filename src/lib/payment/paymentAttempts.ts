@@ -10,6 +10,9 @@ const ATTEMPT_RETENTION_MS = 45 * 60 * 1000;
 
 export type PaymentAttempt = {
   reference: string;
+  accessCode?: string | null;
+  publicKey?: string | null;
+  amountKobo?: number | null;
   templateId: string;
   templateName: string;
   userDesignId: string | null;
@@ -22,6 +25,15 @@ function isPaymentAttempt(value: unknown): value is PaymentAttempt {
   const v = value as Record<string, unknown>;
   return (
     typeof v.reference === "string" &&
+    (v.accessCode === undefined ||
+      v.accessCode === null ||
+      typeof v.accessCode === "string") &&
+    (v.publicKey === undefined ||
+      v.publicKey === null ||
+      typeof v.publicKey === "string") &&
+    (v.amountKobo === undefined ||
+      v.amountKobo === null ||
+      typeof v.amountKobo === "number") &&
     typeof v.templateId === "string" &&
     typeof v.templateName === "string" &&
     (v.userDesignId === null || typeof v.userDesignId === "string") &&

@@ -610,38 +610,6 @@ function CapArcOnScroll() {
   );
 }
 
-/* ─── Scoreboard flip number ── */
-function FlipNum({ value, color = "#FFD700" }: { value: string; color?: string }) {
-  const [display, setDisplay] = useState(value);
-  // Derive "flipping" synchronously from value vs display - no setState in effect.
-  const flipping = display !== value;
-  useEffect(() => {
-    if (display === value) return;
-    const t = setTimeout(() => setDisplay(value), 250);
-    return () => clearTimeout(t);
-  }, [value, display]);
-  return (
-    <span
-      className={flipping ? "nv-flip-num" : undefined}
-      style={{
-        ...mono,
-        display: "inline-block",
-        minWidth: "1.6ch",
-        textAlign: "center",
-        fontWeight: 800,
-        fontVariantNumeric: "tabular-nums",
-        lineHeight: 1,
-        background: `linear-gradient(150deg, ${color}, #FF8C42)`,
-        WebkitBackgroundClip: "text",
-        WebkitTextFillColor: "transparent",
-        backgroundClip: "text",
-      }}
-    >
-      {display}
-    </span>
-  );
-}
-
 /* ─── Hero ───────────────────────────────────────────────── */
 const AVATAR_COLS = ["rgba(255,215,0,0.2)", "rgba(255,107,107,0.18)", "rgba(78,205,196,0.18)", "rgba(168,85,247,0.18)", "rgba(249,115,22,0.18)"] as const;
 
@@ -1427,7 +1395,12 @@ const EXPORT_DOTS = Array.from({ length: 14 }).map((_, i) => {
   const palette = ["#FFD700", "#FF8C42", "#FF6B6B", "#4ECDC4", "#A855F7"];
   const rotSeed = Math.sin((i + 7) * 78.233) * 43758.5453;
   const rotRand = rotSeed - Math.floor(rotSeed);
-  return { x, y, c: palette[i % palette.length], r: rotRand * 360 };
+  return {
+    x: x.toFixed(4),
+    y: y.toFixed(4),
+    c: palette[i % palette.length],
+    r: (rotRand * 360).toFixed(3),
+  };
 });
 
 function ExportDemo({ color }: { color: string }) {
@@ -1471,11 +1444,11 @@ function ExportDemo({ color }: { color: string }) {
             className="nv-export-pop"
             style={{
               position: "absolute", top: "50%", left: "50%",
-              width: 5, height: 8, borderRadius: 1,
+              width: "5px", height: "8px", borderRadius: "1px",
               background: d.c,
               transform: `translate(${d.x}px, ${d.y}px) rotate(${d.r}deg)`,
               animationDelay: "0.1s",
-              opacity: 0.9,
+              opacity: "0.9",
             }}
             aria-hidden
           />

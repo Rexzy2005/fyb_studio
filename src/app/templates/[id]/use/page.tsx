@@ -81,7 +81,20 @@ function deriveCategoryLabel(name: string, explicit: string | null): string {
 const STANDARD_EXPORT_SCALE = 2;
 const PAYMENT_GRANT_POLL_MS = 2000;
 const PAYMENT_VERIFY_FALLBACK_MS = 8000;
-type MobilePaymentStage = "checking" | "opening" | "paying";
+const PAYSTACK_CHECKOUT_TIMEOUT_MS = 30 * 60 * 1000;
+type WorkspacePaymentStage = "checking" | "opening" | "paying" | "verifying";
+
+function isPaymentStillProcessingMessage(message: string): boolean {
+  return /not successful|pending|ongoing|processing|queued|still processing|duplicate transaction reference/i.test(
+    message
+  );
+}
+
+function isSlowPaymentNetworkMessage(message: string): boolean {
+  return /timed out|too long|failed to load paystack|network|fetch failed|could not reach paystack/i.test(
+    message
+  );
+}
 
 // Mobile devices (particularly iOS) have stricter canvas memory limits.
 // Use 1× on small screens so large canvases don't OOM the tab.
@@ -131,13 +144,17 @@ export default function UseTemplatePage({
   const [mobileDetailsOpen, setMobileDetailsOpen] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [mobileReadyToPay, setMobileReadyToPay] = useState(false);
-  const [mobilePaymentStage, setMobilePaymentStage] = useState<MobilePaymentStage | null>(null);
   const [mobilePaymentError, setMobilePaymentError] = useState<string | null>(null);
+  const [slowPaymentModalOpen, setSlowPaymentModalOpen] = useState(false);
+  const [workspacePaymentStage, setWorkspacePaymentStage] =
+    useState<WorkspacePaymentStage | null>(null);
   const [autoFitNonce, setAutoFitNonce] = useState(0);
   const [mobileFormPage, setMobileFormPage] = useState(0);
   const mobileFormScrollRef = useRef<HTMLDivElement | null>(null);
   const [desktopFormPage, setDesktopFormPage] = useState(0);
   const desktopFormScrollRef = useRef<HTMLDivElement | null>(null);
+  const resumeCheckoutRef = useRef(false);
+  const resumePollingOnlyRef = useRef<string | null>(null);
 
   const [previewTextByNodeId, setPreviewTextByNodeId] = useState<Record<string, string>>({});
   const [previewImageByNodeId, setPreviewImageByNodeId] = useState<Record<
@@ -273,6 +290,7 @@ export default function UseTemplatePage({
 
         // First visit: create a fresh IDB record from the server template.
         const record = await createInProgressDesign({
+          id: requestedDesignId ?? undefined,
           templateId: remote.template.id,
           name: remote.template.name,
           categoryLabel,
@@ -403,6 +421,149 @@ export default function UseTemplatePage({
     }
   }, [mobileFlowStepCount, mobileFormPage]);
 
+  useEffect(() => {
+    if (!resumeRequested || !userDesign) return;
+    setMobileReadyToPay(true);
+    setMobileDetailsOpen(false);
+    setDesktopFormPage(Math.max(0, desktopFlowStepCount - 1));
+  }, [resumeRequested, userDesign, desktopFlowStepCount]);
+
+  useEffect(() => {
+    if (!userDesign || !session?.user?.email) return;
+    if (resumeCheckoutRef.current || workspacePaymentStage || exporting || downloadChecking) {
+      return;
+    }
+
+    const attempt = findPaymentAttemptForDesign(userDesign.templateId, userDesign.id);
+    if (!attempt) return;
+    if (resumePollingOnlyRef.current === attempt.reference) return;
+
+    resumeCheckoutRef.current = true;
+    setMobilePaymentError(null);
+
+    void (async () => {
+      const activeReference = attempt.reference;
+      try {
+        const remainingMs =
+          PAYSTACK_CHECKOUT_TIMEOUT_MS - (Date.now() - attempt.initializedAt);
+        if (remainingMs <= 0) {
+          clearPaymentAttempt(attempt.reference);
+          setMobilePaymentError("Payment session expired. Please start payment again.");
+          return;
+        }
+
+        if (!attempt.accessCode || !attempt.publicKey || !attempt.amountKobo) {
+          clearPaymentAttempt(attempt.reference);
+          setMobilePaymentError(
+            "This checkout session cannot be restored. Please start payment again."
+          );
+          return;
+        }
+
+        setWorkspacePaymentStage("verifying");
+        try {
+          const verified = await verifyPayment(attempt.reference);
+          recordPendingDownload({
+            reference: verified.grant.paystackReference,
+            templateId: verified.grant.templateId,
+            templateName: userDesign.name,
+            userDesignId: verified.grant.userDesignId,
+            paidAt: Date.now(),
+          });
+          clearPaymentAttempt(verified.grant.paystackReference);
+
+          const params = new URLSearchParams({
+            autoDownload: "1",
+            reference: verified.grant.paystackReference,
+          });
+          if (verified.grant.userDesignId) {
+            params.set("userDesignId", verified.grant.userDesignId);
+          }
+          router.push(`/dashboard?${params.toString()}`);
+          return;
+        } catch (err) {
+          const message =
+            err instanceof Error ? err.message : "Payment recovery check failed";
+          if (!isPaymentStillProcessingMessage(message)) {
+            throw err;
+          }
+        }
+
+        await loadPaystackScript();
+        setWorkspacePaymentStage("paying");
+        const reference = await openPaystackPopup({
+          publicKey: attempt.publicKey,
+          reference: attempt.reference,
+          accessCode: attempt.accessCode,
+          amountKobo: attempt.amountKobo,
+          email: session.user.email,
+          timeoutMs: remainingMs,
+          onSuccess: () => {},
+          onCancel: () => {
+            clearPaymentAttempt(attempt.reference);
+            void recordPaymentEvent({
+              reference: attempt.reference,
+              event: "cancelled",
+            }).catch((err) => {
+              console.error("[payment] cancel event failed", err);
+            });
+          },
+        });
+
+        setWorkspacePaymentStage("verifying");
+        const verified = await verifyPayment(reference);
+        recordPendingDownload({
+          reference: verified.grant.paystackReference,
+          templateId: verified.grant.templateId,
+          templateName: userDesign.name,
+          userDesignId: verified.grant.userDesignId,
+          paidAt: Date.now(),
+        });
+        clearPaymentAttempt(verified.grant.paystackReference);
+
+        const params = new URLSearchParams({
+          autoDownload: "1",
+          reference: verified.grant.paystackReference,
+        });
+        if (verified.grant.userDesignId) {
+          params.set("userDesignId", verified.grant.userDesignId);
+        }
+        router.push(`/dashboard?${params.toString()}`);
+      } catch (err) {
+        const message =
+          err instanceof Error
+            ? err.message
+            : "Payment could not be completed. Please try again.";
+        if (message === "Payment was cancelled") {
+          clearPaymentAttempt(activeReference);
+          setMobilePaymentError("Payment cancelled. You can try again when you're ready.");
+        } else if (isPaymentStillProcessingMessage(message)) {
+          resumePollingOnlyRef.current = activeReference;
+          setMobilePaymentError(
+            "Payment is still processing. Keep this page open; download will start once Paystack confirms it."
+          );
+        } else if (isSlowPaymentNetworkMessage(message)) {
+          clearPaymentAttempt(activeReference);
+          setMobilePaymentError(null);
+          setSlowPaymentModalOpen(true);
+        } else {
+          clearPaymentAttempt(activeReference);
+          setMobilePaymentError(message);
+        }
+      } finally {
+        resumeCheckoutRef.current = false;
+        setWorkspacePaymentStage(null);
+      }
+    })();
+  }, [
+    userDesign,
+    session?.user?.email,
+    workspacePaymentStage,
+    exporting,
+    downloadChecking,
+    router,
+  ]);
+
   // While the auth-gate effect is redirecting an unauthenticated user, show
   // a quiet loading state instead of flashing the workspace UI.
   if (sessionStatus === "unauthenticated" || sessionStatus === "loading") {
@@ -462,14 +623,17 @@ export default function UseTemplatePage({
   }
 
   const recordName = userDesign.name;
-  const mobilePaymentLabel =
-    mobilePaymentStage === "checking"
+  const paymentBusy = Boolean(workspacePaymentStage);
+  const workspacePaymentLabel =
+    workspacePaymentStage === "checking"
       ? "Checking..."
-      : mobilePaymentStage === "opening"
+      : workspacePaymentStage === "opening"
         ? "Opening Paystack..."
-        : mobilePaymentStage === "paying"
+        : workspacePaymentStage === "paying"
           ? "Waiting for payment..."
-          : null;
+          : workspacePaymentStage === "verifying"
+            ? "Confirming payment..."
+            : null;
 
   function onPreviewTextChange(nodeId: string, value: string) {
     const field = fieldConfig?.fields.find(
@@ -732,8 +896,8 @@ export default function UseTemplatePage({
     }
   }
 
-  async function startMobilePayToDownload() {
-    if (exporting || mobilePaymentStage) return;
+  async function startWorkspaceDownload() {
+    if (exporting || downloadChecking || paymentBusy) return;
     if (!userDesign) return;
     if (!session?.user?.email) {
       setMobilePaymentError("No email found on your account. Sign out and back in, then retry.");
@@ -742,11 +906,9 @@ export default function UseTemplatePage({
 
     setMobilePaymentError(null);
     let activeReference: string | null = null;
-
     try {
       await persistInputsNow();
-
-      setMobilePaymentStage("checking");
+      setWorkspacePaymentStage("checking");
       const info = await fetchActiveGrant(
         {
           templateId: userDesign.templateId,
@@ -759,7 +921,7 @@ export default function UseTemplatePage({
         return;
       }
 
-      setMobilePaymentStage("opening");
+      setWorkspacePaymentStage("opening");
       const init = await initializePayment({
         templateId: userDesign.templateId,
         userDesignId: userDesign.id,
@@ -767,20 +929,26 @@ export default function UseTemplatePage({
       activeReference = init.reference;
       recordPaymentAttempt({
         reference: init.reference,
+        accessCode: init.accessCode,
+        publicKey: init.publicKey,
+        amountKobo: init.amountKobo,
         templateId: userDesign.templateId,
         templateName: recordName,
         userDesignId: userDesign.id,
         amountNgn: init.amountNgn,
         initializedAt: Date.now(),
       });
+
       await loadPaystackScript();
 
-      setMobilePaymentStage("paying");
+      setWorkspacePaymentStage("paying");
       const reference = await openPaystackPopup({
         publicKey: init.publicKey,
         reference: init.reference,
+        accessCode: init.accessCode,
         amountKobo: init.amountKobo,
         email: session.user.email,
+        timeoutMs: PAYSTACK_CHECKOUT_TIMEOUT_MS,
         onSuccess: () => {},
         onCancel: () => {
           clearPaymentAttempt(init.reference);
@@ -793,52 +961,47 @@ export default function UseTemplatePage({
         },
       });
 
+      setWorkspacePaymentStage("verifying");
+      const verified = await verifyPayment(reference);
       recordPendingDownload({
-        reference,
-        templateId: userDesign.templateId,
+        reference: verified.grant.paystackReference,
+        templateId: verified.grant.templateId,
         templateName: recordName,
-        userDesignId: userDesign.id,
+        userDesignId: verified.grant.userDesignId,
         paidAt: Date.now(),
       });
-      clearPaymentAttempt(reference);
-
-      void verifyPayment(reference)
-        .then((verified) => {
-          recordPendingDownload({
-            reference: verified.grant.paystackReference,
-            templateId: verified.grant.templateId,
-            templateName: recordName,
-            userDesignId: verified.grant.userDesignId,
-            paidAt: Date.now(),
-          });
-          clearPaymentAttempt(verified.grant.paystackReference);
-          void recordDownload({
-            templateId: verified.grant.templateId,
-            userDesignId: verified.grant.userDesignId,
-            scale: getExportScale(),
-          })
-            .then(() => {
-              clearPendingDownload(verified.grant.paystackReference);
-            })
-            .catch(() => {
-              // The normal export path may already have consumed the grant.
-            });
-        })
-        .catch((err) => {
-          console.warn("[payment] background verification failed", err);
-        });
-
-      await doExportPng(getExportScale());
+      clearPaymentAttempt(verified.grant.paystackReference);
+      const params = new URLSearchParams({
+        autoDownload: "1",
+        reference: verified.grant.paystackReference,
+      });
+      if (verified.grant.userDesignId) {
+        params.set("userDesignId", verified.grant.userDesignId);
+      }
+      router.push(`/dashboard?${params.toString()}`);
     } catch (err) {
       const message =
-        err instanceof Error ? err.message : "Payment could not be completed. Please try again.";
+        err instanceof Error
+          ? err.message
+          : "Payment could not be completed. Please try again.";
       if (message === "Payment was cancelled") {
         if (activeReference) clearPaymentAttempt(activeReference);
-        return;
+        setMobilePaymentError("Payment cancelled. You can try again when you're ready.");
+      } else if (isPaymentStillProcessingMessage(message)) {
+        if (activeReference) resumePollingOnlyRef.current = activeReference;
+        setMobilePaymentError(
+          "Payment is still processing. Keep this page open; download will start once Paystack confirms it."
+        );
+      } else if (isSlowPaymentNetworkMessage(message)) {
+        if (activeReference) clearPaymentAttempt(activeReference);
+        setMobilePaymentError(null);
+        setSlowPaymentModalOpen(true);
+      } else {
+        if (activeReference) clearPaymentAttempt(activeReference);
+        setMobilePaymentError(message);
       }
-      setMobilePaymentError(message);
     } finally {
-      setMobilePaymentStage(null);
+      setWorkspacePaymentStage(null);
     }
   }
 
@@ -1415,10 +1578,10 @@ export default function UseTemplatePage({
                 </button>
                 <button
                   type="button"
-                  disabled={Boolean(mobilePaymentStage)}
+                  disabled={downloadChecking || paymentBusy}
                   onClick={() => {
                     if (isDesktopReviewStep) {
-                      void startMobilePayToDownload();
+                      void startWorkspaceDownload();
                       return;
                     }
                     setDesktopFormPage((p) => Math.min(desktopFlowStepCount - 1, p + 1));
@@ -1428,13 +1591,13 @@ export default function UseTemplatePage({
                   }}
                   className="inline-flex h-9 flex-1 items-center justify-center gap-1.5 rounded-xl px-3 text-xs font-semibold uppercase transition disabled:opacity-30"
                   style={{
-                    background: mobilePaymentStage ? "rgba(255,255,255,0.05)" : "#FFD700",
-                    color: mobilePaymentStage ? "rgba(255,255,255,0.5)" : "#000",
+                    background: downloadChecking || paymentBusy ? "rgba(255,255,255,0.05)" : "#FFD700",
+                    color: downloadChecking || paymentBusy ? "rgba(255,255,255,0.5)" : "#000",
                     letterSpacing: "0.06em",
                   }}
                 >
-                  {mobilePaymentLabel ? (
-                    <><span className="fyb-dots"><span /><span /><span /></span> {mobilePaymentLabel}</>
+                  {workspacePaymentLabel ? (
+                    <><span className="fyb-dots"><span /><span /><span /></span> {workspacePaymentLabel}</>
                   ) : isDesktopReviewStep ? (
                     <><CreditCard className="h-3.5 w-3.5" /> Download</>
                   ) : (
@@ -1475,7 +1638,7 @@ export default function UseTemplatePage({
           <div className="flex items-center gap-2">
           <button
             type="button"
-            disabled={exporting || downloadChecking || Boolean(mobilePaymentStage) || !hasEdits}
+            disabled={exporting || downloadChecking || paymentBusy || !hasEdits}
             onClick={resetUserWorkspace}
             className="inline-flex h-11 flex-1 items-center justify-center rounded-2xl px-4 text-sm font-semibold transition disabled:opacity-40 active:scale-95"
             style={{
@@ -1488,22 +1651,20 @@ export default function UseTemplatePage({
           </button>
           <button
             type="button"
-            disabled={exporting || downloadChecking || Boolean(mobilePaymentStage)}
-            onClick={mobileReadyToPay ? startMobilePayToDownload : openMobileDetailsFlow}
+            disabled={exporting || downloadChecking || paymentBusy}
+            onClick={mobileReadyToPay ? startWorkspaceDownload : openMobileDetailsFlow}
             data-workspace-tour="mobile-download"
             className="inline-flex h-11 flex-1 items-center justify-center gap-2 rounded-2xl px-4 text-sm font-bold transition active:scale-95 disabled:opacity-60"
             style={{
-              background: downloadChecking || exporting || mobilePaymentStage ? "var(--surface-2)" : "#FFD700",
-              color: downloadChecking || exporting || mobilePaymentStage ? "var(--ink-muted)" : "#000",
-              boxShadow: downloadChecking || exporting || mobilePaymentStage ? "none" : "0 8px 24px rgba(255,180,0,0.32)",
+              background: downloadChecking || exporting || paymentBusy ? "var(--surface-2)" : "#FFD700",
+              color: downloadChecking || exporting || paymentBusy ? "var(--ink-muted)" : "#000",
+              boxShadow: downloadChecking || exporting || paymentBusy ? "none" : "0 8px 24px rgba(255,180,0,0.32)",
             }}
           >
-            {mobilePaymentLabel ? (
-              <><span className="fyb-dots"><span /><span /><span /></span> {mobilePaymentLabel}</>
-            ) : downloadChecking ? (
-              <><span className="fyb-dots"><span /><span /><span /></span> Checking…</>
+            {workspacePaymentLabel ? (
+              <><span className="fyb-dots"><span /><span /><span /></span> {workspacePaymentLabel}</>
             ) : exporting ? (
-              "Exporting…"
+              "Exporting..."
             ) : mobileReadyToPay ? (
               <><CreditCard className="h-4 w-4" /> Download</>
             ) : (
@@ -1855,6 +2016,17 @@ export default function UseTemplatePage({
         hint="Larger designs and custom fonts can take a moment. Keep this tab open."
       />
 
+      {slowPaymentModalOpen ? (
+        <SlowPaymentNetworkModal
+          retrying={paymentBusy || downloadChecking || exporting}
+          onClose={() => setSlowPaymentModalOpen(false)}
+          onTryAgain={() => {
+            setSlowPaymentModalOpen(false);
+            void startWorkspaceDownload();
+          }}
+        />
+      ) : null}
+
       <PaymentRecoveryController
         templateId={userDesign.templateId}
         templateName={recordName}
@@ -1863,6 +2035,7 @@ export default function UseTemplatePage({
         resumeReference={resumeReference}
         exporting={exporting}
         downloadChecking={downloadChecking}
+        checkoutActive={paymentBusy}
         onCheckingChange={setDownloadChecking}
         onExport={() => doExportPng(getExportScale())}
       />
@@ -1987,6 +2160,83 @@ function DownloadSuccessModal({
   );
 }
 
+function SlowPaymentNetworkModal({
+  retrying,
+  onClose,
+  onTryAgain,
+}: {
+  retrying: boolean;
+  onClose: () => void;
+  onTryAgain: () => void;
+}) {
+  return (
+    <div
+      className="fixed inset-0 z-[95] flex items-center justify-center p-4"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="slow-payment-title"
+      style={{ background: "rgba(0,0,0,0.72)", backdropFilter: "blur(12px)" }}
+    >
+      <div
+        className="w-full max-w-sm overflow-hidden text-center"
+        style={{
+          background: "var(--canvas)",
+          border: "1px solid rgba(255,215,0,0.28)",
+          borderRadius: 24,
+          boxShadow: "0 34px 90px rgba(0,0,0,0.62)",
+        }}
+      >
+        <div
+          className="h-1"
+          style={{ background: "linear-gradient(90deg,#FFD700,#FF8C42,#A855F7)" }}
+        />
+        <div className="px-6 py-7">
+          <div
+            className="mx-auto grid h-14 w-14 place-items-center rounded-2xl"
+            style={{ background: "rgba(255,215,0,0.12)", color: "#FFD700" }}
+          >
+            <CreditCard className="h-7 w-7" />
+          </div>
+          <h2 id="slow-payment-title" className="mt-5 text-xl font-bold text-ink">
+            Slow network detected
+          </h2>
+          <p className="mt-2 text-sm leading-6 text-ink-muted">
+            Paystack is taking too long to start. Check your connection and try again.
+          </p>
+          <div className="mt-6 flex gap-2">
+            <button
+              type="button"
+              onClick={onClose}
+              disabled={retrying}
+              className="inline-flex h-12 flex-1 items-center justify-center rounded-2xl text-sm font-semibold transition disabled:opacity-50"
+              style={{
+                border: "1px solid var(--hairline)",
+                color: "var(--ink)",
+                background: "var(--surface-1)",
+              }}
+            >
+              Close
+            </button>
+            <button
+              type="button"
+              onClick={onTryAgain}
+              disabled={retrying}
+              className="inline-flex h-12 flex-1 items-center justify-center gap-2 rounded-2xl text-sm font-bold transition disabled:opacity-60"
+              style={{ background: "#FFD700", color: "#000" }}
+            >
+              {retrying ? (
+                <><span className="fyb-dots"><span /><span /><span /></span> Trying...</>
+              ) : (
+                "Try again"
+              )}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function PaymentRecoveryController({
   templateId,
   templateName,
@@ -1995,6 +2245,7 @@ function PaymentRecoveryController({
   resumeReference,
   exporting,
   downloadChecking,
+  checkoutActive,
   onCheckingChange,
   onExport,
 }: {
@@ -2005,6 +2256,7 @@ function PaymentRecoveryController({
   resumeReference: string | null;
   exporting: boolean;
   downloadChecking: boolean;
+  checkoutActive: boolean;
   onCheckingChange: (checking: boolean) => void;
   onExport: () => Promise<void> | void;
 }) {
@@ -2055,7 +2307,7 @@ function PaymentRecoveryController({
       return;
     }
     if (stopRecoveryRef.current) return;
-    if (exporting || downloadChecking || inFlightRef.current) return;
+    if (exporting || downloadChecking || checkoutActive || inFlightRef.current) return;
 
     let cancelled = false;
     inFlightRef.current = true;
@@ -2142,6 +2394,7 @@ function PaymentRecoveryController({
     resumeReference,
     exporting,
     downloadChecking,
+    checkoutActive,
   ]);
 
   return null;

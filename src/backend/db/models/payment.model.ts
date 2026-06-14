@@ -86,6 +86,8 @@ const paymentSchema = new Schema(
       unique: true,
       index: true,
     },
+    paystackAccessCode: { type: String, default: null },
+    paystackAuthorizationUrl: { type: String, default: null },
 
     status: {
       type: String,

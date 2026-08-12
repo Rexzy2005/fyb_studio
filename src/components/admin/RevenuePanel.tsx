@@ -81,15 +81,23 @@ export function RevenuePanel() {
             Paystack-confirmed earnings and customer download activity. Test users are excluded.
           </p>
         </div>
-        {data ? (
-          <span className="inline-flex items-center gap-1.5 rounded-full border border-hairline bg-surface-1 px-3 py-1 text-[10.5px] font-semibold uppercase tracking-wider text-ink-muted dark:border-hairline dark:bg-surface-1 dark:text-ink-muted">
-            <span
-              aria-hidden
-              className="inline-block h-1.5 w-1.5 rounded-full bg-[var(--accent-blue)]"
-            />
-            30 days · {formatNgn(data.summary.last30Days.revenueNgn)}
-          </span>
-        ) : null}
+        <div className="flex flex-wrap items-center gap-2">
+          {data ? (
+            <span className="inline-flex items-center gap-1.5 rounded-full border border-hairline bg-surface-1 px-3 py-1 text-[10.5px] font-semibold uppercase tracking-wider text-ink-muted dark:border-hairline dark:bg-surface-1 dark:text-ink-muted">
+              <span
+                aria-hidden
+                className="inline-block h-1.5 w-1.5 rounded-full bg-[var(--accent-blue)]"
+              />
+              30 days · {formatNgn(data.summary.last30Days.revenueNgn)}
+            </span>
+          ) : null}
+          <Link
+            href="/admin/revenue-share"
+            className="inline-flex h-9 items-center rounded-xl border border-hairline bg-surface-1 px-3 text-xs font-medium text-ink-muted transition hover:bg-canvas hover:text-ink dark:border-hairline dark:bg-surface-1 dark:text-ink-muted dark:hover:bg-surface-2 dark:hover:text-ink"
+          >
+            Open revenue share
+          </Link>
+        </div>
       </header>
 
       {/* Headline stat cards */}

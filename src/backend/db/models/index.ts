@@ -22,3 +22,5 @@ export type {
   FeedbackCategory,
   FeedbackSource,
 } from "./feedback.model";
+export { RevenueFrameworkModel } from "./revenueFramework.model";
+export type { RevenueFrameworkDoc } from "./revenueFramework.model";

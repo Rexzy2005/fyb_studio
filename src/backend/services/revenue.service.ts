@@ -220,6 +220,32 @@ export async function getRevenueSummary(): Promise<RevenueSummary> {
 }
 
 /**
+ * Integer kobo pool used by the revenue-share allocator. Same definition
+ * as `totalRevenueNgn` on the dashboard: successful Paystack payments,
+ * test accounts excluded. Returned in kobo so the split never floats.
+ */
+export async function getLifetimeRevenuePool(): Promise<{
+  poolKobo: number;
+  successfulPayments: number;
+}> {
+  await connectDb();
+  const excludedUserIds = await getRevenueExcludedUserIds();
+  const successAgg = await Payment.aggregate<{
+    _id: null;
+    totalKobo: number;
+    count: number;
+  }>([
+    { $match: withoutRevenueExcludedUsers({ status: "success" }, excludedUserIds) },
+    { $group: { _id: null, totalKobo: { $sum: "$amountKobo" }, count: { $sum: 1 } } },
+  ]);
+
+  return {
+    poolKobo: successAgg[0]?.totalKobo ?? 0,
+    successfulPayments: successAgg[0]?.count ?? 0,
+  };
+}
+
+/**
  * Daily revenue + payment + download buckets for the last `days` days,
  * UTC-bucketed. Missing days are filled with zeros so the chart doesn't
  * skip dates.
